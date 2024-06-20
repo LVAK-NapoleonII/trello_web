@@ -1,14 +1,32 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { useState } from "react";
+import Button from "@mui/material/Button";
+import reactLogo from "./assets/react.svg";
+import viteLogo from "/vite.svg";
+import "./App.css";
+import { useColorScheme } from "@mui/material/styles";
+
+function ModeToggle() {
+  const { mode, setMode } = useColorScheme();
+  return (
+    <Button
+      onClick={() => {
+        setMode(mode === "light" ? "dark" : "light");
+        // localStorage.setItem("light-dark-mode")
+        // localStorage.getItem("mode", mode);
+      }}
+    >
+      {mode === "light" ? "Turn dark" : "Turn light"}
+    </Button>
+  );
+}
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [count, setCount] = useState(0);
 
   return (
     <>
       <div>
+        <ModeToggle />
         <a href="https://vitejs.dev" target="_blank">
           <img src={viteLogo} className="logo" alt="Vite logo" />
         </a>
@@ -29,7 +47,7 @@ function App() {
         Click on the Vite and React logos to learn more
       </p>
     </>
-  )
+  );
 }
 
-export default App
+export default App;
