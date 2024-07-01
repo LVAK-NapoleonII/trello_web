@@ -17,7 +17,7 @@ function AppBar() {
   return (
     <Box
       sx={{
-        backgroundColor: "white",
+        backgroundColor: "primary.contrastText",
         width: "100%",
         height: (theme) => theme.trelloCustom.appBarHeight,
         display: "flex",

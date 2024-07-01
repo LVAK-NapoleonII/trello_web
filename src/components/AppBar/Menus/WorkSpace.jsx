@@ -34,7 +34,7 @@ function WorkSpace() {
         sx={{ fontWeight: "bold" }}
         endIcon={<ExpandMoreIcon />}
       >
-        workspaces
+        Workspaces
       </Button>
       <Menu
         id="basic-menu-workspaces"
