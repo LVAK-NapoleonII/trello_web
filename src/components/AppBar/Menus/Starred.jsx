@@ -27,7 +27,7 @@ function Starred() {
         aria-haspopup="true"
         aria-expanded={open ? "true" : undefined}
         onClick={handleClick}
-        sx={{ fontWeight: "bold" }}
+        sx={{ fontWeight: "bold", color: "white" }}
         endIcon={<ExpandMoreIcon />}
       >
         Starred
