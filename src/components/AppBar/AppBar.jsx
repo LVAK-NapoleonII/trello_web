@@ -1,5 +1,5 @@
 import { useState } from "react";
-import ModeSelect from "../ModeSelect";
+import ModeSelect from "../ModeSelect/ModeSelect";
 import Box from "@mui/material/Box";
 import AppsIcon from "@mui/icons-material/Apps";
 import BackupTableIcon from "@mui/icons-material/BackupTable";
