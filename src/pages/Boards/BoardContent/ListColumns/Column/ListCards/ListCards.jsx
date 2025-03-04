@@ -1,6 +1,6 @@
 import Box from "@mui/material/Box";
 import Cards from "./Cards/Cards";
-function ListCards() {
+function ListCards(cards) {
   const COLUMN_HEADER_HEIGHT = "50px";
   const COLUMN_FOOTER_HEIGHT = "56px";
   return (
@@ -25,6 +25,9 @@ function ListCards() {
         },
       }}
     >
+      {cards?.map((card) => (
+        <Cards key={card._id} card={card} />
+      ))}
       {/* CARD CONTENT */}
       <Cards />
       <Cards temporaryHideMedia />

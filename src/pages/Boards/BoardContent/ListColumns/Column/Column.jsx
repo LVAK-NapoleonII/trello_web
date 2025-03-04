@@ -16,7 +16,7 @@ import AddCardIcon from "@mui/icons-material/AddCard";
 import DragHandleIcon from "@mui/icons-material/DragHandle";
 import Box from "@mui/material/Box";
 import ListCards from "./ListCards/ListCards";
-function Column() {
+function Column(column) {
   const COLUMN_HEADER_HEIGHT = "50px";
   const [anchorEl, setAnchorEl] = React.useState(null);
   const open = Boolean(anchorEl);
@@ -56,7 +56,7 @@ function Column() {
           variant="h6"
           sx={{ fontWeight: "Bold", cursor: "pointer", fontSize: "1rem" }}
         >
-          Column tittle
+          {column?.title}
         </Typography>
         <Box>
           <Tooltip title="More option">
@@ -119,7 +119,7 @@ function Column() {
         </Box>
       </Box>
       {/*List card*/}
-      <ListCards />
+      <ListCards cards={column?.cards} />
       {/*footer*/}
       <Box
         sx={{

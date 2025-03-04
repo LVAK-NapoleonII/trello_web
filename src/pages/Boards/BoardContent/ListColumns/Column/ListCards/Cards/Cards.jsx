@@ -8,22 +8,7 @@ import AttachmentIcon from "@mui/icons-material/Attachment";
 
 import { Button, Typography } from "@mui/material";
 
-function Cards({ temporaryHideMedia }) {
-  if (temporaryHideMedia) {
-    return (
-      <Card
-        sx={{
-          cursor: "pointer",
-          boxShadow: "0 1px 1px grpa(0,0,0.2)",
-          overflow: "unset",
-        }}
-      >
-        <CardContent sx={{ p: "1.5", "&:last-child": { p: 1.5 } }}>
-          <Typography>~LVAK~</Typography>
-        </CardContent>
-      </Card>
-    );
-  }
+function Cards(card) {
   return (
     <Card
       sx={{
@@ -32,13 +17,16 @@ function Cards({ temporaryHideMedia }) {
         overflow: "unset",
       }}
     >
-      <CardMedia
-        sx={{ height: 140 }}
-        image="https://th.bing.com/th/id/OIP.IgKA0VTzX8YgGULq39huzgHaDb?rs=1&pid=ImgDetMain"
-        title="green iguana"
-      />
+      {card?.cover && (
+        <CardMedia
+          sx={{ height: 140 }}
+          image={card?.cover}
+          title="green iguana"
+        />
+      )}
+
       <CardContent sx={{ p: "1.5", "&:last-child": { p: 1.5 } }}>
-        <Typography>~LVAK~</Typography>
+        <Typography>{card?.title}</Typography>
       </CardContent>
       <CardActions sx={{ p: "0 4px 8px 4px" }}>
         <Button size="small" startIcon={<Groups3Icon />}>

@@ -25,7 +25,7 @@ const menuStype = {
   },
 };
 
-function BoardBar() {
+function BoardBar(board) {
   return (
     <Box
       px={2}
@@ -48,14 +48,14 @@ function BoardBar() {
         <Chip
           sx={menuStype}
           icon={<DashboardIcon />}
-          label="LVAK"
+          label={board?.title}
           //onclick={() => {}}
           clickable={true}
         />
         <Chip
           sx={menuStype}
           icon={<VpnLockIcon />}
-          label="Public/private workspace"
+          label={board?.type}
           //onclick={() => {}}
           clickable={true}
         />
