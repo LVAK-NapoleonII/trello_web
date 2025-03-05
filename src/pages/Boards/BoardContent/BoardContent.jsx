@@ -1,10 +1,12 @@
 import Box from "@mui/material/Box";
 import ListColumns from "./ListColumns/ListColumns";
 import { DndContext } from "@dnd-kit/core";
-function BoardContent(board) {
+import { mapOrder } from "../../../utils/softs.js";
+function BoardContent({ board }) {
   const handleDragEnd = (event) => {
-    console.log(event.target);
+    console.log("handleDragEnd: ", event);
   };
+  const orderedColumns = mapOrder(board?.columns, board?.columnOrderIds, "_id");
   return (
     <DndContext onDragEnd={handleDragEnd}>
       <Box
@@ -17,7 +19,7 @@ function BoardContent(board) {
           p: "10px 0",
         }}
       >
-        <ListColumns columns={board?.columns} />
+        <ListColumns columns={orderedColumns} />
       </Box>
     </DndContext>
   );

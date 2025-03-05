@@ -8,7 +8,15 @@ import AttachmentIcon from "@mui/icons-material/Attachment";
 
 import { Button, Typography } from "@mui/material";
 
-function Cards(card) {
+function Cards({ card }) {
+  const shouldShowCardActions = () => {
+    return (
+      card?.memberIds?.length > 0 ||
+      card?.commens?.length > 0 ||
+      card?.attachments?.length > 0
+    );
+  };
+
   return (
     <Card
       sx={{
@@ -28,17 +36,25 @@ function Cards(card) {
       <CardContent sx={{ p: "1.5", "&:last-child": { p: 1.5 } }}>
         <Typography>{card?.title}</Typography>
       </CardContent>
-      <CardActions sx={{ p: "0 4px 8px 4px" }}>
-        <Button size="small" startIcon={<Groups3Icon />}>
-          20
-        </Button>
-        <Button size="small" startIcon={<AssistantIcon />}>
-          15
-        </Button>
-        <Button size="small" startIcon={<AttachmentIcon />}>
-          10
-        </Button>
-      </CardActions>
+      {shouldShowCardActions() && (
+        <CardActions sx={{ p: "0 4px 8px 4px" }}>
+          {!!card?.memberIds?.length && (
+            <Button size="small" startIcon={<Groups3Icon />}>
+              {card?.memberIds?.length}
+            </Button>
+          )}
+          {!!card?.commens?.length && (
+            <Button size="small" startIcon={<AssistantIcon />}>
+              {card?.commens?.length}
+            </Button>
+          )}
+          {!!card?.attachments?.length && (
+            <Button size="small" startIcon={<AttachmentIcon />}>
+              {card?.attachments?.length}
+            </Button>
+          )}
+        </CardActions>
+      )}
     </Card>
   );
 }

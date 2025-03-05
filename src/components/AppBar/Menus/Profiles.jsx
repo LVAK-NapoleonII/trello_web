@@ -32,11 +32,7 @@ function Profiles() {
           aria-haspopup="true"
           aria-expanded={open ? "true" : undefined}
         >
-          <Avatar
-            sx={{ width: 30, height: 30 }}
-            alt="LVAK"
-            src="https://scontent.fsgn2-3.fna.fbcdn.net/v/t39.30808-6/373052482_796345659163862_3492210870972009521_n.jpg?_nc_cat=107&ccb=1-7&_nc_sid=6ee11a&_nc_eui2=AeFz8Eu77LHqUNbspzw5DZyxJReZnnv7-JklF5mee_v4mWGYtMpzcFCmoIhCjEg0BlJZqPp1Y2-PNBPvfQABRwv7&_nc_ohc=KEyC4Wvi9qoQ7kNvgF9UMmR&_nc_ht=scontent.fsgn2-3.fna&oh=00_AYCJhnx0d4EespVEFnUPOE_uu0jj_zvQnVZ4-f7okmYAHA&oe=6685A88A"
-          />
+          <Avatar sx={{ width: 30, height: 30 }} alt="LVAK" />
         </IconButton>
       </Tooltip>
       <Menu
