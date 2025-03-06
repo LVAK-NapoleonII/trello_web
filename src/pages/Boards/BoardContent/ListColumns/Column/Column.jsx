@@ -27,7 +27,9 @@ function Column({ column }) {
     });
 
   const dndKitColumnStyles = {
-    transform: CSS.Transform.toString(transform),
+    touchAction: "none",
+
+    transform: CSS.Translate.toString(transform),
     transition,
   };
 
