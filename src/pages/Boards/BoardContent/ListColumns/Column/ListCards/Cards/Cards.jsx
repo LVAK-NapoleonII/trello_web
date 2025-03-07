@@ -5,7 +5,8 @@ import CardMedia from "@mui/material/CardMedia";
 import Groups3Icon from "@mui/icons-material/Groups3";
 import AssistantIcon from "@mui/icons-material/Assistant";
 import AttachmentIcon from "@mui/icons-material/Attachment";
-
+import { CSS } from "@dnd-kit/utilities";
+import { useSortable } from "@dnd-kit/sortable";
 import { Button, Typography } from "@mui/material";
 
 function Cards({ card }) {
@@ -17,8 +18,31 @@ function Cards({ card }) {
     );
   };
 
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id: card._id,
+    data: { ...card },
+  });
+
+  const dndKitCardStyles = {
+    touchAction: "none",
+    transform: CSS.Translate.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
   return (
     <Card
+      ref={setNodeRef}
+      style={dndKitCardStyles}
+      {...attributes}
+      {...listeners}
       sx={{
         cursor: "pointer",
         boxShadow: "0 1px 1px grpa(0,0,0.2)",
