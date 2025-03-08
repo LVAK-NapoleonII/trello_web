@@ -44,9 +44,36 @@ function BoardContent({ board }) {
     setActiveDragItemData(event?.active?.data?.current);
   };
 
+  //trigger trong quá trình kéo một phần tử
+  const handleDragOver = (event) => {
+    // console.log("handleDragOver: ", event);
+    if (activeDragItemType === ACTIVE_DRAG_ITEM_TYPE.COLUMN) return;
+    //kéo card giữa các column
+    const { active, over } = event;
+    if (!active || !over) return;
+
+    // activeDranggingCard là card đang được kéo
+    const {
+      id: activeDraggingCardId,
+      data: { current: activeDragItemData },
+    } = active;
+    // over là card đang tương tác với card được kéo
+    const { id: overCardId } = over;
+
+    const activeColumn = findColumnByCardId(activeDraggingCardId);
+    const overColumn = findColumnByCardId(overCardId);
+    console.log("overColumn: " + overColumn);
+    console.log("activeColumn: " + activeColumn);
+  };
+
   const handleDragEnd = (event) => {
     // console.log("handleDragEnd: ", event);
+    if (activeDragItemType === ACTIVE_DRAG_ITEM_TYPE.CARD) {
+      console.log("Hành động kéo thả card- tạm thời không làm gì cả");
+      return;
+    }
     const { active, over } = event;
+
     if (active && over && active.id !== over.id) {
       const newColumnOrderIds = [...board.columnOrderIds];
       const activeColumnIndex = newColumnOrderIds.indexOf(active.id);
@@ -66,9 +93,16 @@ function BoardContent({ board }) {
   const [activeDragItemId, setActiveDragItemId] = useState([null]);
   const [activeDragItemType, setActiveDragItemType] = useState([null]);
   const [activeDragItemData, setActiveDragItemData] = useState([null]);
+
   useEffect(() => {
     setorderColumnsState(orderedColumns);
   }, [board]);
+
+  const findColumnByCardId = (cardId) => {
+    return orderedColumns.find((column) =>
+      column?.cards?.map((card) => card._id)?.includes(cardId)
+    );
+  };
 
   const dropAnimation = {
     sideEffects: defaultDropAnimationSideEffects({
@@ -82,9 +116,10 @@ function BoardContent({ board }) {
 
   return (
     <DndContext
-      onDragEnd={handleDragEnd}
-      sensors={sensors}
       onDragStart={handldeDragStart}
+      onDragEnd={handleDragEnd}
+      onDragOver={handleDragOver}
+      sensors={sensors}
     >
       <Box
         sx={{
