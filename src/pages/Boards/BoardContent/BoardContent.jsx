@@ -35,6 +35,13 @@ function BoardContent({ board }) {
 
   const sensors = useSensors(mouseSensor, touchSensor);
 
+  const orderedColumns = mapOrder(board?.columns, board?.columnOrderIds, "_id");
+  const [orderedColumnsState, setOrderedColumnsState] = useState([]);
+  const [activeDragItemId, setActiveDragItemId] = useState([null]);
+  const [activeDragItemType, setActiveDragItemType] = useState([null]);
+  const [activeDragItemData, setActiveDragItemData] = useState([null]);
+  const [oldColumn, setOldColumn] = useState([null]);
+
   const handldeDragStart = (event) => {
     // console.log("handleDragStart: ", event);
     setActiveDragItemId(event?.active?._id);
@@ -44,6 +51,10 @@ function BoardContent({ board }) {
         : ACTIVE_DRAG_ITEM_TYPE.COLUMN
     );
     setActiveDragItemData(event?.active?.data?.current);
+
+    if (event?.active?.data?.current?.columnId) {
+      setOldColumn(findColumnByCardId(event?.active?.id));
+    }
   };
 
   //trigger trong quá trình kéo một phần tử
@@ -80,7 +91,7 @@ function BoardContent({ board }) {
         newCardIndex =
           overCardIndex >= 0
             ? overCardIndex + modifier
-            : overColumn?.cards?.lenght + 1;
+            : overColumn?.cards?.length;
 
         const nextColumns = cloneDeep(prevColums);
 
@@ -129,48 +140,83 @@ function BoardContent({ board }) {
     if (!active || !over) return;
 
     if (activeDragItemType === ACTIVE_DRAG_ITEM_TYPE.CARD) {
+      // activeDranggingCard là card đang được kéo
+      const {
+        id: activeDraggingCardId,
+        data: { current: activeDragItemData },
+      } = active;
+      // over là card đang tương tác với card được kéo
+      const { id: overCardId } = over;
+
+      const activeColumn = findColumnByCardId(activeDraggingCardId);
+      const overColumn = findColumnByCardId(overCardId);
+      //không tồn tại một trong 2 thì không thực hiện hành động, crash web
+      if (!activeColumn || !overColumn) return;
+
+      if (oldColumn._id !== overColumn._id) {
+        console.log("kéo thả card 2 column khác nhau");
+      } else {
+        const oldCardIndex = oldColumn?.cards?.findIndex(
+          (c) => c._id === activeDraggingCardId
+        );
+        const newCardIndex = overColumn?.cards?.findIndex(
+          (c) => c._id === overCardId
+        );
+        if (oldCardIndex !== -1 && newCardIndex !== -1) {
+          const dndOrderedCards = arrayMove(
+            oldColumn?.cards,
+            oldCardIndex,
+            newCardIndex
+          );
+          setOrderedColumnsState((prevColumns) => {
+            const nextColumns = cloneDeep(prevColumns);
+            const targetColumn = nextColumns.find(
+              (column) => column._id === overColumn._id
+            );
+            if (targetColumn) {
+              targetColumn.cards = dndOrderedCards;
+              targetColumn.cardOrderIds = dndOrderedCards.map(
+                (card) => card._id
+              );
+            }
+            return nextColumns;
+          });
+        }
+      }
     }
 
     if (activeDragItemType === ACTIVE_DRAG_ITEM_TYPE.COLUMN) {
       if (active.id !== over.id) {
-        const oldIndex = orderedColumnsState.findIndex(
+        const oldColumnIndex = orderedColumnsState.findIndex(
           (c) => c._id === active.id
         );
-        const newIndex = orderedColumnsState.findIndex(
+        const newColumnIndex = orderedColumnsState.findIndex(
           (c) => c._id === over.id
         );
 
-        if (oldIndex !== -1 && newIndex !== -1) {
-          const dndOrderedColumns = arrayMove(
-            [...orderedColumnsState],
-            oldIndex,
-            newIndex
-          );
-          setOrderedColumnsState(dndOrderedColumns);
-        }
+        const dndOrderedColumns = arrayMove(
+          [...orderedColumnsState],
+          oldColumnIndex,
+          newColumnIndex
+        );
+        setOrderedColumnsState(dndOrderedColumns);
       }
     }
 
     setActiveDragItemId(null);
     setActiveDragItemType(null);
     setActiveDragItemData(null);
+    setOldColumn(null);
   };
-
-  const orderedColumns = mapOrder(board?.columns, board?.columnOrderIds, "_id");
-  const [orderedColumnsState, setOrderedColumnsState] = useState([]);
-  const [activeDragItemId, setActiveDragItemId] = useState([null]);
-  const [activeDragItemType, setActiveDragItemType] = useState([null]);
-  const [activeDragItemData, setActiveDragItemData] = useState([null]);
 
   useEffect(() => {
     setOrderedColumnsState(orderedColumns);
   }, [board]);
 
-  const findColumnByCardId = (cardId) => {
-    return orderedColumns.find((column) =>
-      column?.cards?.map((card) => card._id)?.includes(cardId)
+  const findColumnByCardId = (cardId) =>
+    orderedColumnsState.find((col) =>
+      col.cards.some((card) => card._id === cardId)
     );
-  };
 
   const dropAnimation = {
     sideEffects: defaultDropAnimationSideEffects({
