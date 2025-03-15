@@ -41,6 +41,79 @@ function BoardContent({ board }) {
   const [activeDragItemType, setActiveDragItemType] = useState([null]);
   const [activeDragItemData, setActiveDragItemData] = useState([null]);
   const [oldColumn, setOldColumn] = useState([null]);
+  const [activeDraggingCardData, setActiveDraggingCardData] = useState([null]);
+
+  //cập nhật state di chuyển card giữa các column
+  const moveCardBetweenDifferentColumns = (
+    overColumn,
+    overCardId,
+    active,
+    over,
+    activeColumn,
+    activeDraggingCardId,
+    activeDraggingCardData
+  ) => {
+    setOrderedColumnsState((prevColums) => {
+      const overCardIndex = overColumn?.cards?.findIndex(
+        (card) => card._id === overCardId
+      );
+      let newCardIndex;
+      const isBelowOverItem =
+        active.rect.current.translated &&
+        active.rect.current.translated.top > over.rect.top + over.rect.height;
+      const modifier = isBelowOverItem ? 1 : 0;
+      newCardIndex =
+        overCardIndex >= 0
+          ? overCardIndex + modifier
+          : overColumn?.cards?.length;
+
+      const nextColumns = cloneDeep(prevColums);
+
+      const nextActiveColumns = nextColumns.find(
+        (column) => column._id === activeColumn._id
+      );
+      const nextOverColumns = nextColumns.find(
+        (column) => column._id === overColumn._id
+      );
+      //column cũ
+      if (nextActiveColumns) {
+        //xóa card khi di chuyển khỏi column cũ
+        nextActiveColumns.cards = nextActiveColumns.cards.filter(
+          (card) => card._id !== activeDraggingCardId
+        );
+        //cập nhật lại column
+        nextActiveColumns.cardOrderIds = nextActiveColumns.cards.map(
+          (card) => card._id
+        );
+      }
+      // column mới
+      if (nextOverColumns) {
+        //kiểm tra card kéo có tồn tại chưa, có thì xóa đi
+        nextOverColumns.cards = nextOverColumns.cards.filter(
+          (card) => card._id !== activeDraggingCardId
+        );
+
+        //cập nhật lại column khi di chuyển 2 column khác nhau
+        const rebuild_activeDraggingCardData = {
+          ...activeDraggingCardData,
+          columnId: overColumn._id,
+        };
+
+        // thêm card mới kéo vào
+        nextOverColumns.cards = nextOverColumns.cards.toSpliced(
+          newCardIndex,
+          0,
+          rebuild_activeDraggingCardData
+        );
+        //cập nhật lại column mới
+        nextOverColumns.cardOrderIds = nextOverColumns.cards.map(
+          (card) => card._id
+        );
+      }
+
+      return nextColumns;
+    });
+  };
 
   const handldeDragStart = (event) => {
     // console.log("handleDragStart: ", event);
@@ -68,7 +141,7 @@ function BoardContent({ board }) {
     // activeDranggingCard là card đang được kéo
     const {
       id: activeDraggingCardId,
-      data: { current: activeDragItemData },
+      data: { current: activeDraggingCardData },
     } = active;
     // over là card đang tương tác với card được kéo
     const { id: overCardId } = over;
@@ -79,59 +152,15 @@ function BoardContent({ board }) {
     if (!activeColumn || !overColumn) return;
 
     if (activeColumn._id !== overColumn._id) {
-      setOrderedColumnsState((prevColums) => {
-        const overCardIndex = overColumn?.cards?.findIndex(
-          (card) => card._id === overCardId
-        );
-        let newCardIndex;
-        const isBelowOverItem =
-          active.rect.current.translated &&
-          active.rect.current.translated.top > over.rect.top + over.rect.height;
-        const modifier = isBelowOverItem ? 1 : 0;
-        newCardIndex =
-          overCardIndex >= 0
-            ? overCardIndex + modifier
-            : overColumn?.cards?.length;
-
-        const nextColumns = cloneDeep(prevColums);
-
-        const nextActiveColumns = nextColumns.find(
-          (column) => column._id === activeColumn._id
-        );
-        const nextOverColumns = nextColumns.find(
-          (column) => column._id === overColumn._id
-        );
-        //column cũ
-        if (nextActiveColumns) {
-          //xóa card khi di chuyển khỏi column cũ
-          nextActiveColumns.cards = nextActiveColumns.cards.filter(
-            (card) => card._id !== activeDraggingCardId
-          );
-          //cập nhật lại column
-          nextActiveColumns.cardOrderIds = nextActiveColumns.cards.map(
-            (card) => card._id
-          );
-        }
-        // column mới
-        if (nextOverColumns) {
-          //kiểm tra card kéo có tồn tại chưa, có thì xóa đi
-          nextOverColumns.cards = nextOverColumns.cards.filter(
-            (card) => card._id !== activeDraggingCardId
-          );
-          // thêm card mới kéo vào
-          nextOverColumns.cards = nextOverColumns.cards.toSpliced(
-            newCardIndex,
-            0,
-            activeDragItemData
-          );
-          //cập nhật lại column mới
-          nextOverColumns.cardOrderIds = nextOverColumns.cards.map(
-            (card) => card._id
-          );
-        }
-
-        return nextColumns;
-      });
+      moveCardBetweenDifferentColumns(
+        overColumn,
+        overCardId,
+        active,
+        over,
+        activeColumn,
+        activeDraggingCardId,
+        activeDraggingCardData
+      );
     }
   };
 
@@ -143,7 +172,7 @@ function BoardContent({ board }) {
       // activeDranggingCard là card đang được kéo
       const {
         id: activeDraggingCardId,
-        data: { current: activeDragItemData },
+        data: { current: activeDraggingCardData },
       } = active;
       // over là card đang tương tác với card được kéo
       const { id: overCardId } = over;
@@ -154,7 +183,15 @@ function BoardContent({ board }) {
       if (!activeColumn || !overColumn) return;
 
       if (oldColumn._id !== overColumn._id) {
-        console.log("kéo thả card 2 column khác nhau");
+        moveCardBetweenDifferentColumns(
+          overColumn,
+          overCardId,
+          active,
+          over,
+          activeColumn,
+          activeDraggingCardId,
+          activeDraggingCardData
+        );
       } else {
         const oldCardIndex = oldColumn?.cards?.findIndex(
           (c) => c._id === activeDraggingCardId
@@ -227,7 +264,6 @@ function BoardContent({ board }) {
       },
     }),
   };
-
   return (
     <DndContext
       collisionDetection={closestCorners}
@@ -244,6 +280,7 @@ function BoardContent({ board }) {
           bgcolor: (theme) =>
             theme.palette.mode === "dark" ? "#34495e" : "#1976d2",
           p: "10px 0",
+          position: "relative",
         }}
       >
         <ListColumns columns={orderedColumnsState} />
