@@ -1,4 +1,5 @@
 import Card from "@mui/material/Card";
+import { useEffect, useState } from "react";
 import CardActions from "@mui/material/CardActions";
 import CardContent from "@mui/material/CardContent";
 import CardMedia from "@mui/material/CardMedia";
@@ -7,9 +8,22 @@ import AssistantIcon from "@mui/icons-material/Assistant";
 import AttachmentIcon from "@mui/icons-material/Attachment";
 import { CSS } from "@dnd-kit/utilities";
 import { useSortable } from "@dnd-kit/sortable";
-import { Button, Typography } from "@mui/material";
+import { Button, Typography, Radio } from "@mui/material";
 
 function Cards({ card }) {
+  const getStoredCompletion = () => {
+    const storedData = JSON.parse(localStorage.getItem("completedTasks")) || {};
+    return storedData[card._id] || false;
+  };
+
+  const [isCompleted, setIsCompleted] = useState(getStoredCompletion);
+
+  useEffect(() => {
+    const storedData = JSON.parse(localStorage.getItem("completedTasks")) || {};
+    storedData[card._id] = isCompleted;
+    localStorage.setItem("completedTasks", JSON.stringify(storedData));
+  }, [isCompleted, card._id]);
+
   const shouldShowCardActions = () => {
     return (
       card?.memberIds?.length > 0 ||
@@ -58,8 +72,27 @@ function Cards({ card }) {
         />
       )}
 
-      <CardContent sx={{ p: "1.5", "&:last-child": { p: 1.5 } }}>
-        <Typography>{card?.title}</Typography>
+      <CardContent
+        sx={{
+          p: "1.5",
+          "&:last-child": { p: 1.5 },
+          display: "flex",
+          alignItems: "center",
+        }}
+      >
+        <Radio
+          checked={isCompleted}
+          onChange={() => setIsCompleted(!isCompleted)}
+          sx={{
+            color: isCompleted ? "#2ecc71" : "gray",
+            "&.Mui-checked": { color: "#2ecc71" },
+          }}
+        />
+        <Typography
+          sx={{ textDecoration: isCompleted ? "line-through" : "none" }}
+        >
+          {card?.title}
+        </Typography>
       </CardContent>
       {shouldShowCardActions() && (
         <CardActions sx={{ p: "0 4px 8px 4px" }}>
