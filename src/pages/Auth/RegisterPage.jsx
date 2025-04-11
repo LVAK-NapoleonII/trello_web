@@ -11,6 +11,7 @@ import {
 } from "@mui/material";
 import { Visibility, VisibilityOff } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
+import axios from "axios"; // ĐÃ SỬA: Thêm axios
 
 const RegisterPage = () => {
   const theme = useTheme();
@@ -29,10 +30,10 @@ const RegisterPage = () => {
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
-    setError(""); // Xóa lỗi khi người dùng nhập lại
+    setError("");
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.name || !formData.email || !formData.password) {
       setError("Vui lòng điền đầy đủ thông tin!");
@@ -42,8 +43,29 @@ const RegisterPage = () => {
       setError("Mật khẩu không khớp!");
       return;
     }
-    console.log("Register Data:", formData);
-    navigate("/login"); // Chuyển hướng sang trang đăng nhập sau khi đăng ký thành công
+
+    try {
+      // Gọi API đăng ký
+      const response = await axios.post(
+        "http://localhost:5000/api/auth/register",
+        {
+          fullName: formData.name, // Đổi tên trường để khớp với backend
+          email: formData.email,
+          password: formData.password,
+        }
+      );
+
+      // Nếu đăng ký thành công, chuyển hướng đến trang xác thực OTP
+      // Truyền email qua state để dùng ở trang VerifyOTP
+      navigate("/verify-otp", { state: { email: formData.email } });
+    } catch (err) {
+      // Xử lý lỗi từ API
+      if (err.response && err.response.data && err.response.data.message) {
+        setError(err.response.data.message);
+      } else {
+        setError("Đã có lỗi xảy ra. Vui lòng thử lại!");
+      }
+    }
   };
 
   return (

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
 import Box from "@mui/material/Box";
@@ -10,16 +10,49 @@ import IconButton from "@mui/material/IconButton";
 import Settings from "@mui/icons-material/Settings";
 import Logout from "@mui/icons-material/Logout";
 import PersonAdd from "@mui/icons-material/PersonAdd";
+import { useAuth } from "../../../context/AuthContext";
+import { useNavigate } from "react-router-dom";
 
 function Profiles() {
   const [anchorEl, setAnchorEl] = React.useState(null);
   const open = Boolean(anchorEl);
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!user) {
+      navigate("/login");
+    }
+  }, [user, navigate]);
+
   const handleClick = (event) => {
     setAnchorEl(event.currentTarget);
   };
+
   const handleClose = () => {
     setAnchorEl(null);
   };
+
+  const handleLogout = () => {
+    logout();
+    navigate("/login");
+    handleClose();
+  };
+
+  const handleProfileClick = () => {
+    navigate("/profile");
+    handleClose();
+  };
+
+  if (!user) {
+    return null;
+  }
+
+  const avatarUrl = user?.avatar
+    ? user.avatar.startsWith("https://api.dicebear.com")
+      ? user.avatar
+      : `http://localhost:5000${user.avatar}`
+    : "";
 
   return (
     <Box>
@@ -32,7 +65,11 @@ function Profiles() {
           aria-haspopup="true"
           aria-expanded={open ? "true" : undefined}
         >
-          <Avatar sx={{ width: 30, height: 30 }} alt="LVAK" />
+          <Avatar
+            sx={{ width: 30, height: 30 }}
+            alt={user?.fullName || "User"}
+            src={avatarUrl}
+          />
         </IconButton>
       </Tooltip>
       <Menu
@@ -44,20 +81,20 @@ function Profiles() {
           "aria-labelledby": "basic-button",
         }}
       >
-        <MenuItem onClick={handleClose}>
+        <MenuItem onClick={handleProfileClick}>
           <Avatar
             sx={{ width: 28, height: 28, mr: 2 }}
-            alt="LVAK"
-            src="https://scontent.fsgn2-3.fna.fbcdn.net/v/t39.30808-6/373052482_796345659163862_3492210870972009521_n.jpg?_nc_cat=107&ccb=1-7&_nc_sid=6ee11a&_nc_eui2=AeFz8Eu77LHqUNbspzw5DZyxJReZnnv7-JklF5mee_v4mWGYtMpzcFCmoIhCjEg0BlJZqPp1Y2-PNBPvfQABRwv7&_nc_ohc=KEyC4Wvi9qoQ7kNvgF9UMmR&_nc_ht=scontent.fsgn2-3.fna&oh=00_AYCJhnx0d4EespVEFnUPOE_uu0jj_zvQnVZ4-f7okmYAHA&oe=6685A88A"
-          />{" "}
+            alt={user?.fullName || "User"}
+            src={avatarUrl}
+          />
           Profile
         </MenuItem>
         <MenuItem onClick={handleClose}>
           <Avatar
             sx={{ width: 28, height: 28, mr: 2 }}
-            alt="LVAK"
-            src="https://scontent.fsgn2-3.fna.fbcdn.net/v/t39.30808-6/373052482_796345659163862_3492210870972009521_n.jpg?_nc_cat=107&ccb=1-7&_nc_sid=6ee11a&_nc_eui2=AeFz8Eu77LHqUNbspzw5DZyxJReZnnv7-JklF5mee_v4mWGYtMpzcFCmoIhCjEg0BlJZqPp1Y2-PNBPvfQABRwv7&_nc_ohc=KEyC4Wvi9qoQ7kNvgF9UMmR&_nc_ht=scontent.fsgn2-3.fna&oh=00_AYCJhnx0d4EespVEFnUPOE_uu0jj_zvQnVZ4-f7okmYAHA&oe=6685A88A"
-          />{" "}
+            alt={user?.fullName || "User"}
+            src={avatarUrl}
+          />
           My account
         </MenuItem>
         <Divider />
@@ -73,7 +110,7 @@ function Profiles() {
           </ListItemIcon>
           Settings
         </MenuItem>
-        <MenuItem onClick={handleClose}>
+        <MenuItem onClick={handleLogout}>
           <ListItemIcon>
             <Logout fontSize="small" />
           </ListItemIcon>

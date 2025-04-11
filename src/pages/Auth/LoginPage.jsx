@@ -11,11 +11,14 @@ import {
 } from "@mui/material";
 import { Visibility, VisibilityOff } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
+import axios from "axios";
+import { useAuth } from "../../context/AuthContext.jsx";
 
 const LoginPage = () => {
   const theme = useTheme();
   const navigate = useNavigate();
   const isDarkMode = theme.palette.mode === "dark";
+  const { login } = useAuth();
 
   return (
     <Box
@@ -49,13 +52,13 @@ const LoginPage = () => {
           Đăng Nhập
         </Typography>
 
-        <LoginForm navigate={navigate} />
+        <LoginForm navigate={navigate} login={login} />
       </Box>
     </Box>
   );
 };
 
-const LoginForm = ({ navigate }) => {
+const LoginForm = ({ navigate, login }) => {
   const [formData, setFormData] = useState({ email: "", password: "" });
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
@@ -65,14 +68,33 @@ const LoginForm = ({ navigate }) => {
     setError("");
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.email || !formData.password) {
       setError("Vui lòng nhập email và mật khẩu!");
       return;
     }
-    console.log("Login Data:", formData);
-    navigate("/dashboard");
+
+    try {
+      const response = await axios.post(
+        "http://localhost:5000/api/auth/login",
+        {
+          email: formData.email,
+          password: formData.password,
+        }
+      );
+
+      // Lưu thông tin user và token vào context
+      login(response.data.user, response.data.token);
+
+      navigate("/");
+    } catch (err) {
+      if (err.response && err.response.data && err.response.data.message) {
+        setError(err.response.data.message);
+      } else {
+        setError("Đã có lỗi xảy ra. Vui lòng thử lại!");
+      }
+    }
   };
 
   return (

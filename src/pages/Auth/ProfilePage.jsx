@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Avatar,
   Box,
@@ -12,17 +12,22 @@ import EditIcon from "@mui/icons-material/Edit";
 import SaveIcon from "@mui/icons-material/Save";
 import CameraAltIcon from "@mui/icons-material/CameraAlt";
 import { deepPurple } from "@mui/material/colors";
-import RecentActivities from "./RecentActivities"; // ✅ Import component mới
+import RecentActivities from "./RecentActivities";
+import { useAuth } from "../../context/AuthContext";
+import axios from "axios";
+import { useNavigate } from "react-router-dom";
 
 const ProfilePage = () => {
   const theme = useTheme();
   const isDarkMode = theme.palette.mode === "dark";
+  const { user, login } = useAuth();
+  const navigate = useNavigate();
 
   const [isEditing, setIsEditing] = useState(false);
   const [profile, setProfile] = useState({
-    avatar: "",
-    name: "Nguyễn Văn A",
-    email: "nguyenvana@example.com",
+    avatar: user?.avatar ? `http://localhost:5000${user.avatar}` : "",
+    name: user?.fullName || "Nguyễn Văn A",
+    email: user?.email || "nguyenvana@example.com",
     bio: "Tôi là một lập trình viên đam mê công nghệ và thiết kế web.",
   });
 
@@ -35,6 +40,23 @@ const ProfilePage = () => {
     { id: 3, text: "Bạn đã đổi mật khẩu thành công" },
   ]);
 
+  useEffect(() => {
+    if (!user) {
+      navigate("/login");
+    } else {
+      setProfile({
+        avatar: user?.avatar
+          ? user.avatar.startsWith("https://api.dicebear.com")
+            ? user.avatar // Nếu là avatar tự động từ DiceBear, giữ nguyên URL
+            : `http://localhost:5000${user.avatar}` // Nếu là avatar đã upload, thêm domain
+          : "",
+        name: user?.fullName || "Nguyễn Văn A",
+        email: user?.email || "nguyenvana@example.com",
+        bio: "Tôi là một lập trình viên đam mê công nghệ và thiết kế web.",
+      });
+    }
+  }, [user, navigate]);
+
   const handleEdit = () => setIsEditing(true);
   const handleSave = () => setIsEditing(false);
 
@@ -42,9 +64,40 @@ const ProfilePage = () => {
     setProfile({ ...profile, [e.target.name]: e.target.value });
   };
 
-  const handleAvatarUpload = () => {
-    alert("Tính năng tải ảnh chưa được hỗ trợ!");
+  const handleAvatarUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append("avatar", file);
+
+    try {
+      const token = localStorage.getItem("token");
+      const response = await axios.post(
+        "http://localhost:5000/api/auth/update-avatar",
+        formData,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "multipart/form-data",
+          },
+        }
+      );
+
+      setProfile({
+        ...profile,
+        avatar: `http://localhost:5000${response.data.user.avatar}`,
+      });
+      login(response.data.user, token);
+    } catch (error) {
+      console.error("Error uploading avatar:", error);
+      alert("Không thể upload avatar. Vui lòng thử lại!");
+    }
   };
+
+  if (!user) {
+    return null;
+  }
 
   return (
     <Box
@@ -89,9 +142,15 @@ const ProfilePage = () => {
               boxShadow: 1,
               "&:hover": { background: "#eee" },
             }}
-            onClick={handleAvatarUpload}
+            component="label"
           >
             <CameraAltIcon fontSize="small" />
+            <input
+              type="file"
+              accept="image/*"
+              hidden
+              onChange={handleAvatarUpload}
+            />
           </IconButton>
         </Box>
 
@@ -137,7 +196,7 @@ const ProfilePage = () => {
           {isEditing ? "Lưu Thay Đổi" : "Chỉnh Sửa"}
         </Button>
 
-        {/* Hoạt động gần đây (Component tách riêng) */}
+        {/* Hoạt động gần đây */}
         <RecentActivities activities={activities} userName={profile.name} />
       </Box>
     </Box>
