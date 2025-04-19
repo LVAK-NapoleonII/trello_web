@@ -1,11 +1,25 @@
-import { useState, useEffect } from "react";
-import { Box, Button, TextField, Typography, useTheme } from "@mui/material";
+import { useState, useEffect, useContext } from "react";
+import { useNavigate } from "react-router-dom";
+import {
+  Box,
+  Button,
+  TextField,
+  Typography,
+  useTheme,
+  CircularProgress,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+} from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import SearchIcon from "@mui/icons-material/Search";
 import BoardList from "../BoardList/BoardList";
-import Sidebar from "./Sidebar/Sidebar"; // Đảm bảo đường dẫn Sidebar đúng
+import Sidebar from "./Sidebar/Sidebar";
+import axios from "axios";
+import { toast } from "react-toastify";
+import { SocketContext } from "../../context/SocketContext";
 
-// Hàm tạo màu gradient ngẫu nhiên
 const generateGradient = () => {
   const colors = [
     ["#ff6b6b", "#feca57"],
@@ -19,37 +33,256 @@ const generateGradient = () => {
 };
 
 const HomePage = () => {
+  const socket = useContext(SocketContext);
   const theme = useTheme();
   const isDarkMode = theme.palette.mode === "dark";
+  const navigate = useNavigate();
 
   const getStoredBgGradient = () =>
     localStorage.getItem("bgGradient") || generateGradient();
 
   const [searchValue, setSearchValue] = useState("");
-  const [boards, setBoards] = useState([
-    { id: 1, name: "Project A", color: "#ff6b6b" },
-    { id: 2, name: "Marketing Plan", color: "#6b6bff" },
-    { id: 3, name: "Sprint Backlog", color: "#feca57" },
-    { id: 4, name: "Personal Tasks", color: "#1dd1a1" },
-  ]);
   const [bgGradient, setBgGradient] = useState(getStoredBgGradient);
+  const [boards, setBoards] = useState([]);
+  const [workspaces, setWorkspaces] = useState([]);
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState("");
+  const [selectedWorkspaceBackground, setSelectedWorkspaceBackground] =
+    useState(null);
+  const [loading, setLoading] = useState(false);
+  const [backgroundError, setBackgroundError] = useState(false);
 
   useEffect(() => {
     localStorage.setItem("bgGradient", bgGradient);
   }, [bgGradient]);
 
-  const handleCreateBoard = () => {
-    const newBoard = {
-      id: boards.length + 1,
-      name: `New Board ${boards.length + 1}`,
-      color: generateGradient(),
+  const fetchWorkspaces = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        navigate("/login");
+        return;
+      }
+
+      const response = await axios.get("http://localhost:5000/api/workspaces", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      setWorkspaces(response.data);
+    } catch (error) {
+      console.error("Lỗi tải workspaces:", error);
+      toast.error("Không thể tải danh sách không gian làm việc!");
+      if (error.response?.status === 401) {
+        navigate("/login");
+      }
+    }
+  };
+
+  const fetchBoards = async () => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem("token");
+      if (!token) {
+        navigate("/login");
+        return;
+      }
+
+      const response = await axios.get("http://localhost:5000/api/boards", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const filteredBoards = selectedWorkspaceId
+        ? response.data.boards.filter(
+            (board) => board.workspace._id === selectedWorkspaceId
+          )
+        : response.data.boards;
+
+      setBoards(filteredBoards);
+    } catch (error) {
+      console.error("Lỗi tải boards:", error);
+      toast.error("Không thể tải danh sách bảng!");
+      if (error.response?.status === 401) {
+        navigate("/login");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const userId = localStorage.getItem("userId");
+    if (userId) {
+      socket.emit("join", userId);
+      console.log("HomePage tham gia phòng socket:", userId);
+    }
+
+    fetchWorkspaces();
+    fetchBoards();
+
+    socket.on("workspaces-loaded", (workspaceIds) => {
+      workspaceIds.forEach((workspaceId) => {
+        socket.emit("join", workspaceId);
+        console.log("HomePage tham gia phòng workspace:", workspaceId);
+      });
+    });
+
+    socket.on("workspace-created", (data) => {
+      console.log("Nhận workspace-created:", data);
+      setWorkspaces((prev) => {
+        if (!prev.some((ws) => ws._id === data.workspace._id)) {
+          return [...prev, data.workspace];
+        }
+        return prev;
+      });
+      socket.emit("join", data.workspace._id);
+    });
+
+    socket.on("workspace-updated", (data) => {
+      console.log("Nhận workspace-updated:", data);
+      setWorkspaces((prev) =>
+        prev.map((ws) => (ws._id === data.workspace._id ? data.workspace : ws))
+      );
+      if (selectedWorkspaceId === data.workspace._id) {
+        setSelectedWorkspaceBackground(data.workspace.background || null);
+      }
+    });
+
+    socket.on("workspace-hidden", (data) => {
+      console.log("Nhận workspace-hidden:", data);
+      setWorkspaces((prev) => prev.filter((ws) => ws._id !== data.workspaceId));
+      if (selectedWorkspaceId === data.workspaceId) {
+        setSelectedWorkspaceId("");
+        setSelectedWorkspaceBackground(null);
+        setBoards([]);
+      }
+    });
+
+    socket.on("board-created", (data) => {
+      console.log("Nhận board-created:", data);
+      if (
+        !selectedWorkspaceId ||
+        data.board.workspace._id === selectedWorkspaceId
+      ) {
+        setBoards((prev) => {
+          if (!prev.some((b) => b._id === data.board._id)) {
+            return [...prev, data.board];
+          }
+          return prev;
+        });
+      }
+    });
+
+    socket.on("boardUpdated", (data) => {
+      console.log("Nhận boardUpdated:", data);
+      if (!selectedWorkspaceId || data.workspace?._id === selectedWorkspaceId) {
+        setBoards((prev) => prev.map((b) => (b._id === data._id ? data : b)));
+      }
+    });
+
+    socket.on("board-deleted", (data) => {
+      console.log("Nhận board-deleted:", data);
+      setBoards((prev) => prev.filter((b) => b._id !== data.boardId));
+    });
+
+    socket.on("member-deactivated", (data) => {
+      console.log("Nhận member-deactivated:", data);
+      if (data.deactivatedUserId === localStorage.getItem("userId")) {
+        // Xóa board khỏi danh sách của người dùng
+        setBoards((prev) => prev.filter((b) => b._id !== data.board._id));
+        if (data.workspaceRemoved) {
+          // Xóa workspace nếu không còn board nào trong workspace
+          setWorkspaces((prev) =>
+            prev.filter((ws) => ws._id !== data.board.workspace._id)
+          );
+          if (selectedWorkspaceId === data.board.workspace._id) {
+            setSelectedWorkspaceId("");
+            setSelectedWorkspaceBackground(null);
+            setBoards([]);
+          }
+        }
+      } else {
+        // Cập nhật board cho các thành viên còn lại
+        setBoards((prev) =>
+          prev.map((b) => (b._id === data.board._id ? data.board : b))
+        );
+      }
+    });
+
+    socket.on("refresh-sidebar", (data) => {
+      console.log("Nhận refresh-sidebar:", data);
+      if (data.userId === localStorage.getItem("userId")) {
+        fetchWorkspaces();
+      }
+    });
+
+    return () => {
+      socket.off("workspaces-loaded");
+      socket.off("workspace-created");
+      socket.off("workspace-updated");
+      socket.off("workspace-hidden");
+      socket.off("board-created");
+      socket.off("boardUpdated");
+      socket.off("board-deleted");
+      socket.off("member-deactivated");
+      socket.off("refresh-sidebar");
     };
-    setBoards([...boards, newBoard]);
+  }, [navigate, selectedWorkspaceId, socket]);
+
+  const handleSelectWorkspace = (workspaceId) => {
+    setSelectedWorkspaceId(workspaceId);
+    const selectedWorkspace = workspaces.find((ws) => ws._id === workspaceId);
+    setSelectedWorkspaceBackground(selectedWorkspace?.background || null);
+    setBackgroundError(false);
+  };
+
+  const handleCreateBoard = async () => {
+    if (!selectedWorkspaceId) {
+      toast.error("Vui lòng chọn một không gian làm việc trước!");
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem("token");
+      const response = await axios.post(
+        "http://localhost:5000/api/boards",
+        {
+          title: `Bảng mới ${boards.length + 1}`,
+          description: "Một bảng mới",
+          visibility: "private",
+          background: generateGradient(),
+          workspace: selectedWorkspaceId,
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      socket.emit("board-created", { board: response.data });
+      toast.success("Tạo bảng thành công!");
+      fetchBoards();
+    } catch (error) {
+      console.error("Lỗi tạo board:", error);
+      toast.error("Có lỗi xảy ra khi tạo bảng!");
+    }
+  };
+
+  const handleUpdateBoard = (updatedBoard) => {
+    setBoards((prevBoards) =>
+      prevBoards.map((board) =>
+        board._id === updatedBoard._id ? updatedBoard : board
+      )
+    );
+  };
+
+  const handleDeleteBoard = (boardId) => {
+    setBoards((prevBoards) =>
+      prevBoards.filter((board) => board._id !== boardId)
+    );
+  };
+
+  const handleBackgroundError = () => {
+    setBackgroundError(true);
   };
 
   return (
     <Box sx={{ display: "flex", minHeight: "100vh", p: 1 }}>
-      {/* Nội dung chính */}
       <Box
         sx={{
           flexGrow: 1,
@@ -58,37 +291,56 @@ const HomePage = () => {
           alignItems: "stretch",
           justifyContent: "center",
           p: 3,
-          background: bgGradient,
+          background:
+            selectedWorkspaceBackground && !backgroundError
+              ? `url(${selectedWorkspaceBackground}) no-repeat center/cover`
+              : bgGradient,
           transition: "background 1s ease",
           borderRadius: "20px",
           boxShadow: "0px 8px 16px rgba(0,0,0,0.2)",
+          position: "relative",
         }}
       >
-        {/* Sidebar bên trái */}
         <Box
           sx={{
-            width: "250px",
-            flexShrink: 0,
-            mr: 2,
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: isDarkMode
+              ? "rgba(0, 0, 0, 0.4)"
+              : "rgba(255, 255, 255, 0.2)",
+            borderRadius: "20px",
           }}
-        >
-          <Sidebar />
+        />
+        {selectedWorkspaceBackground && !backgroundError && (
+          <img
+            src={selectedWorkspaceBackground}
+            alt="Workspace background"
+            style={{ display: "none" }}
+            onError={handleBackgroundError}
+          />
+        )}
+        <Box sx={{ width: "250px", flexShrink: 0, mr: 2, zIndex: 1 }}>
+          <Sidebar onSelectWorkspace={handleSelectWorkspace} />
         </Box>
         <Box
           sx={{
             flexGrow: 1,
-            height: "calc(100vh )",
+            height: "calc(100vh)",
             overflowY: "auto",
-            backdropFilter: "blur(10px)",
+            backdropFilter: "blur(5px)",
             backgroundColor: isDarkMode
-              ? "rgba(255, 255, 255, 0.1)"
-              : "rgba(255, 255, 255, 0.6)",
+              ? "rgba(255, 255, 255, 0.15)"
+              : "rgba(255, 255, 255, 0.7)",
             borderRadius: 4,
             padding: 4,
             boxShadow: isDarkMode
               ? "0px 8px 16px rgba(0, 0, 0, 0.5)"
               : "0px 8px 16px rgba(0, 0, 0, 0.2)",
             transition: "all 0.5s ease",
+            zIndex: 1,
           }}
         >
           <Typography
@@ -96,11 +348,35 @@ const HomePage = () => {
             fontWeight="bold"
             sx={{ mb: 3, color: isDarkMode ? "#fff" : "#333" }}
           >
-            My Boards
+            {selectedWorkspaceId ? "Các bảng trong Workspace" : "Bảng của tôi"}
           </Typography>
-
-          {/* Chọn màu nền */}
           <Box sx={{ display: "flex", gap: 2, alignItems: "center", mb: 3 }}>
+            <FormControl sx={{ minWidth: 200 }}>
+              <InputLabel id="workspace-select-label">
+                Không gian làm việc
+              </InputLabel>
+              <Select
+                labelId="workspace-select-label"
+                value={selectedWorkspaceId || ""}
+                label="Không gian làm việc"
+                onChange={(e) => handleSelectWorkspace(e.target.value)}
+                sx={{
+                  backgroundColor: isDarkMode
+                    ? "rgba(255, 255, 255, 0.2)"
+                    : "rgba(255, 255, 255, 0.8)",
+                  color: isDarkMode ? "#fff" : "#000",
+                }}
+              >
+                <MenuItem value="">
+                  <em>Tất cả không gian làm việc</em>
+                </MenuItem>
+                {workspaces.map((workspace) => (
+                  <MenuItem key={workspace._id} value={workspace._id}>
+                    {workspace.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
             <Typography
               variant="body1"
               sx={{ color: isDarkMode ? "#fff" : "#000" }}
@@ -119,13 +395,11 @@ const HomePage = () => {
               Random Gradient
             </Button>
           </Box>
-
-          {/* Tìm kiếm & Tạo board mới */}
           <Box sx={{ display: "flex", gap: 2, mb: 3 }}>
             <TextField
               variant="outlined"
               size="small"
-              placeholder="Search boards..."
+              placeholder="Tìm kiếm bảng..."
               value={searchValue}
               onChange={(e) => setSearchValue(e.target.value)}
               InputProps={{
@@ -158,12 +432,34 @@ const HomePage = () => {
                 },
               }}
             >
-              Create Board
+              Tạo bảng
             </Button>
           </Box>
-
-          {/* Danh sách boards */}
-          <BoardList boards={boards} searchValue={searchValue} />
+          {selectedWorkspaceId || !selectedWorkspaceId ? (
+            loading ? (
+              <Box sx={{ display: "flex", justifyContent: "center", mt: 5 }}>
+                <CircularProgress size={50} />
+              </Box>
+            ) : (
+              <BoardList
+                boards={boards}
+                searchValue={searchValue}
+                onUpdate={handleUpdateBoard}
+                onDelete={handleDeleteBoard}
+              />
+            )
+          ) : (
+            <Typography
+              variant="h6"
+              sx={{
+                textAlign: "center",
+                mt: 5,
+                color: isDarkMode ? "#ccc" : "gray",
+              }}
+            >
+              Vui lòng chọn một không gian làm việc để xem danh sách bảng.
+            </Typography>
+          )}
         </Box>
       </Box>
     </Box>

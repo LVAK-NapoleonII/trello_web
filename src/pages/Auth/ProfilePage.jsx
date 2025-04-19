@@ -7,6 +7,7 @@ import {
   Typography,
   IconButton,
   useTheme,
+  CircularProgress,
 } from "@mui/material";
 import EditIcon from "@mui/icons-material/Edit";
 import SaveIcon from "@mui/icons-material/Save";
@@ -20,12 +21,16 @@ import { useNavigate } from "react-router-dom";
 const ProfilePage = () => {
   const theme = useTheme();
   const isDarkMode = theme.palette.mode === "dark";
-  const { user, login } = useAuth();
+  const { user, login, loading } = useAuth();
   const navigate = useNavigate();
 
   const [isEditing, setIsEditing] = useState(false);
   const [profile, setProfile] = useState({
-    avatar: user?.avatar ? `http://localhost:5000${user.avatar}` : "",
+    avatar: user?.avatar
+      ? user.avatar.startsWith("https://api.dicebear.com")
+        ? user.avatar
+        : `http://localhost:5000${user.avatar}`
+      : "",
     name: user?.fullName || "Nguyễn Văn A",
     email: user?.email || "nguyenvana@example.com",
     bio: "Tôi là một lập trình viên đam mê công nghệ và thiết kế web.",
@@ -41,21 +46,23 @@ const ProfilePage = () => {
   ]);
 
   useEffect(() => {
+    if (loading) return;
+
     if (!user) {
       navigate("/login");
     } else {
       setProfile({
         avatar: user?.avatar
           ? user.avatar.startsWith("https://api.dicebear.com")
-            ? user.avatar // Nếu là avatar tự động từ DiceBear, giữ nguyên URL
-            : `http://localhost:5000${user.avatar}` // Nếu là avatar đã upload, thêm domain
+            ? user.avatar
+            : `http://localhost:5000${user.avatar}`
           : "",
         name: user?.fullName || "Nguyễn Văn A",
         email: user?.email || "nguyenvana@example.com",
         bio: "Tôi là một lập trình viên đam mê công nghệ và thiết kế web.",
       });
     }
-  }, [user, navigate]);
+  }, [user, navigate, loading]);
 
   const handleEdit = () => setIsEditing(true);
   const handleSave = () => setIsEditing(false);
@@ -94,6 +101,21 @@ const ProfilePage = () => {
       alert("Không thể upload avatar. Vui lòng thử lại!");
     }
   };
+
+  if (loading) {
+    return (
+      <Box
+        sx={{
+          minHeight: "100vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <CircularProgress />
+      </Box>
+    );
+  }
 
   if (!user) {
     return null;

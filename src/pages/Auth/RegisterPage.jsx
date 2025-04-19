@@ -8,10 +8,11 @@ import {
   IconButton,
   Alert,
   useTheme,
+  CircularProgress,
 } from "@mui/material";
 import { Visibility, VisibilityOff } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
-import axios from "axios"; // ĐÃ SỬA: Thêm axios
+import axios from "axios";
 
 const RegisterPage = () => {
   const theme = useTheme();
@@ -24,47 +25,66 @@ const RegisterPage = () => {
     password: "",
     confirmPassword: "",
   });
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [showPassword, setShowPassword] = useState(false); // State for password visibility
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false); // State for confirm password visibility
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
     setError("");
   };
 
+  const handleTogglePassword = () => {
+    setShowPassword((prev) => !prev);
+  };
+
+  const handleToggleConfirmPassword = () => {
+    setShowConfirmPassword((prev) => !prev);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError("");
+    setLoading(true);
+
     if (!formData.name || !formData.email || !formData.password) {
       setError("Vui lòng điền đầy đủ thông tin!");
+      setLoading(false);
       return;
     }
     if (formData.password !== formData.confirmPassword) {
       setError("Mật khẩu không khớp!");
+      setLoading(false);
+      return;
+    }
+    if (formData.password.length < 6) {
+      setError("Mật khẩu phải có ít nhất 6 ký tự!");
+      setLoading(false);
+      return;
+    }
+    if (!/\S+@\S+\.\S+/.test(formData.email)) {
+      setError("Email không hợp lệ!");
+      setLoading(false);
       return;
     }
 
     try {
-      // Gọi API đăng ký
       const response = await axios.post(
         "http://localhost:5000/api/auth/register",
         {
-          fullName: formData.name, // Đổi tên trường để khớp với backend
+          fullName: formData.name,
           email: formData.email,
           password: formData.password,
         }
       );
-
-      // Nếu đăng ký thành công, chuyển hướng đến trang xác thực OTP
-      // Truyền email qua state để dùng ở trang VerifyOTP
       navigate("/verify-otp", { state: { email: formData.email } });
     } catch (err) {
-      // Xử lý lỗi từ API
-      if (err.response && err.response.data && err.response.data.message) {
-        setError(err.response.data.message);
-      } else {
-        setError("Đã có lỗi xảy ra. Vui lòng thử lại!");
-      }
+      setError(
+        err.response?.data?.message || "Đã có lỗi xảy ra. Vui lòng thử lại!"
+      );
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -120,6 +140,7 @@ const RegisterPage = () => {
             onChange={handleChange}
             margin="normal"
             variant="outlined"
+            disabled={loading}
             InputProps={{
               sx: {
                 borderRadius: 2,
@@ -137,6 +158,7 @@ const RegisterPage = () => {
             onChange={handleChange}
             margin="normal"
             variant="outlined"
+            disabled={loading}
             InputProps={{
               sx: {
                 borderRadius: 2,
@@ -154,10 +176,11 @@ const RegisterPage = () => {
             onChange={handleChange}
             margin="normal"
             variant="outlined"
+            disabled={loading}
             InputProps={{
               endAdornment: (
                 <InputAdornment position="end">
-                  <IconButton onClick={() => setShowPassword(!showPassword)}>
+                  <IconButton onClick={handleTogglePassword} edge="end">
                     {showPassword ? <VisibilityOff /> : <Visibility />}
                   </IconButton>
                 </InputAdornment>
@@ -178,12 +201,11 @@ const RegisterPage = () => {
             onChange={handleChange}
             margin="normal"
             variant="outlined"
+            disabled={loading}
             InputProps={{
               endAdornment: (
                 <InputAdornment position="end">
-                  <IconButton
-                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  >
+                  <IconButton onClick={handleToggleConfirmPassword} edge="end">
                     {showConfirmPassword ? <VisibilityOff /> : <Visibility />}
                   </IconButton>
                 </InputAdornment>
@@ -200,6 +222,7 @@ const RegisterPage = () => {
             fullWidth
             type="submit"
             variant="contained"
+            disabled={loading}
             sx={{
               mt: 3,
               py: 1.5,
@@ -212,7 +235,11 @@ const RegisterPage = () => {
               },
             }}
           >
-            Đăng Ký
+            {loading ? (
+              <CircularProgress size={24} color="inherit" />
+            ) : (
+              "Đăng Ký"
+            )}
           </Button>
         </form>
 

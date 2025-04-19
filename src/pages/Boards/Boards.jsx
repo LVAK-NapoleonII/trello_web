@@ -1,22 +1,83 @@
 import { useState, useEffect } from "react";
 import Container from "@mui/material/Container";
 import CircularProgress from "@mui/material/CircularProgress";
-import AppBar from "../../components/AppBar/AppBar";
+import { useTheme } from "@mui/material/styles";
 import BoardBar from "./BoardBar/BoardBar";
 import BoardContent from "./BoardContent/BoardContent";
-import { mockData } from "../../apis/mock-data";
 import Takenotes from "../Takenotes/Takenotes.jsx";
+import axios from "axios";
+import { useParams } from "react-router-dom";
 
 function Board() {
+  const { boardId } = useParams(); // Lấy boardId từ URL
   const [notesList, setNotesList] = useState([]); // Danh sách TakeNotes
-  const [loading, setLoading] = useState(true); // ✅ Trạng thái loading dữ liệu bảng
+  const [loading, setLoading] = useState(true); // Trạng thái loading dữ liệu bảng
+  const [board, setBoard] = useState(null); // Dữ liệu bảng
+  const theme = useTheme(); // Lấy theme để kiểm tra chế độ light/dark
+  const isDarkMode = theme.palette.mode === "dark";
 
-  // ✅ Giả lập hiệu ứng tải bảng (Giả lập API)
+  // Tải dữ liệu bảng từ API
   useEffect(() => {
-    setTimeout(() => {
+    const fetchBoard = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        if (!token) {
+          throw new Error("Không tìm thấy token! Vui lòng đăng nhập lại.");
+        }
+
+        console.log("Board: Fetching board with ID:", boardId);
+        const response = await axios.get(
+          `http://localhost:5000/api/boards/${boardId}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+
+        const boardData = response.data;
+        console.log("Board: Fetched board data:", boardData);
+
+        // Tải danh sách cột
+        const columnsResponse = await axios.get(
+          `http://localhost:5000/api/lists/board/${boardId}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        console.log("Board: Fetched columns:", columnsResponse.data);
+
+        const columnsWithCards = await Promise.all(
+          columnsResponse.data.map(async (column) => {
+            const cardsResponse = await axios.get(
+              `http://localhost:5000/api/cards/list/${column._id}`,
+              { headers: { Authorization: `Bearer ${token}` } }
+            );
+            return { ...column, cards: cardsResponse.data };
+          })
+        );
+
+        setBoard({
+          ...boardData,
+          columns: columnsWithCards,
+          columnOrderIds: columnsWithCards.map((col) => col._id),
+        });
+        setLoading(false);
+      } catch (err) {
+        console.error(
+          "Board: Error fetching board:",
+          err.response?.data || err.message
+        );
+        alert(
+          `Có lỗi xảy ra khi tải bảng: ${
+            err.response?.data?.message || err.message
+          }`
+        );
+        setLoading(false);
+      }
+    };
+
+    if (boardId) {
+      fetchBoard();
+    } else {
+      console.warn("Board: No boardId provided");
       setLoading(false);
-    }, 1000); // Giả lập thời gian tải
-  }, []);
+    }
+  }, [boardId]);
 
   // Khi nhấn chuột phải, thêm một TakeNotes mới
   const handleRightClick = (event) => {
@@ -26,12 +87,11 @@ function Board() {
       id: Date.now(),
       position: { x: event.clientX, y: event.clientY },
       notes: [],
-      isAdding: true, // ✅ Thêm trạng thái đang thêm
+      isAdding: true,
     };
 
     setNotesList((prev) => [...prev, newNote]);
 
-    // ✅ Sau 500ms thì bỏ trạng thái loading
     setTimeout(() => {
       setNotesList((prev) =>
         prev.map((note) =>
@@ -50,11 +110,13 @@ function Board() {
     <Container
       disableGutters
       maxWidth={false}
-      sx={{ height: "100vh", backgroundColor: "primary.main" }}
-      onContextMenu={handleRightClick} // Lắng nghe sự kiện nhấn chuột phải
+      sx={{
+        height: "100vh",
+        backgroundColor: isDarkMode ? "#000000" : "#FFFFFF", // Màu đen cho dark, trắng cho light
+      }}
+      onContextMenu={handleRightClick}
     >
-      {/* ✅ Loading khi tải dữ liệu bảng */}
-      {loading ? (
+      {loading || !board ? (
         <Container
           sx={{
             height: "100vh",
@@ -67,9 +129,8 @@ function Board() {
         </Container>
       ) : (
         <>
-          <BoardBar board={mockData.board} />
-          <BoardContent board={mockData.board} />
-
+          <BoardBar board={board} setBoard={setBoard} />
+          <BoardContent board={board} />
           {/* Render nhiều TakeNotes */}
           {notesList.map((noteItem) => (
             <Takenotes
@@ -102,7 +163,7 @@ function Board() {
               }}
               onClose={() => deleteTakeNote(noteItem.id)}
               sx={{
-                opacity: noteItem.isAdding ? 0.5 : 1, // ✅ Làm mờ khi đang thêm
+                opacity: noteItem.isAdding ? 0.5 : 1,
                 transition: "opacity 0.5s ease-in-out",
               }}
             />

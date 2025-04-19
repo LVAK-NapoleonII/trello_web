@@ -1,24 +1,50 @@
 import { useState } from "react";
 import {
   Box,
-  Button,
   TextField,
+  Button,
   Typography,
+  useTheme,
   InputAdornment,
   IconButton,
-  Alert,
-  useTheme,
 } from "@mui/material";
-import { Visibility, VisibilityOff } from "@mui/icons-material";
+import { Visibility, VisibilityOff } from "@mui/icons-material"; // Thêm icon
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
 import axios from "axios";
-import { useAuth } from "../../context/AuthContext.jsx";
 
 const LoginPage = () => {
   const theme = useTheme();
   const navigate = useNavigate();
-  const isDarkMode = theme.palette.mode === "dark";
   const { login } = useAuth();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [showPassword, setShowPassword] = useState(false); // Thêm trạng thái showPassword
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    try {
+      const response = await axios.post(
+        "http://localhost:5000/api/auth/login",
+        {
+          email,
+          password,
+        }
+      );
+
+      const { token, refreshToken, user } = response.data;
+      login(user, token, refreshToken);
+      navigate("/");
+    } catch (err) {
+      setError(err.response?.data?.message || "Đăng nhập thất bại");
+    }
+  };
+
+  // Hàm xử lý hiện/ẩn mật khẩu
+  const handleTogglePasswordVisibility = () => {
+    setShowPassword((prev) => !prev);
+  };
 
   return (
     <Box
@@ -27,9 +53,7 @@ const LoginPage = () => {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        background: isDarkMode
-          ? "#121212"
-          : "linear-gradient(135deg, #6a11cb, #2575fc)",
+        background: "linear-gradient(135deg, #667eea, #764ba2)",
         p: 3,
       }}
     >
@@ -38,127 +62,91 @@ const LoginPage = () => {
           width: "400px",
           p: 4,
           borderRadius: 3,
-          background: isDarkMode ? "#1e1e1e" : "#ffffff",
-          boxShadow: isDarkMode ? 3 : "0px 4px 10px rgba(0, 0, 0, 0.2)",
+          background: theme.palette.mode === "dark" ? "#161b22" : "#fff",
+          boxShadow:
+            theme.palette.mode === "dark"
+              ? 3
+              : "0px 4px 10px rgba(0, 0, 0, 0.1)",
+          textAlign: "center",
         }}
       >
-        <Typography
-          variant="h4"
-          fontWeight="bold"
-          mb={2}
-          textAlign="center"
-          color={isDarkMode ? "white" : "primary"}
-        >
+        <Typography variant="h5" fontWeight="bold" mb={3}>
           Đăng Nhập
         </Typography>
-
-        <LoginForm navigate={navigate} login={login} />
+        {error && (
+          <Typography color="error" mb={2}>
+            {error}
+          </Typography>
+        )}
+        <form onSubmit={handleLogin}>
+          <TextField
+            fullWidth
+            label="Email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            margin="normal"
+            required
+            InputProps={{
+              sx: {
+                borderRadius: 2,
+                "&:hover fieldset": { borderColor: "#6a11cb" },
+                "&.Mui-focused fieldset": { borderColor: "#2575fc" },
+              },
+            }}
+          />
+          <TextField
+            fullWidth
+            label="Mật khẩu"
+            type={showPassword ? "text" : "password"} // Chuyển đổi type dựa trên showPassword
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            margin="normal"
+            required
+            InputProps={{
+              endAdornment: (
+                <InputAdornment position="end">
+                  <IconButton
+                    onClick={handleTogglePasswordVisibility}
+                    edge="end"
+                  >
+                    {showPassword ? <VisibilityOff /> : <Visibility />}
+                  </IconButton>
+                </InputAdornment>
+              ),
+              sx: {
+                borderRadius: 2,
+                "&:hover fieldset": { borderColor: "#6a11cb" },
+                "&.Mui-focused fieldset": { borderColor: "#2575fc" },
+              },
+            }}
+          />
+          <Button
+            type="submit"
+            variant="contained"
+            sx={{
+              mt: 2,
+              width: "100%",
+              bgcolor: "#6a11cb",
+              "&:hover": { bgcolor: "#2575fc" },
+              color: "white",
+              transition: "0.3s",
+            }}
+          >
+            Đăng Nhập
+          </Button>
+        </form>
+        <Typography mt={2}>
+          Chưa có tài khoản?{" "}
+          <Button onClick={() => navigate("/register")}>Đăng ký</Button>
+        </Typography>
+        <Typography mt={1}>
+          <Button onClick={() => navigate("/forgot-password")}>
+            Quên mật khẩu?
+          </Button>
+        </Typography>
       </Box>
     </Box>
-  );
-};
-
-const LoginForm = ({ navigate, login }) => {
-  const [formData, setFormData] = useState({ email: "", password: "" });
-  const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState("");
-
-  const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-    setError("");
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!formData.email || !formData.password) {
-      setError("Vui lòng nhập email và mật khẩu!");
-      return;
-    }
-
-    try {
-      const response = await axios.post(
-        "http://localhost:5000/api/auth/login",
-        {
-          email: formData.email,
-          password: formData.password,
-        }
-      );
-
-      // Lưu thông tin user và token vào context
-      login(response.data.user, response.data.token);
-
-      navigate("/");
-    } catch (err) {
-      if (err.response && err.response.data && err.response.data.message) {
-        setError(err.response.data.message);
-      } else {
-        setError("Đã có lỗi xảy ra. Vui lòng thử lại!");
-      }
-    }
-  };
-
-  return (
-    <>
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
-        </Alert>
-      )}
-
-      <form onSubmit={handleSubmit}>
-        <TextField
-          fullWidth
-          label="Email"
-          name="email"
-          type="email"
-          value={formData.email}
-          onChange={handleChange}
-          margin="normal"
-        />
-        <TextField
-          fullWidth
-          label="Mật khẩu"
-          name="password"
-          type={showPassword ? "text" : "password"}
-          value={formData.password}
-          onChange={handleChange}
-          margin="normal"
-          InputProps={{
-            endAdornment: (
-              <InputAdornment position="end">
-                <IconButton onClick={() => setShowPassword(!showPassword)}>
-                  {showPassword ? <VisibilityOff /> : <Visibility />}
-                </IconButton>
-              </InputAdornment>
-            ),
-          }}
-        />
-
-        <Button
-          fullWidth
-          type="submit"
-          variant="contained"
-          sx={{
-            mt: 2,
-            py: 1.5,
-            fontSize: "1rem",
-            fontWeight: "bold",
-          }}
-        >
-          Đăng Nhập
-        </Button>
-      </form>
-
-      <Typography textAlign="center" mt={2} variant="body2">
-        Chưa có tài khoản?{" "}
-        <Button
-          onClick={() => navigate("/register")}
-          sx={{ textTransform: "none" }}
-        >
-          Đăng Ký
-        </Button>
-      </Typography>
-    </>
   );
 };
 

@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, forwardRef } from "react";
 import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
 import Box from "@mui/material/Box";
@@ -11,19 +11,34 @@ import Settings from "@mui/icons-material/Settings";
 import Logout from "@mui/icons-material/Logout";
 import PersonAdd from "@mui/icons-material/PersonAdd";
 import { useAuth } from "../../../context/AuthContext";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom"; // Thêm useLocation
+import { CircularProgress } from "@mui/material";
 
-function Profiles() {
+const Profiles = forwardRef((props, ref) => {
   const [anchorEl, setAnchorEl] = React.useState(null);
   const open = Boolean(anchorEl);
-  const { user, logout } = useAuth();
+  const { user, logout, loading } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation(); // Lấy thông tin route hiện tại
+
+  // Các route công khai không yêu cầu đăng nhập
+  const publicRoutes = [
+    "/register",
+    "/login",
+    "/verify-otp",
+    "/forgot-password",
+    "/reset-password",
+  ];
 
   useEffect(() => {
-    if (!user) {
+    if (loading) return;
+
+    // Chỉ kiểm tra đăng nhập nếu không phải là trang công khai
+    if (!publicRoutes.includes(location.pathname) && !user) {
+      alert("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
       navigate("/login");
     }
-  }, [user, navigate]);
+  }, [user, navigate, loading, location.pathname]);
 
   const handleClick = (event) => {
     setAnchorEl(event.currentTarget);
@@ -44,7 +59,16 @@ function Profiles() {
     handleClose();
   };
 
-  if (!user) {
+  if (loading) {
+    return (
+      <Box sx={{ display: "flex", alignItems: "center" }}>
+        <CircularProgress size={24} />
+      </Box>
+    );
+  }
+
+  // Không render component nếu đang ở trang công khai và user chưa đăng nhập
+  if (publicRoutes.includes(location.pathname) || !user) {
     return null;
   }
 
@@ -55,7 +79,7 @@ function Profiles() {
     : "";
 
   return (
-    <Box>
+    <Box ref={ref}>
       <Tooltip title="Account settings">
         <IconButton
           onClick={handleClick}
@@ -119,6 +143,6 @@ function Profiles() {
       </Menu>
     </Box>
   );
-}
+});
 
 export default Profiles;

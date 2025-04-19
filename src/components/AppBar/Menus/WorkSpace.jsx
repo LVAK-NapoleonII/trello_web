@@ -1,43 +1,105 @@
-import React from "react";
-import Button from "@mui/material/Button";
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
-import Box from "@mui/material/Box";
-import { Typography } from "@mui/material";
-import ListItemText from "@mui/material/ListItemText";
-import ListItemIcon from "@mui/material/ListItemIcon";
-import Divider from "@mui/material/Divider";
-import ContentCut from "@mui/icons-material/ContentCut";
-import ContentCopy from "@mui/icons-material/ContentCopy";
-import ContentPaste from "@mui/icons-material/ContentPaste";
-import Cloud from "@mui/icons-material/Cloud";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import Button from "@mui/material/Button";
+import WorkspacesIcon from "@mui/icons-material/Workspaces";
+import axios from "axios";
+import io from "socket.io-client";
 
-function WorkSpace() {
-  const [anchorEl, setAnchorEl] = React.useState(null);
+const socket = io("http://localhost:5000");
+
+const WorkSpace = () => {
+  const [anchorEl, setAnchorEl] = useState(null);
+  const [workspaces, setWorkspaces] = useState([]);
+  const navigate = useNavigate();
   const open = Boolean(anchorEl);
+
+  const fetchWorkspaces = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        throw new Error("Không tìm thấy token!");
+      }
+      const response = await axios.get("http://localhost:5000/api/workspaces", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      console.log("Fetched workspaces:", response.data);
+      setWorkspaces(response.data);
+    } catch (error) {
+      console.error("Error fetching workspaces:", error);
+      alert("Không thể tải danh sách không gian làm việc!");
+    }
+  };
+
+  useEffect(() => {
+    fetchWorkspaces();
+  }, []);
+
+  // Lắng nghe các sự kiện Socket.IO
+  useEffect(() => {
+    // Khi workspace được tạo
+    socket.on("workspace-created", (data) => {
+      console.log("Received workspace-created:", data);
+      setWorkspaces((prev) => {
+        if (!prev.some((ws) => ws._id === data.workspace._id)) {
+          return [...prev, data.workspace];
+        }
+        return prev;
+      });
+    });
+
+    // Khi workspace được cập nhật
+    socket.on("workspace-updated", (data) => {
+      console.log("Received workspace-updated:", data);
+      setWorkspaces((prev) =>
+        prev.map((ws) => (ws._id === data.workspace._id ? data.workspace : ws))
+      );
+    });
+
+    // Khi workspace bị ẩn
+    socket.on("workspace-hidden", (data) => {
+      console.log("Received workspace-hidden:", data);
+      setWorkspaces((prev) => prev.filter((ws) => ws._id !== data.workspaceId));
+    });
+
+    // Dọn dẹp khi component unmount
+    return () => {
+      socket.off("workspace-created");
+      socket.off("workspace-updated");
+      socket.off("workspace-hidden");
+    };
+  }, []);
+
   const handleClick = (event) => {
     setAnchorEl(event.currentTarget);
   };
+
   const handleClose = () => {
     setAnchorEl(null);
   };
 
+  const handleWorkspaceClick = (workspaceId) => {
+    navigate(`/workspace/${workspaceId}`);
+    handleClose();
+  };
+
   return (
-    <Box>
+    <div>
       <Button
-        id="basic-button-workspaces"
-        aria-controls={open ? "basic-menu-workspaces" : undefined}
-        aria-haspopup="true"
-        aria-expanded={open ? "true" : undefined}
+        sx={{
+          color: "white",
+          fontWeight: "bold",
+        }}
+        startIcon={<WorkspacesIcon />}
         onClick={handleClick}
-        sx={{ fontWeight: "bold", color: "white" }}
-        endIcon={<ExpandMoreIcon />}
       >
         Workspaces
       </Button>
       <Menu
-        id="basic-menu-workspaces"
+        id="workspace-menu"
         anchorEl={anchorEl}
         open={open}
         onClose={handleClose}
@@ -45,43 +107,21 @@ function WorkSpace() {
           "aria-labelledby": "basic-button",
         }}
       >
-        <MenuItem>
-          <ListItemIcon>
-            <ContentCut fontSize="small" />
-          </ListItemIcon>
-          <ListItemText>Cut</ListItemText>
-          <Typography variant="body2" color="text.secondary">
-            ⌘X
-          </Typography>
-        </MenuItem>
-        <MenuItem>
-          <ListItemIcon>
-            <ContentCopy fontSize="small" />
-          </ListItemIcon>
-          <ListItemText>Copy</ListItemText>
-          <Typography variant="body2" color="text.secondary">
-            ⌘C
-          </Typography>
-        </MenuItem>
-        <MenuItem>
-          <ListItemIcon>
-            <ContentPaste fontSize="small" />
-          </ListItemIcon>
-          <ListItemText>Paste</ListItemText>
-          <Typography variant="body2" color="text.secondary">
-            ⌘V
-          </Typography>
-        </MenuItem>
-        <Divider />
-        <MenuItem>
-          <ListItemIcon>
-            <Cloud fontSize="small" />
-          </ListItemIcon>
-          <ListItemText>Web Clipboard</ListItemText>
-        </MenuItem>
+        {workspaces.length > 0 ? (
+          workspaces.map((workspace) => (
+            <MenuItem
+              key={workspace._id}
+              onClick={() => handleWorkspaceClick(workspace._id)}
+            >
+              {workspace.name}
+            </MenuItem>
+          ))
+        ) : (
+          <MenuItem disabled>Không có không gian làm việc</MenuItem>
+        )}
       </Menu>
-    </Box>
+    </div>
   );
-}
+};
 
 export default WorkSpace;
