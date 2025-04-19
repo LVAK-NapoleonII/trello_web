@@ -1,28 +1,16 @@
-import { useState, useContext } from "react";
-import {
-  Box,
-  Collapse,
-  Typography,
-  IconButton,
-  Divider,
-  TextField,
-  Button,
-  Checkbox,
-  List,
-  ListItem,
-  ListItemText,
-  Chip,
-  Stack,
-} from "@mui/material";
-import CommentIcon from "@mui/icons-material/Comment";
-import PersonIcon from "@mui/icons-material/Person";
-import LabelIcon from "@mui/icons-material/Label";
-import NoteIcon from "@mui/icons-material/Note";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import { useState, useContext, useEffect } from "react";
+import { Box, Collapse, CircularProgress } from "@mui/material";
 import axios from "axios";
 import { toast } from "react-toastify";
 import AddMemberDialog from "./AddMemberDialog";
 import { SocketContext } from "../../../../../../../context/SocketContext";
+import DescriptionSection from "./DescriptionSection";
+import DueDateSection from "./DueDateSection";
+import MembersSection from "./MembersSection";
+import LabelsSection from "./LabelsSection";
+import NotesSection from "./NotesSection";
+import ChecklistsSection from "./ChecklistsSection";
+import CommentsSection from "./CommentsSection";
 
 function CardDetails({
   card,
@@ -38,16 +26,189 @@ function CardDetails({
   const [checklistTitle, setChecklistTitle] = useState("");
   const [checklistItem, setChecklistItem] = useState("");
   const [openAddMemberDialog, setOpenAddMemberDialog] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState(null);
+  const [isBoardOwner, setIsBoardOwner] = useState(false);
+  const [loading, setLoading] = useState({
+    comment: false,
+    note: false,
+    checklist: false,
+    checklistItem: false,
+    checklistToggle: false,
+    removeMember: false,
+    user: true,
+  });
 
-  console.log("boardMembers:", boardMembers);
-  console.log("card.members:", card.members);
+  // Fetch current user
+  useEffect(() => {
+    const fetchCurrentUser = async () => {
+      try {
+        setLoading((prev) => ({ ...prev, user: true }));
+        const token = localStorage.getItem("token");
+        if (!token) throw new Error("Không tìm thấy token!");
+        const response = await axios.get(
+          "http://localhost:5000/api/auth/profile",
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        setCurrentUserId(response.data.user.id || response.data.user._id);
+      } catch (err) {
+        console.error("Error fetching current user:", err);
+        toast.error("Không thể lấy thông tin người dùng hiện tại.");
+      } finally {
+        setLoading((prev) => ({ ...prev, user: false }));
+      }
+    };
+    fetchCurrentUser();
+  }, []);
+
+  // Check if user is board owner
+  useEffect(() => {
+    const checkBoardOwner = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const response = await axios.get(
+          `http://localhost:5000/api/boards/${card.board}`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+        const board = response.data;
+        const ownerId = board.owner._id
+          ? board.owner._id.toString()
+          : board.owner.toString();
+        setIsBoardOwner(currentUserId === ownerId);
+      } catch (err) {
+        console.error("Error checking board owner:", err);
+        toast.error("Không thể xác minh quyền chủ phòng!");
+      }
+    };
+    if (card.board && currentUserId) {
+      checkBoardOwner();
+    }
+  }, [card.board, currentUserId]);
+
+  // Utility to update card state
+  const updateCardState = (cardId, updatedFields) => {
+    setCards((prevCards) =>
+      prevCards.map((c) => (c._id === cardId ? { ...c, ...updatedFields } : c))
+    );
+    setColumns((prevColumns) =>
+      prevColumns.map((col) => ({
+        ...col,
+        cards: col.cards.map((c) =>
+          c._id === cardId ? { ...c, ...updatedFields } : c
+        ),
+      }))
+    );
+  };
+
+  // Socket event listeners
+  useEffect(() => {
+    if (!socket) return;
+
+    socket.on("member-added", ({ cardId, members }) => {
+      if (cardId === card._id) {
+        updateCardState(cardId, { members });
+      }
+    });
+
+    socket.on("member-removed-from-card", ({ cardId, memberId, message }) => {
+      if (cardId === card._id) {
+        updateCardState(cardId, {
+          members: card.members.filter((m) => m._id.toString() !== memberId),
+        });
+        toast.info(message);
+      }
+    });
+
+    socket.on("comment-added", ({ cardId, comment }) => {
+      if (cardId === card._id) {
+        updateCardState(cardId, {
+          comments: [...(card.comments || []), comment],
+        });
+      }
+    });
+
+    socket.on("note-added", ({ cardId, note }) => {
+      if (cardId === card._id) {
+        updateCardState(cardId, {
+          notes: [...(card.notes || []), note],
+        });
+      }
+    });
+
+    socket.on("checklist-added", ({ cardId, checklist }) => {
+      if (cardId === card._id) {
+        updateCardState(cardId, {
+          checklists: [...(card.checklists || []), checklist],
+        });
+      }
+    });
+
+    socket.on(
+      "checklist-item-added",
+      ({ cardId, checklistIndex, checklist }) => {
+        console.log("Received checklist-item-added:", {
+          cardId,
+          checklistIndex,
+          checklist,
+        });
+        if (cardId === card._id) {
+          updateCardState(cardId, {
+            checklists: (card.checklists || []).map((cl, idx) =>
+              idx === checklistIndex
+                ? { ...cl, items: checklist.items || cl.items }
+                : cl
+            ),
+          });
+        }
+      }
+    );
+
+    socket.on(
+      "checklist-item-toggled",
+      ({ cardId, checklistIndex, itemIndex, completed }) => {
+        console.log("Received checklist-item-toggled:", {
+          cardId,
+          checklistIndex,
+          itemIndex,
+          completed,
+        });
+        if (cardId === card._id) {
+          updateCardState(cardId, {
+            checklists: (card.checklists || []).map((cl, idx) =>
+              idx === checklistIndex
+                ? {
+                    ...cl,
+                    items: (cl.items || []).map((item, i) =>
+                      i === itemIndex ? { ...item, completed } : item
+                    ),
+                  }
+                : cl
+            ),
+          });
+        }
+      }
+    );
+
+    return () => {
+      socket.off("member-added");
+      socket.off("member-removed-from-card");
+      socket.off("comment-added");
+      socket.off("note-added");
+      socket.off("checklist-added");
+      socket.off("checklist-item-added");
+      socket.off("checklist-item-toggled");
+    };
+  }, [socket, card._id, card.members, updateCardState]);
 
   const isMemberInBoard = (memberId) => {
-    if (!memberId) return false;
-    return (boardMembers || []).some(
+    if (!memberId || !boardMembers || !Array.isArray(boardMembers)) {
+      return false;
+    }
+    return boardMembers.some(
       (boardMember) =>
         boardMember.user?._id?.toString() === memberId.toString() &&
-        boardMember.isActive
+        boardMember.isActive === true
     );
   };
 
@@ -57,6 +218,18 @@ function CardDetails({
       return;
     }
 
+    setLoading((prev) => ({ ...prev, comment: true }));
+
+    // Cập nhật state tạm thời
+    const tempComment = {
+      text: comment,
+      user: { _id: currentUserId, fullName: "Bạn" },
+      createdAt: new Date(),
+    };
+    updateCardState(card._id, {
+      comments: [...(card.comments || []), tempComment],
+    });
+
     try {
       const token = localStorage.getItem("token");
       const response = await axios.post(
@@ -65,24 +238,8 @@ function CardDetails({
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      setCards((prevCards) =>
-        prevCards.map((c) =>
-          c._id === card._id
-            ? { ...c, comments: [...(c.comments || []), response.data] }
-            : c
-        )
-      );
-
-      setColumns((prevColumns) =>
-        prevColumns.map((col) => ({
-          ...col,
-          cards: col.cards.map((c) =>
-            c._id === card._id
-              ? { ...c, comments: [...(c.comments || []), response.data] }
-              : c
-          ),
-        }))
-      );
+      // Cập nhật state với dữ liệu từ server
+      updateCardState(card._id, { comments: response.data });
 
       if (socket) {
         socket.emit("comment-added", {
@@ -95,11 +252,15 @@ function CardDetails({
       toast.success("Thêm bình luận thành công!");
     } catch (err) {
       console.error("Error adding comment:", err);
+      // Hoàn tác nếu có lỗi
+      updateCardState(card._id, { comments: card.comments });
       toast.error(
         `Có lỗi khi thêm bình luận: ${
           err.response?.data?.message || err.message
         }`
       );
+    } finally {
+      setLoading((prev) => ({ ...prev, comment: false }));
     }
   };
 
@@ -109,6 +270,18 @@ function CardDetails({
       return;
     }
 
+    setLoading((prev) => ({ ...prev, note: true }));
+
+    // Cập nhật state tạm thời
+    const tempNote = {
+      content: note,
+      createdBy: { _id: currentUserId, fullName: "Bạn" },
+      createdAt: new Date(),
+    };
+    updateCardState(card._id, {
+      notes: [...(card.notes || []), tempNote],
+    });
+
     try {
       const token = localStorage.getItem("token");
       const response = await axios.post(
@@ -117,36 +290,27 @@ function CardDetails({
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      setCards((prevCards) =>
-        prevCards.map((c) =>
-          c._id === card._id
-            ? { ...c, notes: [...(c.notes || []), response.data] }
-            : c
-        )
-      );
-
-      setColumns((prevColumns) =>
-        prevColumns.map((col) => ({
-          ...col,
-          cards: col.cards.map((c) =>
-            c._id === card._id
-              ? { ...c, notes: [...(c.notes || []), response.data] }
-              : c
-          ),
-        }))
-      );
+      // Cập nhật state với dữ liệu từ server
+      updateCardState(card._id, { notes: response.data });
 
       if (socket) {
-        socket.emit("note-added", { cardId: card._id, note: response.data });
+        socket.emit("note-added", {
+          cardId: card._id,
+          note: response.data,
+        });
       }
 
       setNote("");
       toast.success("Thêm ghi chú thành công!");
     } catch (err) {
       console.error("Error adding note:", err);
+      // Hoàn tác nếu có lỗi
+      updateCardState(card._id, { notes: card.notes });
       toast.error(
         `Có lỗi khi thêm ghi chú: ${err.response?.data?.message || err.message}`
       );
+    } finally {
+      setLoading((prev) => ({ ...prev, note: false }));
     }
   };
 
@@ -155,6 +319,19 @@ function CardDetails({
       toast.error("Tiêu đề checklist không được để trống!");
       return;
     }
+
+    setLoading((prev) => ({ ...prev, checklist: true }));
+
+    // Cập nhật state tạm thời
+    const tempChecklist = {
+      title: checklistTitle,
+      items: [],
+      createdAt: new Date(),
+    };
+    updateCardState(card._id, {
+      checklists: [...(card.checklists || []), tempChecklist],
+    });
+
     try {
       const token = localStorage.getItem("token");
       const response = await axios.post(
@@ -163,39 +340,29 @@ function CardDetails({
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      const newChecklist = response.data;
-      setCards((prevCards) =>
-        prevCards.map((c) =>
-          c._id === card._id
-            ? { ...c, checklists: [...(c.checklists || []), newChecklist] }
-            : c
-        )
-      );
-      setColumns((prevColumns) =>
-        prevColumns.map((col) => ({
-          ...col,
-          cards: col.cards.map((c) =>
-            c._id === card._id
-              ? { ...c, checklists: [...(c.checklists || []), newChecklist] }
-              : c
-          ),
-        }))
-      );
+      // Cập nhật state với dữ liệu từ server
+      updateCardState(card._id, { checklists: response.data });
+
       if (socket) {
         socket.emit("checklist-added", {
           cardId: card._id,
-          checklist: newChecklist,
+          checklist: response.data,
         });
       }
+
       setChecklistTitle("");
       toast.success("Thêm checklist thành công!");
     } catch (err) {
       console.error("Error adding checklist:", err);
+      // Hoàn tác nếu có lỗi
+      updateCardState(card._id, { checklists: card.checklists });
       toast.error(
         `Có lỗi khi thêm checklist: ${
           err.response?.data?.message || err.message
         }`
       );
+    } finally {
+      setLoading((prev) => ({ ...prev, checklist: false }));
     }
   };
 
@@ -204,6 +371,25 @@ function CardDetails({
       toast.error("Item checklist không được để trống!");
       return;
     }
+    if (!card.checklists?.[checklistIndex]) {
+      toast.error("Checklist không tồn tại!");
+      return;
+    }
+
+    setLoading((prev) => ({ ...prev, checklistItem: true }));
+
+    // Sao chép sâu checklists để đảm bảo re-render
+    const currentChecklists = JSON.parse(JSON.stringify(card.checklists || []));
+    const newItem = {
+      text: checklistItem,
+      completed: false,
+      createdAt: new Date().toISOString(),
+    };
+    currentChecklists[checklistIndex] = {
+      ...currentChecklists[checklistIndex],
+      items: [...(currentChecklists[checklistIndex].items || []), newItem],
+    };
+    updateCardState(card._id, { checklists: currentChecklists });
 
     try {
       const token = localStorage.getItem("token");
@@ -213,41 +399,33 @@ function CardDetails({
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      const updatedChecklist = response.data;
-      setCards((prevCards) =>
-        prevCards.map((c) =>
-          c._id === card._id
-            ? {
-                ...c,
-                checklists: (c.checklists || []).map((cl, idx) =>
-                  idx === checklistIndex ? updatedChecklist : cl
-                ),
-              }
-            : c
-        )
-      );
+      console.log("Add checklist item response:", response.data);
 
-      setColumns((prevColumns) =>
-        prevColumns.map((col) => ({
-          ...col,
-          cards: col.cards.map((c) =>
-            c._id === card._id
-              ? {
-                  ...c,
-                  checklists: (c.checklists || []).map((cl, idx) =>
-                    idx === checklistIndex ? updatedChecklist : cl
-                  ),
-                }
-              : c
-          ),
-        }))
-      );
+      // Xử lý response.data là mảng checklists hoặc object checklist
+      let updatedChecklist;
+      if (Array.isArray(response.data)) {
+        updatedChecklist =
+          response.data[checklistIndex] || currentChecklists[checklistIndex];
+      } else {
+        updatedChecklist = response.data;
+      }
+      updateCardState(card._id, {
+        checklists: (card.checklists || []).map((cl, idx) =>
+          idx === checklistIndex
+            ? { ...cl, items: updatedChecklist.items || cl.items }
+            : cl
+        ),
+      });
 
       if (socket) {
         socket.emit("checklist-item-added", {
           cardId: card._id,
           checklistIndex,
-          checklist: updatedChecklist,
+          checklist: {
+            ...currentChecklists[checklistIndex],
+            items:
+              updatedChecklist.items || currentChecklists[checklistIndex].items,
+          },
         });
       }
 
@@ -255,11 +433,15 @@ function CardDetails({
       toast.success("Thêm item checklist thành công!");
     } catch (err) {
       console.error("Error adding checklist item:", err);
+      // Hoàn tác nếu có lỗi
+      updateCardState(card._id, { checklists: card.checklists });
       toast.error(
         `Có lỗi khi thêm item checklist: ${
           err.response?.data?.message || err.message
         }`
       );
+    } finally {
+      setLoading((prev) => ({ ...prev, checklistItem: false }));
     }
   };
 
@@ -269,65 +451,100 @@ function CardDetails({
       return;
     }
 
+    setLoading((prev) => ({ ...prev, checklistToggle: true }));
+
+    // Sao chép sâu checklists để đảm bảo re-render
+    const currentChecklists = JSON.parse(JSON.stringify(card.checklists || []));
+    const newCompleted =
+      !currentChecklists[checklistIndex].items[itemIndex].completed;
+    currentChecklists[checklistIndex].items[itemIndex] = {
+      ...currentChecklists[checklistIndex].items[itemIndex],
+      completed: newCompleted,
+    };
+    updateCardState(card._id, { checklists: currentChecklists });
+
     try {
       const token = localStorage.getItem("token");
-      console.log("Toggling checklist item:", {
-        cardId: card._id,
-        checklistIndex,
-        itemIndex,
-      });
       const response = await axios.put(
         `http://localhost:5000/api/cards/${card._id}/checklists/${checklistIndex}/items/${itemIndex}/toggle`,
         {},
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      const updatedChecklist = response.data;
-      setCards((prevCards) =>
-        prevCards.map((c) =>
-          c._id === card._id
-            ? {
-                ...c,
-                checklists: (c.checklists || []).map((cl, idx) =>
-                  idx === checklistIndex ? updatedChecklist : cl
-                ),
-              }
-            : c
-        )
-      );
+      console.log("Toggle checklist item response:", response.data);
 
-      setColumns((prevColumns) =>
-        prevColumns.map((col) => ({
-          ...col,
-          cards: col.cards.map((c) =>
-            c._id === card._id
-              ? {
-                  ...c,
-                  checklists: (c.checklists || []).map((cl, idx) =>
-                    idx === checklistIndex ? updatedChecklist : cl
-                  ),
-                }
-              : c
-          ),
-        }))
-      );
+      // Xử lý response.data là mảng checklists hoặc object checklist
+      let updatedChecklist;
+      if (Array.isArray(response.data)) {
+        updatedChecklist =
+          response.data[checklistIndex] || currentChecklists[checklistIndex];
+      } else {
+        updatedChecklist = response.data;
+      }
+      updateCardState(card._id, {
+        checklists: (card.checklists || []).map((cl, idx) =>
+          idx === checklistIndex
+            ? { ...cl, items: updatedChecklist.items || cl.items }
+            : cl
+        ),
+      });
 
       if (socket) {
         socket.emit("checklist-item-toggled", {
           cardId: card._id,
           checklistIndex,
-          checklist: updatedChecklist,
+          itemIndex,
+          completed: newCompleted,
         });
       }
 
       toast.success("Cập nhật trạng thái item checklist thành công!");
     } catch (err) {
       console.error("Error toggling checklist item:", err);
+      // Hoàn tác nếu có lỗi
+      updateCardState(card._id, { checklists: card.checklists });
       toast.error(
         `Có lỗi khi cập nhật trạng thái item checklist: ${
           err.response?.data?.message || err.message
         }`
       );
+    } finally {
+      setLoading((prev) => ({ ...prev, checklistToggle: false }));
+    }
+  };
+
+  const handleRemoveMember = async (memberId) => {
+    if (!window.confirm("Bạn có chắc muốn xóa thành viên này khỏi card?"))
+      return;
+
+    setLoading((prev) => ({ ...prev, removeMember: true }));
+
+    try {
+      const token = localStorage.getItem("token");
+      const response = await axios.delete(
+        `http://localhost:5000/api/cards/${card._id}/members/${memberId}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      updateCardState(card._id, { members: response.data.members });
+
+      if (socket) {
+        socket.emit("member-removed-from-card", {
+          cardId: card._id,
+          memberId,
+        });
+      }
+
+      toast.success("Xóa thành viên khỏi card thành công!");
+    } catch (err) {
+      console.error("Error removing member from card:", err);
+      toast.error(
+        `Có lỗi khi xóa thành viên: ${
+          err.response?.data?.message || err.message
+        }`
+      );
+    } finally {
+      setLoading((prev) => ({ ...prev, removeMember: false }));
     }
   };
 
@@ -335,526 +552,76 @@ function CardDetails({
     <Collapse in={expanded} timeout="auto" unmountOnExit>
       <Box
         sx={{
-          p: 2,
-          bgcolor: (theme) => theme.palette.background.paper,
-          borderRadius: 1,
-          maxHeight: "300px",
+          p: 3,
+          bgcolor: "background.paper",
+          borderRadius: 2,
+          maxHeight: "400px",
           overflowY: "auto",
+          boxShadow: 3,
           "&::-webkit-scrollbar": {
-            width: "6px",
+            width: "8px",
           },
           "&::-webkit-scrollbar-track": {
-            backgroundColor: (theme) =>
-              theme.palette.mode === "light"
-                ? theme.palette.grey[200]
-                : theme.palette.grey[800],
+            backgroundColor: "grey.100",
             borderRadius: "10px",
           },
           "&::-webkit-scrollbar-thumb": {
-            backgroundColor: (theme) =>
-              theme.palette.mode === "light"
-                ? theme.palette.grey[400]
-                : theme.palette.grey[600],
+            backgroundColor: "grey.400",
             borderRadius: "10px",
             "&:hover": {
-              backgroundColor: (theme) =>
-                theme.palette.mode === "light"
-                  ? theme.palette.grey[500]
-                  : theme.palette.grey[500],
+              backgroundColor: "grey.500",
             },
           },
         }}
       >
-        {/* Mô tả */}
         {card.description && (
-          <Box sx={{ mb: 2 }}>
-            <Typography
-              variant="subtitle2"
-              color={(theme) => theme.palette.text.primary}
-              gutterBottom
-            >
-              Mô tả
-            </Typography>
-            <Typography
-              variant="body2"
-              color={(theme) => theme.palette.text.secondary}
-            >
-              {card.description}
-            </Typography>
-          </Box>
+          <DescriptionSection description={card.description} />
         )}
-
-        {/* Hạn chót */}
-        {card.dueDate && (
-          <Box sx={{ mb: 2 }}>
-            <Typography
-              variant="subtitle2"
-              color={(theme) => theme.palette.text.primary}
-              gutterBottom
-            >
-              Hạn chót
-            </Typography>
-            <Typography
-              variant="body2"
-              color={(theme) => theme.palette.text.secondary}
-            >
-              {new Date(card.dueDate).toLocaleString()}
-            </Typography>
-          </Box>
-        )}
-
-        {/* Thành viên */}
-        <Box sx={{ mb: 2 }}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
-            <PersonIcon
-              fontSize="small"
-              sx={{ color: (theme) => theme.palette.action.active }}
-            />
-            <Typography
-              variant="subtitle2"
-              color={(theme) => theme.palette.text.primary}
-            >
-              Thành viên
-            </Typography>
-          </Box>
-          {(card.members || []).length > 0 ? (
-            <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mb: 1 }}>
-              {(card.members || []).map((member, index) => (
-                <Chip
-                  key={member._id || index}
-                  label={member.fullName || member.email || "Không xác định"}
-                  size="small"
-                  sx={{
-                    bgcolor: (theme) =>
-                      theme.palette.mode === "light"
-                        ? theme.palette.info.light
-                        : theme.palette.info.dark,
-                    color: (theme) => theme.palette.info.contrastText,
-                    textDecoration: !isMemberInBoard(member._id)
-                      ? "line-through"
-                      : "none",
-                  }}
-                />
-              ))}
-            </Stack>
-          ) : (
-            <Typography
-              variant="body2"
-              color={(theme) => theme.palette.text.secondary}
-            >
-              Chưa có thành viên
-            </Typography>
-          )}
-          <Button
-            size="small"
-            onClick={() => setOpenAddMemberDialog(true)}
-            variant="outlined"
-            sx={{
-              mt: 1,
-              color: (theme) => theme.palette.text.primary,
-              borderColor: (theme) => theme.palette.divider,
-              "&:hover": {
-                borderColor: (theme) => theme.palette.text.primary,
-                bgcolor: (theme) =>
-                  theme.palette.mode === "light"
-                    ? theme.palette.grey[100]
-                    : theme.palette.grey[800],
-              },
-            }}
-          >
-            Thêm thành viên
-          </Button>
-        </Box>
-
-        {/* Nhãn */}
-        {(card.labels || []).length > 0 && (
-          <Box sx={{ mb: 2 }}>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
-              <LabelIcon
-                fontSize="small"
-                sx={{ color: (theme) => theme.palette.action.active }}
-              />
-              <Typography
-                variant="subtitle2"
-                color={(theme) => theme.palette.text.primary}
-              >
-                Nhãn
-              </Typography>
-            </Box>
-            <Stack direction="row" spacing={1} flexWrap="wrap">
-              {(card.labels || []).map((label, index) => (
-                <Chip
-                  key={index}
-                  label={label}
-                  size="small"
-                  sx={{
-                    bgcolor: (theme) =>
-                      theme.palette.mode === "light"
-                        ? theme.palette.secondary.light
-                        : theme.palette.secondary.dark,
-                    color: (theme) => theme.palette.secondary.contrastText,
-                  }}
-                />
-              ))}
-            </Stack>
-          </Box>
-        )}
-
-        {/* Ghi chú */}
-        {(card.notes || []).length > 0 && (
-          <Box sx={{ mb: 2 }}>
-            <Typography
-              variant="subtitle2"
-              color={(theme) => theme.palette.text.primary}
-              gutterBottom
-            >
-              Ghi chú
-            </Typography>
-            <List dense>
-              {(card.notes || []).map((note, index) => (
-                <ListItem key={index} sx={{ py: 0.5 }}>
-                  <ListItemText
-                    primary={note.content}
-                    primaryTypographyProps={{
-                      color: (theme) => theme.palette.text.primary,
-                    }}
-                    secondary={
-                      <>
-                        {new Date(note.createdAt).toLocaleString()} -{" "}
-                        <span
-                          style={{
-                            textDecoration: !isMemberInBoard(
-                              note.createdBy?._id
-                            )
-                              ? "line-through"
-                              : "none",
-                          }}
-                        >
-                          {note.createdBy?.fullName || "Không xác định"}
-                        </span>
-                      </>
-                    }
-                    secondaryTypographyProps={{
-                      color: (theme) => theme.palette.text.secondary,
-                    }}
-                  />
-                </ListItem>
-              ))}
-            </List>
-          </Box>
-        )}
-        <Box sx={{ mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
-          <NoteIcon
-            fontSize="small"
-            sx={{ color: (theme) => theme.palette.action.active }}
-          />
-          <TextField
-            fullWidth
-            size="small"
-            placeholder="Thêm ghi chú..."
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            variant="outlined"
-            sx={{
-              "& .MuiOutlinedInput-root": {
-                bgcolor: (theme) =>
-                  theme.palette.mode === "light"
-                    ? theme.palette.background.default
-                    : theme.palette.grey[900],
-                "& fieldset": {
-                  borderColor: (theme) => theme.palette.divider,
-                },
-                "&:hover fieldset": {
-                  borderColor: (theme) => theme.palette.text.secondary,
-                },
-              },
-              "& .MuiInputBase-input": {
-                color: (theme) => theme.palette.text.primary,
-              },
-            }}
-          />
-          <Button
-            variant="contained"
-            size="small"
-            onClick={handleAddNote}
-            disabled={!note.trim()}
-            sx={{
-              bgcolor: (theme) => theme.palette.primary.main,
-              color: (theme) => theme.palette.primary.contrastText,
-              "&:hover": {
-                bgcolor: (theme) => theme.palette.primary.dark,
-              },
-              "&.Mui-disabled": {
-                bgcolor: (theme) => theme.palette.action.disabledBackground,
-                color: (theme) => theme.palette.action.disabled,
-              },
-            }}
-          >
-            Thêm
-          </Button>
-        </Box>
-
-        {/* Checklist */}
-        {(card.checklists || []).length > 0 && (
-          <Box sx={{ mb: 2 }}>
-            <Typography
-              variant="subtitle2"
-              color={(theme) => theme.palette.text.primary}
-              gutterBottom
-            >
-              Checklists
-            </Typography>
-            {(card.checklists || []).map((checklist, checklistIndex) => (
-              <Box key={checklistIndex} sx={{ mb: 2, pl: 2 }}>
-                <Typography
-                  variant="body2"
-                  fontWeight="medium"
-                  color={(theme) => theme.palette.text.primary}
-                  gutterBottom
-                >
-                  {checklist.title || "Checklist không có tiêu đề"}
-                </Typography>
-                <List dense>
-                  {(checklist.items || []).map((item, itemIndex) => (
-                    <ListItem
-                      key={itemIndex}
-                      sx={{ py: 0 }}
-                      secondaryAction={
-                        <Checkbox
-                          edge="end"
-                          checked={item.completed || false}
-                          onChange={() =>
-                            handleToggleChecklistItem(checklistIndex, itemIndex)
-                          }
-                          sx={{
-                            color: (theme) => theme.palette.action.active,
-                            "&.Mui-checked": {
-                              color: (theme) => theme.palette.success.main,
-                            },
-                          }}
-                        />
-                      }
-                    >
-                      <ListItemText
-                        primary={item.text || "Item không có nội dung"}
-                        sx={{
-                          textDecoration: item.completed
-                            ? "line-through"
-                            : "none",
-                          color: (theme) => theme.palette.text.primary,
-                        }}
-                      />
-                    </ListItem>
-                  ))}
-                </List>
-                <Box
-                  sx={{ display: "flex", alignItems: "center", gap: 1, mt: 1 }}
-                >
-                  <TextField
-                    fullWidth
-                    size="small"
-                    placeholder="Thêm item checklist..."
-                    value={checklistItem}
-                    onChange={(e) => setChecklistItem(e.target.value)}
-                    variant="outlined"
-                    sx={{
-                      "& .MuiOutlinedInput-root": {
-                        bgcolor: (theme) =>
-                          theme.palette.mode === "light"
-                            ? theme.palette.background.default
-                            : theme.palette.grey[900],
-                        "& fieldset": {
-                          borderColor: (theme) => theme.palette.divider,
-                        },
-                        "&:hover fieldset": {
-                          borderColor: (theme) => theme.palette.text.secondary,
-                        },
-                      },
-                      "& .MuiInputBase-input": {
-                        color: (theme) => theme.palette.text.primary,
-                      },
-                    }}
-                  />
-                  <Button
-                    variant="contained"
-                    size="small"
-                    onClick={() => handleAddChecklistItem(checklistIndex)}
-                    disabled={!checklistItem.trim()}
-                    sx={{
-                      bgcolor: (theme) => theme.palette.primary.main,
-                      color: (theme) => theme.palette.primary.contrastText,
-                      "&:hover": {
-                        bgcolor: (theme) => theme.palette.primary.dark,
-                      },
-                      "&.Mui-disabled": {
-                        bgcolor: (theme) =>
-                          theme.palette.action.disabledBackground,
-                        color: (theme) => theme.palette.action.disabled,
-                      },
-                    }}
-                  >
-                    Thêm
-                  </Button>
-                </Box>
-              </Box>
-            ))}
-          </Box>
-        )}
-        <Box sx={{ mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
-          <CheckCircleIcon
-            fontSize="small"
-            sx={{ color: (theme) => theme.palette.action.active }}
-          />
-          <TextField
-            fullWidth
-            size="small"
-            placeholder="Thêm tiêu đề checklist..."
-            value={checklistTitle}
-            onChange={(e) => setChecklistTitle(e.target.value)}
-            variant="outlined"
-            sx={{
-              "& .MuiOutlinedInput-root": {
-                bgcolor: (theme) =>
-                  theme.palette.mode === "light"
-                    ? theme.palette.background.default
-                    : theme.palette.grey[900],
-                "& fieldset": {
-                  borderColor: (theme) => theme.palette.divider,
-                },
-                "&:hover fieldset": {
-                  borderColor: (theme) => theme.palette.text.secondary,
-                },
-              },
-              "& .MuiInputBase-input": {
-                color: (theme) => theme.palette.text.primary,
-              },
-            }}
-          />
-          <Button
-            variant="contained"
-            size="small"
-            onClick={handleAddChecklist}
-            disabled={!checklistTitle.trim()}
-            sx={{
-              bgcolor: (theme) => theme.palette.primary.main,
-              color: (theme) => theme.palette.primary.contrastText,
-              "&:hover": {
-                bgcolor: (theme) => theme.palette.primary.dark,
-              },
-              "&.Mui-disabled": {
-                bgcolor: (theme) => theme.palette.action.disabledBackground,
-                color: (theme) => theme.palette.action.disabled,
-              },
-            }}
-          >
-            Thêm Checklist
-          </Button>
-        </Box>
-
-        {/* Bình luận */}
-        {(card.comments || []).length > 0 && (
-          <Box sx={{ mb: 2 }}>
-            <Typography
-              variant="subtitle2"
-              color={(theme) => theme.palette.text.primary}
-              gutterBottom
-            >
-              Bình luận
-            </Typography>
-            <List dense>
-              {(card.comments || []).map((comment, index) => (
-                <ListItem key={index} sx={{ py: 0.5 }}>
-                  <ListItemText
-                    primary={comment.text}
-                    primaryTypographyProps={{
-                      color: (theme) => theme.palette.text.primary,
-                    }}
-                    secondary={
-                      <>
-                        {new Date(comment.createdAt).toLocaleString()} -{" "}
-                        <span
-                          style={{
-                            textDecoration: !isMemberInBoard(comment.user?._id)
-                              ? "line-through"
-                              : "none",
-                          }}
-                        >
-                          {comment.user?.fullName || "Không xác định"}
-                        </span>
-                      </>
-                    }
-                    secondaryTypographyProps={{
-                      color: (theme) => theme.palette.text.secondary,
-                    }}
-                  />
-                </ListItem>
-              ))}
-            </List>
-          </Box>
-        )}
-        <Divider
-          sx={{
-            my: 2,
-            bgcolor: (theme) => theme.palette.divider,
-          }}
+        {card.dueDate && <DueDateSection dueDate={card.dueDate} />}
+        <MembersSection
+          members={card.members}
+          boardMembers={boardMembers}
+          isBoardOwner={isBoardOwner}
+          loading={loading}
+          handleRemoveMember={handleRemoveMember}
+          setOpenAddMemberDialog={setOpenAddMemberDialog}
+          isMemberInBoard={isMemberInBoard}
         />
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-          <CommentIcon
-            fontSize="small"
-            sx={{ color: (theme) => theme.palette.action.active }}
-          />
-          <TextField
-            fullWidth
-            size="small"
-            placeholder="Viết bình luận..."
-            value={comment}
-            onChange={(e) => setComment(e.target.value)}
-            variant="outlined"
-            sx={{
-              "& .MuiOutlinedInput-root": {
-                bgcolor: (theme) =>
-                  theme.palette.mode === "light"
-                    ? theme.palette.background.default
-                    : theme.palette.grey[900],
-                "& fieldset": {
-                  borderColor: (theme) => theme.palette.divider,
-                },
-                "&:hover fieldset": {
-                  borderColor: (theme) => theme.palette.text.secondary,
-                },
-              },
-              "& .MuiInputBase-input": {
-                color: (theme) => theme.palette.text.primary,
-              },
-            }}
-          />
-          <Button
-            variant="contained"
-            size="small"
-            onClick={handleAddComment}
-            disabled={!comment.trim()}
-            sx={{
-              bgcolor: (theme) => theme.palette.primary.main,
-              color: (theme) => theme.palette.primary.contrastText,
-              "&:hover": {
-                bgcolor: (theme) => theme.palette.primary.dark,
-              },
-              "&.Mui-disabled": {
-                bgcolor: (theme) => theme.palette.action.disabledBackground,
-                color: (theme) => theme.palette.action.disabled,
-              },
-            }}
-          >
-            Gửi
-          </Button>
-        </Box>
-
+        {card.labels?.length > 0 && <LabelsSection labels={card.labels} />}
+        <NotesSection
+          notes={card.notes}
+          note={note}
+          setNote={setNote}
+          loading={loading}
+          handleAddNote={handleAddNote}
+          isMemberInBoard={isMemberInBoard}
+        />
+        <ChecklistsSection
+          checklists={card.checklists}
+          checklistTitle={checklistTitle}
+          setChecklistTitle={setChecklistTitle}
+          checklistItem={checklistItem}
+          setChecklistItem={setChecklistItem}
+          loading={loading}
+          handleAddChecklist={handleAddChecklist}
+          handleAddChecklistItem={handleAddChecklistItem}
+          handleToggleChecklistItem={handleToggleChecklistItem}
+        />
+        <CommentsSection
+          comments={card.comments}
+          comment={comment}
+          setComment={setComment}
+          loading={loading}
+          handleAddComment={handleAddComment}
+          isMemberInBoard={isMemberInBoard}
+        />
         <AddMemberDialog
           open={openAddMemberDialog}
           onClose={() => setOpenAddMemberDialog(false)}
           card={card}
           setCards={setCards}
           setColumns={setColumns}
+          boardMembers={boardMembers}
         />
       </Box>
     </Collapse>
