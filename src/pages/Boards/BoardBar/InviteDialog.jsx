@@ -39,6 +39,16 @@ function InviteDialog({
   const theme = useTheme();
   const isDarkMode = theme.palette.mode === "dark";
 
+  // Lọc trùng lặp trong searchResults và pastMembersAndInvited
+  const uniqueSearchResults = Array.from(
+    new Map(searchResults.map((user) => [user._id, user])).values()
+  );
+  const uniquePastMembersAndInvited = Array.from(
+    new Map(
+      pastMembersAndInvited.map((entry) => [entry.user?._id, entry])
+    ).values()
+  );
+
   return (
     <Dialog
       open={open}
@@ -112,7 +122,8 @@ function InviteDialog({
             }}
           />
         </Paper>
-        {(searchResults.length > 0 || pastMembersAndInvited.length > 0) && (
+        {(uniqueSearchResults.length > 0 ||
+          uniquePastMembersAndInvited.length > 0) && (
           <Box
             sx={{
               maxHeight: 400,
@@ -130,7 +141,7 @@ function InviteDialog({
               },
             }}
           >
-            {searchResults.length > 0 && (
+            {uniqueSearchResults.length > 0 && (
               <Box sx={{ mb: 3 }}>
                 <Typography
                   variant="subtitle1"
@@ -140,7 +151,7 @@ function InviteDialog({
                   Kết quả tìm kiếm
                 </Typography>
                 <List dense>
-                  {searchResults.map((user) => (
+                  {uniqueSearchResults.map((user) => (
                     <ListItem
                       key={user._id}
                       disablePadding
@@ -179,66 +190,72 @@ function InviteDialog({
                             sx={{ width: 40, height: 40 }}
                           />
                         </ListItemAvatar>
-                        <ListItemText
-                          primary={
-                            <Box
-                              sx={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 1,
-                              }}
+                        <Box
+                          sx={{
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 0.5,
+                          }}
+                        >
+                          <Box
+                            sx={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 1,
+                            }}
+                          >
+                            <Typography
+                              variant="body1"
+                              fontWeight="medium"
+                              color={theme.palette.text.primary}
                             >
                               {user.fullName || user.email}
-                              {user.isPastMember && (
-                                <Chip
-                                  label="Đã rời"
-                                  size="small"
-                                  color="warning"
-                                  variant="outlined"
-                                  sx={{
-                                    fontSize: 12,
-                                    bgcolor: isDarkMode
-                                      ? theme.palette.warning.dark
-                                      : theme.palette.warning.light,
-                                    color: theme.palette.warning.contrastText,
-                                  }}
-                                />
-                              )}
-                              {user.isInvited && (
-                                <Chip
-                                  label="Đã mời"
-                                  size="small"
-                                  color="info"
-                                  variant="outlined"
-                                  sx={{
-                                    fontSize: 12,
-                                    bgcolor: isDarkMode
-                                      ? theme.palette.info.dark
-                                      : theme.palette.info.light,
-                                    color: theme.palette.info.contrastText,
-                                  }}
-                                />
-                              )}
-                            </Box>
-                          }
-                          secondary={user.email}
-                          primaryTypographyProps={{
-                            variant: "body1",
-                            fontWeight: "medium",
-                            color: theme.palette.text.primary,
-                          }}
-                          secondaryTypographyProps={{
-                            variant: "body2",
-                            color: theme.palette.text.secondary,
-                          }}
-                        />
+                            </Typography>
+                            {user.isPastMember && (
+                              <Chip
+                                label="Đã rời"
+                                size="small"
+                                color="warning"
+                                variant="outlined"
+                                sx={{
+                                  fontSize: 12,
+                                  bgcolor: isDarkMode
+                                    ? theme.palette.warning.dark
+                                    : theme.palette.warning.light,
+                                  color: theme.palette.warning.contrastText,
+                                }}
+                              />
+                            )}
+                            {user.isInvited && (
+                              <Chip
+                                label="Đã mời"
+                                size="small"
+                                color="info"
+                                variant="outlined"
+                                sx={{
+                                  fontSize: 12,
+                                  bgcolor: isDarkMode
+                                    ? theme.palette.info.dark
+                                    : theme.palette.info.light,
+                                  color: theme.palette.info.contrastText,
+                                }}
+                              />
+                            )}
+                          </Box>
+                          <Typography
+                            variant="body2"
+                            color={theme.palette.text.secondary}
+                          >
+                            {user.email}
+                          </Typography>
+                        </Box>
                       </ListItemButton>
                     </ListItem>
                   ))}
                 </List>
               </Box>
             )}
-            {pastMembersAndInvited.length > 0 && (
+            {uniquePastMembersAndInvited.length > 0 && (
               <Box>
                 <Typography
                   variant="subtitle1"
@@ -248,7 +265,7 @@ function InviteDialog({
                   Thành viên cũ hoặc đã được mời
                 </Typography>
                 <List dense>
-                  {pastMembersAndInvited.map((entry) => (
+                  {uniquePastMembersAndInvited.map((entry) => (
                     <ListItem
                       key={entry.user?._id}
                       disablePadding
@@ -289,59 +306,65 @@ function InviteDialog({
                             sx={{ width: 40, height: 40 }}
                           />
                         </ListItemAvatar>
-                        <ListItemText
-                          primary={
-                            <Box
-                              sx={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 1,
-                              }}
+                        <Box
+                          sx={{
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 0.5,
+                          }}
+                        >
+                          <Box
+                            sx={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 1,
+                            }}
+                          >
+                            <Typography
+                              variant="body1"
+                              fontWeight="medium"
+                              color={theme.palette.text.primary}
                             >
                               {entry.user?.fullName || entry.user?.email}
-                              {!entry.isActive && (
-                                <Chip
-                                  label="Đã rời"
-                                  size="small"
-                                  color="warning"
-                                  variant="outlined"
-                                  sx={{
-                                    fontSize: 12,
-                                    bgcolor: isDarkMode
-                                      ? theme.palette.warning.dark
-                                      : theme.palette.warning.light,
-                                    color: theme.palette.warning.contrastText,
-                                  }}
-                                />
-                              )}
-                              {entry.isActive && (
-                                <Chip
-                                  label="Đã mời"
-                                  size="small"
-                                  color="info"
-                                  variant="outlined"
-                                  sx={{
-                                    fontSize: 12,
-                                    bgcolor: isDarkMode
-                                      ? theme.palette.info.dark
-                                      : theme.palette.info.light,
-                                    color: theme.palette.info.contrastText,
-                                  }}
-                                />
-                              )}
-                            </Box>
-                          }
-                          secondary={entry.user?.email}
-                          primaryTypographyProps={{
-                            variant: "body1",
-                            fontWeight: "medium",
-                            color: theme.palette.text.primary,
-                          }}
-                          secondaryTypographyProps={{
-                            variant: "body2",
-                            color: theme.palette.text.secondary,
-                          }}
-                        />
+                            </Typography>
+                            {!entry.isActive && (
+                              <Chip
+                                label="Đã rời"
+                                size="small"
+                                color="warning"
+                                variant="outlined"
+                                sx={{
+                                  fontSize: 12,
+                                  bgcolor: isDarkMode
+                                    ? theme.palette.warning.dark
+                                    : theme.palette.warning.light,
+                                  color: theme.palette.warning.contrastText,
+                                }}
+                              />
+                            )}
+                            {entry.isActive && (
+                              <Chip
+                                label="Đã mời"
+                                size="small"
+                                color="info"
+                                variant="outlined"
+                                sx={{
+                                  fontSize: 12,
+                                  bgcolor: isDarkMode
+                                    ? theme.palette.info.dark
+                                    : theme.palette.info.light,
+                                  color: theme.palette.info.contrastText,
+                                }}
+                              />
+                            )}
+                          </Box>
+                          <Typography
+                            variant="body2"
+                            color={theme.palette.text.secondary}
+                          >
+                            {entry.user?.email}
+                          </Typography>
+                        </Box>
                       </ListItemButton>
                     </ListItem>
                   ))}
@@ -350,8 +373,8 @@ function InviteDialog({
             )}
           </Box>
         )}
-        {searchResults.length === 0 &&
-          pastMembersAndInvited.length === 0 &&
+        {uniqueSearchResults.length === 0 &&
+          uniquePastMembersAndInvited.length === 0 &&
           !loading &&
           searchQuery.trim() && (
             <Typography

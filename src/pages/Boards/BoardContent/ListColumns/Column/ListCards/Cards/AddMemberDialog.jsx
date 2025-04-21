@@ -28,30 +28,27 @@ function AddMemberDialog({
   setColumns,
   boardMembers,
 }) {
-  const { socket } = useContext(SocketContext);
+  const { socket, socketReady } = useContext(SocketContext); // Sử dụng socketReady
   const theme = useTheme();
   const isDarkMode = theme.palette.mode === "dark";
   const [searchQuery, setSearchQuery] = useState("");
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [socketReady, setSocketReady] = useState(false);
 
   // Kiểm tra socket sẵn sàng
   useEffect(() => {
     if (!socket) {
-      console.warn("Socket not available in AddMemberDialog");
+      console.warn("Socket không khả dụng trong AddMemberDialog");
       return;
     }
 
     socket.on("connect", () => {
-      console.log("AddMemberDialog: Socket connected");
-      setSocketReady(true);
+      console.log("AddMemberDialog: Socket kết nối");
     });
 
     socket.on("connect_error", (err) => {
-      console.error("AddMemberDialog: Socket error:", err.message);
+      console.error("AddMemberDialog: Lỗi socket:", err.message);
       toast.error("Lỗi kết nối server!");
-      setSocketReady(false);
     });
 
     return () => {
@@ -87,13 +84,18 @@ function AddMemberDialog({
         }
       );
 
+      console.log("AddMemberDialog: Search response:", response.data);
+      console.log("AddMemberDialog: boardMembers:", boardMembers);
+
       // Lọc người dùng dựa trên boardMembers
       const filteredUsers = response.data.users.filter((user) =>
-        boardMembers.some(
-          (member) =>
-            member.user?._id.toString() === user._id.toString() &&
-            member.isActive
-        )
+        boardMembers.some((member) => {
+          const memberId = member.user?._id || member._id;
+          return (
+            memberId?.toString() === user._id.toString() &&
+            member.isActive === true
+          );
+        })
       );
 
       setUsers(filteredUsers);
@@ -102,7 +104,7 @@ function AddMemberDialog({
       }
     } catch (err) {
       console.error(
-        "Error searching users:",
+        "Lỗi tìm kiếm người dùng:",
         err.response?.data || err.message
       );
       toast.error(
@@ -122,17 +124,18 @@ function AddMemberDialog({
       return;
     }
 
-    // Kiểm tra xem người dùng đã là thành viên của thẻ chưa
     if (card.members?.some((m) => m._id.toString() === memberId.toString())) {
       toast.info("Người dùng đã là thành viên của thẻ!");
       return;
     }
 
-    // Kiểm tra xem người dùng có trong boardMembers và active không
-    const isValidMember = boardMembers.some(
-      (member) =>
-        member.user?._id.toString() === memberId.toString() && member.isActive
-    );
+    const isValidMember = boardMembers.some((member) => {
+      const memberIdFromBoard = member.user?._id || member._id;
+      return (
+        memberIdFromBoard?.toString() === memberId.toString() &&
+        member.isActive === true
+      );
+    });
     if (!isValidMember) {
       toast.error("Người dùng không phải thành viên active của bảng!");
       return;
@@ -151,14 +154,12 @@ function AddMemberDialog({
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      // Cập nhật cards
       setCards((prevCards) =>
         prevCards.map((c) =>
           c._id === card._id ? { ...c, members: response.data.members } : c
         )
       );
 
-      // Cập nhật columns
       setColumns((prevColumns) =>
         prevColumns.map((col) => ({
           ...col,
@@ -168,7 +169,6 @@ function AddMemberDialog({
         }))
       );
 
-      // Gửi sự kiện socket
       if (socket && socketReady) {
         socket.emit("member-added", {
           boardId: card.board,
@@ -183,12 +183,12 @@ function AddMemberDialog({
           members: response.data.members,
         });
       } else {
-        console.warn("Socket not ready, skipping emit");
+        console.warn("Socket chưa sẵn sàng, bỏ qua emit");
       }
 
       toast.success("Thêm thành viên thành công!");
     } catch (err) {
-      console.error("Error adding member:", err.response?.data || err.message);
+      console.error("Lỗi thêm thành viên:", err.response?.data || err.message);
       toast.error(
         `Có lỗi khi thêm thành viên: ${
           err.response?.data?.message || err.message
@@ -300,11 +300,13 @@ function AddMemberDialog({
                   disabled={
                     loading ||
                     card.members?.some((m) => m._id === user._id) ||
-                    !boardMembers.some(
-                      (member) =>
-                        member.user?._id.toString() === user._id.toString() &&
-                        member.isActive
-                    )
+                    !boardMembers.some((member) => {
+                      const memberId = member.user?._id || member._id;
+                      return (
+                        memberId?.toString() === user._id.toString() &&
+                        member.isActive === true
+                      );
+                    })
                   }
                   sx={{
                     borderRadius: "8px",
@@ -336,11 +338,13 @@ function AddMemberDialog({
                             (Đã thêm)
                           </Typography>
                         )}
-                        {!boardMembers.some(
-                          (member) =>
-                            member.user?._id.toString() ===
-                              user._id.toString() && member.isActive
-                        ) && (
+                        {!boardMembers.some((member) => {
+                          const memberId = member.user?._id || member._id;
+                          return (
+                            memberId?.toString() === user._id.toString() &&
+                            member.isActive === true
+                          );
+                        }) && (
                           <Typography
                             component="span"
                             color="error.main"

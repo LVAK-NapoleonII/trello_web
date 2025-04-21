@@ -1,14 +1,16 @@
+import { useState } from "react";
 import {
   Box,
   Typography,
-  Chip,
-  Stack,
-  Button,
+  IconButton,
+  Avatar,
+  Tooltip,
   CircularProgress,
 } from "@mui/material";
-import PersonIcon from "@mui/icons-material/Person";
+import PersonAddIcon from "@mui/icons-material/PersonAdd";
+import DeleteIcon from "@mui/icons-material/Delete";
 
-const MembersSection = ({
+function MembersSection({
   members,
   boardMembers,
   isBoardOwner,
@@ -16,65 +18,133 @@ const MembersSection = ({
   handleRemoveMember,
   setOpenAddMemberDialog,
   isMemberInBoard,
-}) => (
-  <Box sx={{ mb: 3 }}>
-    <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
-      <PersonIcon fontSize="small" color="action" />
-      <Typography variant="h6" color="text.primary">
-        Thành viên
-      </Typography>
+}) {
+  console.log("MembersSection props:", { members, boardMembers, isBoardOwner });
+
+  return (
+    <Box sx={{ mb: 2 }}>
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          mb: 1,
+        }}
+      >
+        <Typography
+          variant="h6"
+          sx={{
+            color: (theme) => theme.palette.text.primary,
+          }}
+        >
+          Thành viên
+        </Typography>
+        {isBoardOwner && (
+          <Tooltip title="Thêm thành viên">
+            <IconButton
+              onClick={() => setOpenAddMemberDialog(true)}
+              sx={{
+                color: (theme) => theme.palette.primary.main,
+                "&:hover": {
+                  bgcolor: (theme) => theme.palette.action.hover,
+                },
+              }}
+            >
+              <PersonAddIcon />
+            </IconButton>
+          </Tooltip>
+        )}
+      </Box>
+      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+        {members.map((member) => {
+          const isActive = isMemberInBoard(member._id);
+          console.log(
+            `Member ${member._id} (${member.fullName}): isMemberInBoard = ${isActive}`
+          );
+          return (
+            <Box
+              key={member._id}
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                gap: 1,
+                bgcolor: (theme) =>
+                  theme.palette.mode === "light"
+                    ? theme.palette.grey[100]
+                    : theme.palette.grey[800],
+                p: 1,
+                borderRadius: 1,
+                transition: "background-color 0.2s",
+                "&:hover": {
+                  bgcolor: (theme) =>
+                    theme.palette.mode === "light"
+                      ? theme.palette.grey[200]
+                      : theme.palette.grey[700],
+                },
+              }}
+            >
+              <Avatar
+                src={member.avatar}
+                alt={member.fullName}
+                sx={{
+                  width: 24,
+                  height: 24,
+                  bgcolor: (theme) => theme.palette.background.paper,
+                  border: (theme) =>
+                    `1px solid ${
+                      theme.palette.mode === "light"
+                        ? theme.palette.grey[300]
+                        : theme.palette.grey[700]
+                    }`,
+                }}
+              />
+              <Typography
+                sx={{
+                  textDecoration: isActive ? "none" : "line-through",
+                  color: isActive
+                    ? (theme) => theme.palette.text.primary
+                    : (theme) => theme.palette.text.secondary,
+                }}
+              >
+                {member.fullName}
+              </Typography>
+              {isBoardOwner && (
+                <Tooltip title="Xóa thành viên">
+                  <IconButton
+                    onClick={() => handleRemoveMember(member._id)}
+                    disabled={loading.removeMember}
+                    size="small"
+                    sx={{
+                      color: (theme) => theme.palette.error.main,
+                      "&:hover": {
+                        bgcolor: (theme) => theme.palette.action.hover,
+                      },
+                    }}
+                  >
+                    {loading.removeMember ? (
+                      <CircularProgress
+                        size={16}
+                        sx={{
+                          color: (theme) => theme.palette.text.secondary,
+                        }}
+                      />
+                    ) : (
+                      <DeleteIcon
+                        fontSize="small"
+                        sx={{
+                          color: (theme) => theme.palette.error.main,
+                        }}
+                      />
+                    )}
+                  </IconButton>
+                </Tooltip>
+              )}
+            </Box>
+          );
+        })}
+      </Box>
     </Box>
-    {members?.length > 0 ? (
-      <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mb: 2 }}>
-        {members.map((member, index) => (
-          <Chip
-            key={member._id || index}
-            label={member.fullName || member.email || "Không xác định"}
-            size="small"
-            sx={{
-              bgcolor: "info.main",
-              color: "info.contrastText",
-              textDecoration: !isMemberInBoard(member._id)
-                ? "line-through"
-                : "none",
-              "& .MuiChip-deleteIcon": {
-                color: "info.contrastText",
-              },
-            }}
-            onDelete={
-              isBoardOwner && !loading.removeMember
-                ? () => handleRemoveMember(member._id)
-                : undefined
-            }
-            deleteIcon={
-              isBoardOwner && loading.removeMember ? (
-                <CircularProgress size={14} sx={{ color: "inherit" }} />
-              ) : undefined
-            }
-          />
-        ))}
-      </Stack>
-    ) : (
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Chưa có thành viên
-      </Typography>
-    )}
-    <Button
-      size="small"
-      onClick={() => setOpenAddMemberDialog(true)}
-      variant="outlined"
-      sx={{
-        borderColor: "primary.main",
-        color: "primary.main",
-        "&:hover": {
-          bgcolor: "primary.light",
-          borderColor: "primary.dark",
-        },
-      }}
-    >
-      Thêm thành viên
-    </Button>
-  </Box>
-);
+  );
+}
 
 export default MembersSection;

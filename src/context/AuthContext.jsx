@@ -66,7 +66,6 @@ export const AuthProvider = ({ children }) => {
 
             localStorage.setItem("token", newToken);
 
-            // Gọi lại API profile với token mới
             const profileResponse = await axios.get(
               "http://localhost:5000/api/auth/profile",
               {
@@ -121,11 +120,27 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     console.log("AuthContext: Logging out user");
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+      console.log("AuthContext: No token found, clearing client-side data");
+      setUser(null);
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      toast.success("Đăng xuất thành công!");
+      return;
+    }
+
     try {
       await axios.post(
         "http://localhost:5000/api/auth/logout",
         {},
-        { withCredentials: true }
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          withCredentials: true,
+        }
       );
       console.log("AuthContext: Logout API called successfully");
       toast.success("Đăng xuất thành công!");
@@ -134,12 +149,12 @@ export const AuthProvider = ({ children }) => {
         message: error.message,
         status: error.response?.status,
       });
-      toast.error("Lỗi khi đăng xuất!");
+      toast.error("Lỗi khi đăng xuất, nhưng đã xóa dữ liệu phía client!");
+    } finally {
+      setUser(null);
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
     }
-
-    setUser(null);
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
   };
 
   return (

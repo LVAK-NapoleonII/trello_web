@@ -32,10 +32,13 @@ import AddToPhotosIcon from "@mui/icons-material/AddToPhotos";
 import SearchIcon from "@mui/icons-material/Search";
 import ClearIcon from "@mui/icons-material/Clear";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import DeleteIcon from "@mui/icons-material/Delete";
 import axios from "axios";
 import { useAuth } from "../../context/AuthContext";
 import { toast } from "react-toastify";
 import { SocketContext } from "../../context/SocketContext";
+import { formatDistanceToNow } from "date-fns";
+import vi from "date-fns/locale/vi";
 
 function AppBar() {
   const socket = useContext(SocketContext);
@@ -56,46 +59,58 @@ function AppBar() {
   const [anchorEl, setAnchorEl] = useState(null);
   const openNotifications = Boolean(anchorEl);
 
-  // Lấy thông báo và xử lý socket
   useEffect(() => {
-    if (user?._id) {
-      socket.emit("join", user._id);
-      console.log("AppBar tham gia phòng socket:", user._id);
+    if (!user?._id) return;
 
-      // Lấy thông báo ban đầu
-      const fetchNotifications = async () => {
-        try {
-          const token = localStorage.getItem("token");
-          const response = await axios.get(
-            "http://localhost:5000/api/notifications",
-            {
-              headers: { Authorization: `Bearer ${token}` },
-            }
-          );
-          setNotifications(response.data);
-          setUnreadCount(response.data.filter((n) => !n.isRead).length);
-        } catch (err) {
-          console.error("Error fetching notifications:", err);
-          toast.error("Không thể tải thông báo!");
+    console.log("Current user ID in AppBar:", user._id);
+
+    socket.emit("join", user._id);
+    console.log("AppBar tham gia phòng socket:", user._id);
+
+    const fetchNotifications = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        if (!token) {
+          console.log("AppBar: No token found, cannot fetch notifications");
+          return;
         }
-      };
-      fetchNotifications();
+        const response = await axios.get(
+          "http://localhost:5000/api/notifications",
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+        console.log("Notifications response in AppBar:", response.data);
+        if (!response.data.notifications) {
+          throw new Error("Không nhận được danh sách thông báo từ server");
+        }
+        if (response.data.notifications.length === 0) {
+          console.log(
+            "AppBar: Không có thông báo nào khớp với điều kiện (isHidden: false)"
+          );
+        }
+        setNotifications(response.data.notifications.slice(0, 10));
+        setUnreadCount(response.data.unreadCount || 0);
+      } catch (err) {
+        console.error("Lỗi khi lấy thông báo:", err);
+        toast.error("Không thể tải thông báo!");
+      }
+    };
+    fetchNotifications();
 
-      // Xử lý thông báo mới
-      socket.on("new-notification", (notification) => {
-        setNotifications((prev) => [notification, ...prev]);
-        setUnreadCount((prev) => prev + 1);
-        toast.info(notification.message, {
-          autoClose: 3000,
-        });
-      });
+    socket.on("new-notification", (notification) => {
+      console.log("Received new notification in AppBar:", notification);
+      if (!notification.isHidden) {
+        setNotifications((prev) => [notification, ...prev].slice(0, 10));
+        setUnreadCount((prev) => prev + (notification.isRead ? 0 : 1));
+        toast.info(notification.message, { autoClose: 3000 });
+      }
+    });
 
-      // Xử lý workspace-created để thông báo
-      socket.on("workspace-created", (data) => {
-        console.log("Nhận workspace-created trong AppBar:", data);
-        toast.success(data.message);
-      });
-    }
+    socket.on("workspace-created", (data) => {
+      console.log("Nhận workspace-created trong AppBar:", data);
+      toast.success(data.message);
+    });
 
     return () => {
       socket.off("new-notification");
@@ -103,7 +118,6 @@ function AppBar() {
     };
   }, [user, socket]);
 
-  // Mở/đóng menu thông báo
   const handleOpenNotifications = (event) => {
     setAnchorEl(event.currentTarget);
   };
@@ -112,8 +126,8 @@ function AppBar() {
     setAnchorEl(null);
   };
 
-  // Đánh dấu thông báo đã đọc
-  const handleMarkAsRead = async (notificationId) => {
+  const handleMarkAsRead = async (notificationId, event) => {
+    event.stopPropagation();
     try {
       const token = localStorage.getItem("token");
       await axios.put(
@@ -125,40 +139,67 @@ function AppBar() {
         prev.map((n) => (n._id === notificationId ? { ...n, isRead: true } : n))
       );
       setUnreadCount((prev) => prev - 1);
+      toast.success("Đã đánh dấu là đã đọc!");
     } catch (err) {
-      console.error("Error marking notification as read:", err);
+      console.error("Lỗi khi đánh dấu thông báo đã đọc:", err);
       toast.error("Không thể đánh dấu thông báo!");
     }
   };
 
-  // Đánh dấu tất cả đã đọc
-  const handleMarkAllAsRead = async () => {
+  const handleHideNotification = async (notificationId, event) => {
+    event.stopPropagation();
     try {
       const token = localStorage.getItem("token");
-      await axios.put(
-        "http://localhost:5000/api/notifications/read-all",
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
+      await axios.delete(
+        `http://localhost:5000/api/notifications/${notificationId}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
       );
-      setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
-      setUnreadCount(0);
-      toast.success("Đã đánh dấu tất cả thông báo là đã đọc!");
+      setNotifications((prev) => prev.filter((n) => n._id !== notificationId));
+      setUnreadCount(
+        (prev) =>
+          prev -
+          (notifications.find((n) => n._id === notificationId)?.isRead ? 0 : 1)
+      );
+      toast.success("Đã ẩn thông báo!");
     } catch (err) {
-      console.error("Error marking all notifications as read:", err);
-      toast.error("Không thể đánh dấu tất cả thông báo!");
+      console.error("Lỗi khi ẩn thông báo:", err);
+      toast.error("Không thể ẩn thông báo!");
     }
   };
 
-  // Điều hướng khi nhấn thông báo
+  const handleHideAllNotifications = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      await axios.delete("http://localhost:5000/api/notifications", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setNotifications([]);
+      setUnreadCount(0);
+      toast.success("Đã ẩn tất cả thông báo!");
+    } catch (err) {
+      console.error("Lỗi khi ẩn tất cả thông báo:", err);
+      toast.error("Không thể ẩn tất cả thông báo!");
+    }
+  };
+
   const handleNotificationClick = (notification) => {
-    handleMarkAsRead(notification._id);
-    if (notification.targetModel && notification.target) {
+    if (!notification.isRead) {
+      handleMarkAsRead(notification._id, new Event("click"));
+    }
+    if (notification.target && notification.targetModel) {
       switch (notification.targetModel) {
         case "Board":
           navigate(`/boards/${notification.target._id}`);
           break;
         case "Workspace":
           navigate(`/workspaces/${notification.target._id}`);
+          break;
+        case "Card":
+          navigate(
+            `/boards/${notification.target.board}/cards/${notification.target._id}`
+          );
           break;
         default:
           break;
@@ -209,7 +250,7 @@ function AppBar() {
         throw new Error("Vui lòng đăng nhập để tạo không gian làm việc!");
       }
 
-      console.log("Sending workspace data:", workspaceData);
+      console.log("Gửi dữ liệu không gian làm việc:", workspaceData);
 
       const response = await axios.post(
         "http://localhost:5000/api/workspaces",
@@ -217,17 +258,17 @@ function AppBar() {
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      console.log("Workspace created response:", response.data);
+      console.log("Phản hồi tạo không gian làm việc:", response.data);
 
       socket.emit("workspace-created", {
         workspace: response.data,
-        message: `Workspace "${response.data.name}" đã được tạo bởi ${user.fullName}`,
+        message: `Không gian làm việc "${response.data.name}" đã được tạo bởi ${user.fullName}`,
       });
 
       toast.success("Tạo không gian làm việc thành công!");
       handleCloseModal();
     } catch (error) {
-      console.error("Lỗi tạo workspace:", error);
+      console.error("Lỗi tạo không gian làm việc:", error);
       const message =
         error.response?.data?.message || "Lỗi khi tạo không gian làm việc!";
       setError(message);
@@ -275,6 +316,18 @@ function AppBar() {
             LVAK
           </Typography>
         </Box>
+        <WorkSpace onCreateWorkspace={handleOpenModal} />
+        <Recents />
+        <Starred />
+        <Templates />
+        <Button
+          sx={{ color: "white", borderColor: "white" }}
+          variant="outlined"
+          startIcon={<AddToPhotosIcon />}
+          onClick={handleOpenModal}
+        >
+          Tạo
+        </Button>
       </Box>
       <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
         <TextField
@@ -292,14 +345,14 @@ function AppBar() {
             ),
             endAdornment: (
               <Tooltip title="Xóa tìm kiếm">
-                <ClearIcon
-                  sx={{
-                    fontSize: "1.2rem",
-                    color: searchValue ? "white" : "transparent",
-                    cursor: "pointer",
-                  }}
-                  onClick={() => setSearchValue("")}
-                />
+                <IconButton onClick={() => setSearchValue("")}>
+                  <ClearIcon
+                    sx={{
+                      fontSize: "1.2rem",
+                      color: searchValue ? "white" : "transparent",
+                    }}
+                  />
+                </IconButton>
               </Tooltip>
             ),
           }}
@@ -318,24 +371,133 @@ function AppBar() {
         />
         <ModeSelect />
         <Tooltip title="Thông báo">
-          <span>
+          <IconButton onClick={handleOpenNotifications}>
             <Badge
               badgeContent={unreadCount}
               color="warning"
-              sx={{ cursor: "pointer", color: "white" }}
-              onClick={handleOpenNotifications}
+              sx={{ color: "white" }}
             >
               <NotificationsIcon />
             </Badge>
-          </span>
+          </IconButton>
         </Tooltip>
         <Tooltip title="Trợ giúp">
-          <HelpIcon sx={{ cursor: "pointer", color: "white" }} />
+          <IconButton>
+            <HelpIcon sx={{ color: "white" }} />
+          </IconButton>
         </Tooltip>
         <Tooltip title="Hồ sơ">
           <Profiles />
         </Tooltip>
       </Box>
+      <Menu
+        anchorEl={anchorEl}
+        open={openNotifications}
+        onClose={handleCloseNotifications}
+        PaperProps={{
+          sx: {
+            maxWidth: 400,
+            minWidth: 300,
+            maxHeight: 400,
+            overflowY: "auto",
+            borderRadius: 2,
+            boxShadow: 3,
+          },
+        }}
+      >
+        <Box
+          sx={{
+            px: 2,
+            py: 1,
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
+          <Typography variant="subtitle1">Thông báo</Typography>
+          {notifications.length > 0 && (
+            <Box sx={{ display: "flex", gap: 1 }}>
+              <Button
+                size="small"
+                onClick={handleMarkAllAsRead}
+                disabled={unreadCount === 0}
+              >
+                Đánh dấu tất cả
+              </Button>
+              <Button
+                size="small"
+                onClick={handleHideAllNotifications}
+                color="error"
+              >
+                Ẩn tất cả
+              </Button>
+            </Box>
+          )}
+        </Box>
+        <Divider />
+        {notifications.length === 0 ? (
+          <MenuItem>
+            <Typography variant="body2" color="text.secondary">
+              Không có thông báo nào
+            </Typography>
+          </MenuItem>
+        ) : (
+          notifications.map((notification) => (
+            <MenuItem
+              key={notification._id}
+              onClick={() => handleNotificationClick(notification)}
+              sx={{
+                whiteSpace: "normal",
+                py: 0.5,
+                px: 2,
+                bgcolor: !notification.isRead ? "action.hover" : "inherit",
+                "&:hover": { bgcolor: "action.selected" },
+              }}
+            >
+              <Box
+                sx={{ display: "flex", alignItems: "center", width: "100%" }}
+              >
+                <ListItemText
+                  primary={notification.message || "Không có nội dung"}
+                  secondary={formatDistanceToNow(
+                    new Date(notification.createdAt),
+                    {
+                      addSuffix: true,
+                      locale: vi,
+                    }
+                  )}
+                  primaryTypographyProps={{
+                    variant: "body2",
+                    fontWeight: !notification.isRead ? "bold" : "normal",
+                    noWrap: true,
+                    sx: { maxWidth: 220 },
+                  }}
+                  secondaryTypographyProps={{
+                    variant: "caption",
+                    color: "text.secondary",
+                  }}
+                />
+                <Box sx={{ display: "flex", gap: 0.5 }}>
+                  {!notification.isRead && (
+                    <ListItemIcon
+                      sx={{ minWidth: 0, mr: 1 }}
+                      onClick={(e) => handleMarkAsRead(notification._id, e)}
+                    >
+                      <CheckCircleIcon fontSize="small" color="primary" />
+                    </ListItemIcon>
+                  )}
+                  <ListItemIcon
+                    sx={{ minWidth: 0 }}
+                    onClick={(e) => handleHideNotification(notification._id, e)}
+                  >
+                    <DeleteIcon fontSize="small" color="error" />
+                  </ListItemIcon>
+                </Box>
+              </Box>
+            </MenuItem>
+          ))
+        )}
+      </Menu>
       <Modal
         open={openModal}
         onClose={handleCloseModal}

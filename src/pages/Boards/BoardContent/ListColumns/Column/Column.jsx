@@ -93,7 +93,6 @@ function Column({
   const handleToggleExpand = () => {
     const newExpanded = !isExpanded;
     setIsExpanded(newExpanded);
-    // Cập nhật isExpanded vào column để đồng bộ với setColumns
     setColumns((prevColumns) =>
       prevColumns.map((col) =>
         col._id === column._id ? { ...col, isExpanded: newExpanded } : col
@@ -176,7 +175,7 @@ function Column({
       setColumns((prevColumns) =>
         prevColumns.map((col) =>
           col._id === column._id
-            ? { ...col, cards: [...col.cards, response.data] }
+            ? { ...col, cards: [...(col.cards || []), response.data] }
             : col
         )
       );
@@ -218,8 +217,8 @@ function Column({
           ref={setDroppableNodeRef}
           {...listeners}
           sx={{
-            minWidth: "300px",
-            maxWidth: "300px",
+            minWidth: "350px", // Tăng từ 300px lên 400px
+            maxWidth: "400px", // Tăng từ 300px lên 400px
             ml: 2,
             borderRadius: "12px",
             bgcolor: isOver
@@ -472,8 +471,8 @@ function Column({
                   listId={column._id}
                   refresh={refreshCards}
                   setColumns={setColumns}
-                  boardMembers={boardMembers} // Truyền boardMembers
-                  setBoardMembers={setBoardMembers} // Truyền setBoardMembers
+                  boardMembers={boardMembers}
+                  setBoardMembers={setBoardMembers}
                 />
               </Box>
 

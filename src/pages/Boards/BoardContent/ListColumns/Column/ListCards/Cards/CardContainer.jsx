@@ -58,7 +58,7 @@ function CardContainer({
         bgcolor: (theme) => theme.palette.background.paper,
         position: "relative",
         height: expanded ? "auto" : "120px",
-        maxHeight: expanded ? "600px" : "120px",
+        maxHeight: expanded ? "800px" : "120px", // Tăng maxHeight khi mở rộng
         width: "100%",
         overflow: "hidden",
         transition: "all 0.2s ease-in-out",

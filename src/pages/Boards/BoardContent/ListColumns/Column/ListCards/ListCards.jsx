@@ -41,50 +41,6 @@ function ListCards({
     })
   );
 
-  useEffect(() => {
-    if (!socket) {
-      console.warn("Socket not available in ListCards");
-      return;
-    }
-
-    socket.on("connect", () => {
-      console.log("ListCards: Socket connected");
-      setSocketReady(true);
-    });
-
-    socket.on("connect_error", (err) => {
-      console.error("ListCards: Socket error:", err.message);
-      toast.error("Lỗi kết nối server!");
-      setSocketReady(false);
-    });
-
-    socket.on("card-order-updated", ({ listId: updatedListId, cardOrder }) => {
-      if (updatedListId === listId) {
-        setCards((prevCards) => {
-          const reorderedCards = cardOrder
-            .map((id) => prevCards.find((card) => card._id === id))
-            .filter((card) => card);
-          return reorderedCards;
-        });
-      }
-    });
-
-    socket.on("card-moved", ({ card, oldListId, newListId }) => {
-      if (oldListId === listId) {
-        setCards((prevCards) => prevCards.filter((c) => c._id !== card._id));
-      } else if (newListId === listId) {
-        setCards((prevCards) => [...prevCards, card]);
-      }
-    });
-
-    return () => {
-      socket.off("connect");
-      socket.off("connect_error");
-      socket.off("card-order-updated");
-      socket.off("card-moved");
-    };
-  }, [socket, listId]);
-
   const fetchCards = useCallback(async () => {
     try {
       const token = localStorage.getItem("token");
@@ -106,6 +62,77 @@ function ListCards({
       );
     }
   }, [listId]);
+
+  useEffect(() => {
+    if (!socket) {
+      console.warn("Socket not available in ListCards");
+      return;
+    }
+
+    socket.on("connect", () => {
+      console.log("ListCards: Socket connected");
+      setSocketReady(true);
+    });
+
+    socket.on("connect_error", (err) => {
+      console.error("ListCards: Socket error:", err.message);
+      toast.error("Lỗi kết nối server!");
+      setSocketReady(false);
+    });
+
+    socket.on("card-order-updated", ({ listId: updatedListId, cardOrder }) => {
+      if (updatedListId === listId) {
+        console.log("Received card-order-updated:", { listId, cardOrder });
+        setCards((prevCards) => {
+          const reorderedCards = cardOrder
+            .map((id) => prevCards.find((card) => card._id === id))
+            .filter((card) => card);
+          const remainingCards = prevCards.filter(
+            (card) => !cardOrder.includes(card._id)
+          );
+          return [...reorderedCards, ...remainingCards];
+        });
+      }
+    });
+
+    socket.on("card-moved", ({ card, oldListId, newListId }) => {
+      console.log("Received card-moved:", {
+        cardId: card._id,
+        oldListId,
+        newListId,
+      });
+      if (oldListId === listId) {
+        setCards((prevCards) => prevCards.filter((c) => c._id !== card._id));
+      } else if (newListId === listId) {
+        setCards((prevCards) => {
+          if (!prevCards.some((c) => c._id === card._id)) {
+            return [...prevCards, card];
+          }
+          return prevCards;
+        });
+      }
+    });
+
+    socket.on("card-created", ({ listId: updatedListId, card }) => {
+      if (updatedListId === listId) {
+        console.log("Received card-created:", { listId, cardId: card._id });
+        setCards((prevCards) => {
+          if (!prevCards.some((c) => c._id === card._id)) {
+            return [...prevCards, card];
+          }
+          return prevCards;
+        });
+      }
+    });
+
+    return () => {
+      socket.off("connect");
+      socket.off("connect_error");
+      socket.off("card-order-updated");
+      socket.off("card-moved");
+      socket.off("card-created");
+    };
+  }, [socket, listId]);
 
   useEffect(() => {
     if (!listId) {
@@ -130,10 +157,18 @@ function ListCards({
     const { active, over } = event;
     setActiveCard(null);
 
-    if (!over || active.id === over.id) return;
+    if (!over || active.id === over.id) {
+      console.log("No valid drag action performed");
+      return;
+    }
 
     const oldIndex = cards.findIndex((c) => c._id === active.id);
     const newIndex = cards.findIndex((c) => c._id === over.id);
+
+    if (oldIndex === -1 || newIndex === -1) {
+      console.error("Invalid card indices:", { oldIndex, newIndex });
+      return;
+    }
 
     const newCards = arrayMove(cards, oldIndex, newIndex);
     setCards(newCards);
@@ -143,12 +178,14 @@ function ListCards({
       if (!token) {
         throw new Error("Không tìm thấy token! Vui lòng đăng nhập lại.");
       }
+
       const cardOrder = newCards.map((card) => card._id);
       console.log("Sending cardOrder to server:", {
         listId,
         cardOrder: JSON.stringify(cardOrder),
         timestamp: new Date().toISOString(),
       });
+
       await axios.put(
         `http://localhost:5000/api/lists/card-order/${listId}`,
         { cardOrder },
@@ -181,7 +218,7 @@ function ListCards({
           err.response?.data?.message || err.message
         }`
       );
-      fetchCards();
+      fetchCards(); // Khôi phục trạng thái từ server nếu lỗi
     }
   };
 
@@ -216,8 +253,8 @@ function ListCards({
                 setCards={setCards}
                 setColumns={setColumns}
                 isDragging={activeCard?._id === card._id}
-                boardMembers={boardMembers} // Truyền boardMembers
-                setBoardMembers={setBoardMembers} // Truyền setBoardMembers
+                boardMembers={boardMembers}
+                setBoardMembers={setBoardMembers}
               />
             ))
           ) : (
@@ -260,8 +297,8 @@ function ListCards({
                 setCards={setCards}
                 setColumns={setColumns}
                 isDragging={true}
-                boardMembers={boardMembers} // Truyền boardMembers
-                setBoardMembers={setBoardMembers} // Truyền setBoardMembers
+                boardMembers={boardMembers}
+                setBoardMembers={setBoardMembers}
               />
             </Box>
           )}

@@ -1,7 +1,6 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useContext } from "react";
 import { Box, CircularProgress, useTheme } from "@mui/material";
 import axios from "axios";
-import io from "socket.io-client";
 import debounce from "lodash/debounce";
 import { useNavigate } from "react-router-dom";
 import { ToastContainer, toast } from "react-toastify";
@@ -11,11 +10,12 @@ import BoardBarActions from "./BoardBarActions";
 import MemberMenu from "./MemberMenu";
 import InviteDialog from "./InviteDialog";
 import ManageMembersDialog from "./ManageMembersDialog";
+import { SocketContext } from "../../../context/SocketContext";
 
 function BoardBar({ board, setBoard }) {
   const theme = useTheme();
   const isDarkMode = theme.palette.mode === "dark";
-  const [socket, setSocket] = useState(null);
+  const { socket, socketReady } = useContext(SocketContext);
   const [openInviteDialog, setOpenInviteDialog] = useState(false);
   const [openManageMembersDialog, setOpenManageMembersDialog] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -45,62 +45,43 @@ function BoardBar({ board, setBoard }) {
     }
   }, [board]);
 
-  // Khởi tạo Socket.IO và join room
+  // Tham gia phòng socket khi socket sẵn sàng
   useEffect(() => {
-    const newSocket = io("http://localhost:5000", {
-      withCredentials: true,
-    });
-    setSocket(newSocket);
+    if (!socket || !socketReady || !board?._id) return;
 
-    newSocket.on("connect", () => {
-      console.log("BoardBar: Socket connected, ID:", newSocket.id);
-      if (board?._id) {
-        newSocket.emit("join-board", { boardId: board._id });
-        console.log("BoardBar: Joined board room:", board._id);
-      } else {
-        console.warn("BoardBar: Không thể join-board, board._id không hợp lệ");
-      }
-    });
-
-    newSocket.on("connect_error", (err) => {
-      console.error("BoardBar: Socket error:", err.message);
-      toast.error("Lỗi kết nối server!");
+    socket.on("connect", () => {
+      console.log("BoardBar: Socket connected, ID:", socket.id);
+      socket.emit("join-board", { boardId: board._id });
+      console.log("BoardBar: Joined board room:", board._id);
     });
 
     return () => {
-      newSocket.disconnect();
-      console.log("BoardBar: Socket disconnected");
+      socket.off("connect");
     };
-  }, [board?._id]);
+  }, [socket, socketReady, board?._id]);
 
   // Socket.IO listeners
   useEffect(() => {
-    if (!socket) return;
+    if (!socket || !socketReady) return;
 
     socket.on("member-invited", (data) => {
       console.log("BoardBar: Received member-invited:", data);
       if (typeof setBoard === "function") {
-        setBoard((prev) => {
-          const updatedBoard = JSON.parse(JSON.stringify(data.board));
-          console.log("Cập nhật board với member mới:", updatedBoard);
-          return updatedBoard;
-        });
+        setBoard(data.board);
         toast.success(`Đã mời ${data.invitedUser.fullName} thành công!`);
       } else {
         console.warn(
           "BoardBar: setBoard is not a function, skipping state update"
         );
       }
+      // Phát sự kiện board-updated để đồng bộ
+      socket.emit("board-updated", { board: data.board });
     });
 
     socket.on("member-deactivated", (data) => {
       console.log("BoardBar: Received member-deactivated:", data);
       if (typeof setBoard === "function") {
-        setBoard((prev) => {
-          const updatedBoard = JSON.parse(JSON.stringify(data.board));
-          console.log("Cập nhật board sau khi xóa member:", updatedBoard);
-          return updatedBoard;
-        });
+        setBoard(data.board);
         toast.success("Đã xóa thành viên thành công!");
       } else {
         console.warn(
@@ -111,6 +92,8 @@ function BoardBar({ board, setBoard }) {
         navigate("/boards");
         socket.emit("refresh-sidebar", { userId: currentUserId });
       }
+      // Phát sự kiện board-updated để đồng bộ
+      socket.emit("board-updated", { board: data.board });
     });
 
     socket.on("board-updated", (data) => {
@@ -143,7 +126,7 @@ function BoardBar({ board, setBoard }) {
       socket.off("board-updated");
       socket.off("board-deleted");
     };
-  }, [socket, board?._id, setBoard, currentUserId, navigate]);
+  }, [socket, socketReady, board?._id, setBoard, currentUserId, navigate]);
 
   // Lấy thông tin người dùng hiện tại
   useEffect(() => {
@@ -296,7 +279,7 @@ function BoardBar({ board, setBoard }) {
           "BoardBar: setBoard is not a function, skipping state update"
         );
       }
-      if (selectedUserId) {
+      if (selectedUserId && socket && socketReady) {
         socket.emit("member-invited", {
           board: response.data.board,
           invitedUser: response.data.board.members.find(
@@ -349,11 +332,13 @@ function BoardBar({ board, setBoard }) {
           "BoardBar: setBoard is not a function, skipping state update"
         );
       }
-      socket.emit("member-deactivated", {
-        board: response.data.board,
-        deactivatedUserId: userId,
-      });
-      socket.emit("refresh-sidebar", { userId });
+      if (socket && socketReady) {
+        socket.emit("member-deactivated", {
+          board: response.data.board,
+          deactivatedUserId: userId,
+        });
+        socket.emit("refresh-sidebar", { userId });
+      }
       toast.success("Đã xóa thành viên thành công!");
       handleCloseMenu();
       fetchBoard(); // Dự phòng
@@ -384,11 +369,13 @@ function BoardBar({ board, setBoard }) {
         { headers: { Authorization: `Bearer ${token}` } }
       );
       console.log("BoardBar: Leave response:", response.data);
-      socket.emit("member-deactivated", {
-        board: response.data.board,
-        deactivatedUserId: currentUserId,
-        workspaceRemoved: response.data.workspaceRemoved,
-      });
+      if (socket && socketReady) {
+        socket.emit("member-deactivated", {
+          board: response.data.board,
+          deactivatedUserId: currentUserId,
+          workspaceRemoved: response.data.workspaceRemoved,
+        });
+      }
       handleCloseManageMembersDialog();
       navigate(response.data.redirect || "/boards");
       toast.success("Đã rời khỏi bảng!");
@@ -440,8 +427,12 @@ function BoardBar({ board, setBoard }) {
 
   // Menu
   const handleOpenMenu = (event, member) => {
-    setAnchorEl(event.currentTarget);
-    setSelectedMember(member);
+    if (event.currentTarget) {
+      setAnchorEl(event.currentTarget);
+      setSelectedMember(member);
+    } else {
+      console.warn("BoardBar: Invalid anchorEl in handleOpenMenu");
+    }
   };
 
   const handleCloseMenu = () => {

@@ -12,70 +12,59 @@ import {
   closestCorners,
 } from "@dnd-kit/core";
 import { mapOrder } from "../../../utils/softs.js";
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useContext } from "react";
 import Column from "./ListColumns/Column/Column.jsx";
 import Cards from "./ListColumns/Column/ListCards/Cards/Cards.jsx";
 import { cloneDeep } from "lodash";
 import { arrayMove } from "@dnd-kit/sortable";
-import io from "socket.io-client";
 import { toast } from "react-toastify";
 import axios from "axios";
+import { SocketContext } from "../../../context/SocketContext.jsx"; // Thêm SocketContext
 
 const ACTIVE_DRAG_ITEM_TYPE = {
   COLUMN: "ACTIVE_DRAG_ITEM_TYPE_COLUMN",
   CARD: "ACTIVE_DRAG_ITEM_TYPE_CARD",
 };
 
-function BoardContent({ board }) {
-  const [socket, setSocket] = useState(null);
+function BoardContent({ board, boardMembers, setBoardMembers }) {
+  const { socket, socketReady } = useContext(SocketContext); // Sử dụng SocketContext
   const [orderedColumnsState, setOrderedColumnsState] = useState([]);
-  const [activeDragItem, setActiveDragItem] = useState(null); // Hợp nhất state
+  const [activeDragItem, setActiveDragItem] = useState(null);
   const lastOverId = useRef(null);
 
-  // Khởi tạo Socket.IO
+  // Tham gia phòng socket khi socket sẵn sàng
   useEffect(() => {
-    const newSocket = io("http://localhost:5000", { withCredentials: true });
-    setSocket(newSocket);
+    if (!socket || !socketReady || !board?._id) return;
 
-    newSocket.on("connect", () => {
+    socket.on("connect", () => {
       console.log("BoardContent: Socket connected");
-      if (board?._id) {
-        newSocket.emit("join-board", { boardId: board._id });
-      }
-    });
-
-    newSocket.on("connect_error", (err) => {
-      console.error("BoardContent: Socket error:", err.message);
-      toast.error("Lỗi kết nối server!");
+      socket.emit("join-board", { boardId: board._id });
     });
 
     // Lắng nghe sự kiện từ server
-    newSocket.on(
-      "card-moved",
-      ({ card, oldListId, newListId, newPosition }) => {
-        setOrderedColumnsState((prev) => {
-          const nextColumns = cloneDeep(prev);
-          const oldColumn = nextColumns.find((c) => c._id === oldListId);
-          const newColumn = nextColumns.find((c) => c._id === newListId);
+    socket.on("card-moved", ({ card, oldListId, newListId, newPosition }) => {
+      setOrderedColumnsState((prev) => {
+        const nextColumns = cloneDeep(prev);
+        const oldColumn = nextColumns.find((c) => c._id === oldListId);
+        const newColumn = nextColumns.find((c) => c._id === newListId);
 
-          if (oldColumn && newColumn) {
-            oldColumn.cards = oldColumn.cards.filter((c) => c._id !== card._id);
-            oldColumn.cardOrderIds = oldColumn.cards.map((c) => c._id);
+        if (oldColumn && newColumn) {
+          oldColumn.cards = oldColumn.cards.filter((c) => c._id !== card._id);
+          oldColumn.cardOrderIds = oldColumn.cards.map((c) => c._id);
 
-            newColumn.cards = newColumn.cards.filter((c) => c._id !== card._id);
-            newColumn.cards.splice(newPosition, 0, {
-              ...card,
-              columnId: newListId,
-            });
-            newColumn.cardOrderIds = newColumn.cards.map((c) => c._id);
-          }
+          newColumn.cards = newColumn.cards.filter((c) => c._id !== card._id);
+          newColumn.cards.splice(newPosition, 0, {
+            ...card,
+            columnId: newListId,
+          });
+          newColumn.cardOrderIds = newColumn.cards.map((c) => c._id);
+        }
 
-          return nextColumns;
-        });
-      }
-    );
+        return nextColumns;
+      });
+    });
 
-    newSocket.on("card-order-updated", ({ listId, cardOrder }) => {
+    socket.on("card-order-updated", ({ listId, cardOrder }) => {
       setOrderedColumnsState((prev) => {
         const nextColumns = cloneDeep(prev);
         const column = nextColumns.find((c) => c._id === listId);
@@ -87,10 +76,49 @@ function BoardContent({ board }) {
       });
     });
 
+    // Lắng nghe sự kiện thêm/xóa thành viên
+    socket.on("member-invited", (data) => {
+      console.log("BoardContent: Received member-invited:", data);
+      setBoardMembers(data.board.members || []);
+      setOrderedColumnsState((prev) => {
+        const nextColumns = cloneDeep(prev);
+        nextColumns.forEach((column) => {
+          column.cards.forEach((card) => {
+            card.members = card.members.filter((member) =>
+              data.board.members.some(
+                (m) => m.user._id === member._id && m.isActive
+              )
+            );
+          });
+        });
+        return nextColumns;
+      });
+    });
+
+    socket.on("member-deactivated", (data) => {
+      console.log("BoardContent: Received member-deactivated:", data);
+      setBoardMembers(data.board.members || []);
+      setOrderedColumnsState((prev) => {
+        const nextColumns = cloneDeep(prev);
+        nextColumns.forEach((column) => {
+          column.cards.forEach((card) => {
+            card.members = card.members.filter(
+              (member) => member._id !== data.deactivatedUserId
+            );
+          });
+        });
+        return nextColumns;
+      });
+    });
+
     return () => {
-      newSocket.disconnect();
+      socket.off("connect");
+      socket.off("card-moved");
+      socket.off("card-order-updated");
+      socket.off("member-invited");
+      socket.off("member-deactivated");
     };
-  }, [board?._id]);
+  }, [socket, socketReady, board?._id, setBoardMembers]);
 
   // Cảm biến kéo thả
   const sensors = useSensors(
@@ -178,14 +206,16 @@ function BoardContent({ board }) {
         return nextColumns;
       });
 
-      socket.emit("card-moved", {
-        card: response.data.card,
-        oldListId: activeColumn._id,
-        newListId: overColumn._id,
-        newPosition: newCardIndex,
-      });
+      if (socket && socketReady) {
+        socket.emit("card-moved", {
+          card: response.data.card,
+          oldListId: activeColumn._id,
+          newListId: overColumn._id,
+          newPosition: newCardIndex,
+        });
+      }
     } catch (err) {
-      console.error("Error moving card:", err);
+      console.error("Lỗi di chuyển thẻ:", err);
       toast.error("Lỗi khi di chuyển thẻ!");
     }
   };
@@ -291,12 +321,14 @@ function BoardContent({ board }) {
                 return nextColumns;
               });
 
-              socket.emit("card-order-updated", {
-                listId: activeColumn._id,
-                cardOrder: newCardOrderIds,
-              });
+              if (socket && socketReady) {
+                socket.emit("card-order-updated", {
+                  listId: activeColumn._id,
+                  cardOrder: newCardOrderIds,
+                });
+              }
             } catch (err) {
-              console.error("Error updating card order:", err);
+              console.error("Lỗi cập nhật thứ tự thẻ:", err);
               toast.error("Lỗi khi cập nhật thứ tự thẻ!");
             }
           }
@@ -334,12 +366,14 @@ function BoardContent({ board }) {
             );
 
             setOrderedColumnsState(dndOrderedColumns);
-            socket.emit("list-order-updated", {
-              boardId: board._id,
-              listOrder: dndOrderedColumns.map((c) => c._id),
-            });
+            if (socket && socketReady) {
+              socket.emit("list-order-updated", {
+                boardId: board._id,
+                listOrder: dndOrderedColumns.map((c) => c._id),
+              });
+            }
           } catch (err) {
-            console.error("Error updating list order:", err);
+            console.error("Lỗi cập nhật thứ tự cột:", err);
             toast.error("Lỗi khi cập nhật thứ tự cột!");
           }
         }
@@ -347,7 +381,14 @@ function BoardContent({ board }) {
 
       setActiveDragItem(null);
     },
-    [activeDragItem, orderedColumnsState, board._id, socket, findColumnByCardId]
+    [
+      activeDragItem,
+      orderedColumnsState,
+      board._id,
+      socket,
+      socketReady,
+      findColumnByCardId,
+    ]
   );
 
   // Thuật toán phát hiện va chạm
@@ -356,7 +397,7 @@ function BoardContent({ board }) {
       if (activeDragItem?.type === ACTIVE_DRAG_ITEM_TYPE.COLUMN) {
         return closestCorners(args);
       }
-      return closestCorners(args); // Đơn giản hóa để cải thiện hiệu suất
+      return closestCorners(args);
     },
     [activeDragItem]
   );
