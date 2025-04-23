@@ -1,4 +1,4 @@
-import { useState, useEffect, useContext } from "react";
+import { useState, useEffect, useContext, forwardRef } from "react";
 import { useNavigate } from "react-router-dom";
 import ModeSelect from "../ModeSelect/ModeSelect";
 import Box from "@mui/material/Box";
@@ -40,6 +40,12 @@ import { SocketContext } from "../../context/SocketContext";
 import { formatDistanceToNow } from "date-fns";
 import vi from "date-fns/locale/vi";
 
+const CustomIconButton = forwardRef(({ onClick, children, ...props }, ref) => (
+  <IconButton ref={ref} onClick={onClick} {...props}>
+    {children}
+  </IconButton>
+));
+
 function AppBar() {
   const socket = useContext(SocketContext);
   const [searchValue, setSearchValue] = useState("");
@@ -60,18 +66,24 @@ function AppBar() {
   const openNotifications = Boolean(anchorEl);
 
   useEffect(() => {
-    if (!user?._id) return;
+    if (!user || !user._id) {
+      console.log("AppBar: No user or user ID found, redirecting to login");
+      navigate("/login");
+      return;
+    }
 
-    console.log("Current user ID in AppBar:", user._id);
+    console.log("AppBar: Current user ID:", user._id);
 
-    socket.emit("join", user._id);
-    console.log("AppBar tham gia phòng socket:", user._id);
+    socket.emit("join-user", user._id);
+    console.log("AppBar: Joined socket room:", user._id);
 
     const fetchNotifications = async () => {
       try {
         const token = localStorage.getItem("token");
         if (!token) {
-          console.log("AppBar: No token found, cannot fetch notifications");
+          console.error("AppBar: No token found, redirecting to login");
+          toast.error("Vui lòng đăng nhập để xem thông báo!");
+          navigate("/login");
           return;
         }
         const response = await axios.get(
@@ -80,26 +92,27 @@ function AppBar() {
             headers: { Authorization: `Bearer ${token}` },
           }
         );
-        console.log("Notifications response in AppBar:", response.data);
+        console.log("AppBar: Notifications response:", response.data);
         if (!response.data.notifications) {
           throw new Error("Không nhận được danh sách thông báo từ server");
         }
         if (response.data.notifications.length === 0) {
-          console.log(
-            "AppBar: Không có thông báo nào khớp với điều kiện (isHidden: false)"
-          );
+          console.log("AppBar: No notifications found (isHidden: false)");
         }
         setNotifications(response.data.notifications.slice(0, 10));
         setUnreadCount(response.data.unreadCount || 0);
       } catch (err) {
-        console.error("Lỗi khi lấy thông báo:", err);
-        toast.error("Không thể tải thông báo!");
+        console.error("AppBar: Error fetching notifications:", {
+          message: err.message,
+          response: err.response?.data,
+        });
+        toast.error(err.response?.data?.message || "Không thể tải thông báo!");
       }
     };
     fetchNotifications();
 
     socket.on("new-notification", (notification) => {
-      console.log("Received new notification in AppBar:", notification);
+      console.log("AppBar: Received new notification:", notification);
       if (!notification.isHidden) {
         setNotifications((prev) => [notification, ...prev].slice(0, 10));
         setUnreadCount((prev) => prev + (notification.isRead ? 0 : 1));
@@ -108,7 +121,7 @@ function AppBar() {
     });
 
     socket.on("workspace-created", (data) => {
-      console.log("Nhận workspace-created trong AppBar:", data);
+      console.log("AppBar: Received workspace-created:", data);
       toast.success(data.message);
     });
 
@@ -116,7 +129,7 @@ function AppBar() {
       socket.off("new-notification");
       socket.off("workspace-created");
     };
-  }, [user, socket]);
+  }, [user, socket, navigate]);
 
   const handleOpenNotifications = (event) => {
     setAnchorEl(event.currentTarget);
@@ -141,7 +154,7 @@ function AppBar() {
       setUnreadCount((prev) => prev - 1);
       toast.success("Đã đánh dấu là đã đọc!");
     } catch (err) {
-      console.error("Lỗi khi đánh dấu thông báo đã đọc:", err);
+      console.error("AppBar: Error marking notification as read:", err);
       toast.error("Không thể đánh dấu thông báo!");
     }
   };
@@ -164,7 +177,7 @@ function AppBar() {
       );
       toast.success("Đã ẩn thông báo!");
     } catch (err) {
-      console.error("Lỗi khi ẩn thông báo:", err);
+      console.error("AppBar: Error hiding notification:", err);
       toast.error("Không thể ẩn thông báo!");
     }
   };
@@ -179,7 +192,7 @@ function AppBar() {
       setUnreadCount(0);
       toast.success("Đã ẩn tất cả thông báo!");
     } catch (err) {
-      console.error("Lỗi khi ẩn tất cả thông báo:", err);
+      console.error("AppBar: Error hiding all notifications:", err);
       toast.error("Không thể ẩn tất cả thông báo!");
     }
   };
@@ -250,7 +263,7 @@ function AppBar() {
         throw new Error("Vui lòng đăng nhập để tạo không gian làm việc!");
       }
 
-      console.log("Gửi dữ liệu không gian làm việc:", workspaceData);
+      console.log("AppBar: Sending workspace data:", workspaceData);
 
       const response = await axios.post(
         "http://localhost:5000/api/workspaces",
@@ -258,7 +271,7 @@ function AppBar() {
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      console.log("Phản hồi tạo không gian làm việc:", response.data);
+      console.log("AppBar: Workspace creation response:", response.data);
 
       socket.emit("workspace-created", {
         workspace: response.data,
@@ -268,7 +281,7 @@ function AppBar() {
       toast.success("Tạo không gian làm việc thành công!");
       handleCloseModal();
     } catch (error) {
-      console.error("Lỗi tạo không gian làm việc:", error);
+      console.error("AppBar: Error creating workspace:", error);
       const message =
         error.response?.data?.message || "Lỗi khi tạo không gian làm việc!";
       setError(message);
@@ -298,9 +311,9 @@ function AppBar() {
       }}
     >
       <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-        <IconButton onClick={handleNavigateHome}>
+        <CustomIconButton onClick={handleNavigateHome}>
           <AppsIcon sx={{ color: "white" }} />
-        </IconButton>
+        </CustomIconButton>
         <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
           <BackupTableIcon sx={{ color: "white" }} />
           <Typography
@@ -345,14 +358,14 @@ function AppBar() {
             ),
             endAdornment: (
               <Tooltip title="Xóa tìm kiếm">
-                <IconButton onClick={() => setSearchValue("")}>
+                <CustomIconButton onClick={() => setSearchValue("")}>
                   <ClearIcon
                     sx={{
                       fontSize: "1.2rem",
                       color: searchValue ? "white" : "transparent",
                     }}
                   />
-                </IconButton>
+                </CustomIconButton>
               </Tooltip>
             ),
           }}
@@ -371,7 +384,7 @@ function AppBar() {
         />
         <ModeSelect />
         <Tooltip title="Thông báo">
-          <IconButton onClick={handleOpenNotifications}>
+          <CustomIconButton onClick={handleOpenNotifications}>
             <Badge
               badgeContent={unreadCount}
               color="warning"
@@ -379,12 +392,12 @@ function AppBar() {
             >
               <NotificationsIcon />
             </Badge>
-          </IconButton>
+          </CustomIconButton>
         </Tooltip>
         <Tooltip title="Trợ giúp">
-          <IconButton>
+          <CustomIconButton>
             <HelpIcon sx={{ color: "white" }} />
-          </IconButton>
+          </CustomIconButton>
         </Tooltip>
         <Tooltip title="Hồ sơ">
           <Profiles />
@@ -417,13 +430,6 @@ function AppBar() {
           <Typography variant="subtitle1">Thông báo</Typography>
           {notifications.length > 0 && (
             <Box sx={{ display: "flex", gap: 1 }}>
-              <Button
-                size="small"
-                onClick={handleMarkAllAsRead}
-                disabled={unreadCount === 0}
-              >
-                Đánh dấu tất cả
-              </Button>
               <Button
                 size="small"
                 onClick={handleHideAllNotifications}

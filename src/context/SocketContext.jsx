@@ -12,15 +12,21 @@ export const SocketProvider = ({ children }) => {
   });
 
   socket.on("connect", () => {
-    console.log("SocketProvider connected:", socket.id);
+    console.log("SocketProvider: Connected with ID:", socket.id);
   });
 
   socket.on("connect_error", (err) => {
-    console.error("SocketProvider connect error:", err.message);
+    console.error("SocketProvider: Connect error:", {
+      message: err.message,
+      description: err.description,
+    });
+    toast.error(
+      "Không thể kết nối đến server thời gian thực. Vui lòng kiểm tra kết nối!"
+    );
   });
 
   socket.on("disconnect", () => {
-    console.log("SocketProvider disconnected");
+    console.log("SocketProvider: Disconnected");
   });
 
   return (
