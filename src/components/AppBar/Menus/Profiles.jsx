@@ -31,7 +31,7 @@ const Profiles = forwardRef((props, ref) => {
   useEffect(() => {
     if (!user?._id) return;
 
-    console.log("Current user ID in Profiles:", user._id);
+    console.log("Profiles: Fetching activities for user:", user._id);
 
     const fetchActivities = async () => {
       try {
@@ -46,25 +46,17 @@ const Profiles = forwardRef((props, ref) => {
             headers: { Authorization: `Bearer ${token}` },
           }
         );
-        console.log("Activities response in Profiles:", response.data);
-        if (!response.data.activities) {
-          throw new Error("Không nhận được danh sách hoạt động từ server");
-        }
-        if (response.data.activities.length === 0) {
-          console.log(
-            "Profiles: Không có hoạt động nào khớp với điều kiện (isHidden: false)"
-          );
-        }
-        setActivities(response.data.activities.slice(0, 10));
+        console.log("Profiles: Activities response:", response.data);
+        setActivities(response.data.activities?.slice(0, 10) || []);
       } catch (err) {
-        console.error("Lỗi khi lấy hoạt động:", err);
+        console.error("Profiles: Error fetching activities:", err);
         toast.error("Không thể tải hoạt động!");
       }
     };
     fetchActivities();
 
     socket.on("new-activity", (activity) => {
-      console.log("Received new activity in Profiles:", activity);
+      console.log("Profiles: Received new activity:", activity);
       if (!activity.isHidden) {
         setActivities((prev) => [activity, ...prev].slice(0, 10));
         toast.info(activity.details || "Không có chi tiết", {
@@ -119,7 +111,7 @@ const Profiles = forwardRef((props, ref) => {
       setActivities((prev) => prev.filter((a) => a._id !== activityId));
       toast.success("Đã ẩn hoạt động!");
     } catch (err) {
-      console.error("Lỗi khi ẩn hoạt động:", err);
+      console.error("Profiles: Error hiding activity:", err);
       toast.error("Không thể ẩn hoạt động!");
     }
   };
@@ -135,7 +127,7 @@ const Profiles = forwardRef((props, ref) => {
       setActivities([]);
       toast.success("Đã ẩn tất cả hoạt động!");
     } catch (err) {
-      console.error("Lỗi khi ẩn tất cả hoạt động:", err);
+      console.error("Profiles: Error hiding all activities:", err);
       toast.error("Không thể ẩn tất cả hoạt động!");
     }
   };
@@ -147,7 +139,7 @@ const Profiles = forwardRef((props, ref) => {
   };
 
   const handleProfileEdit = () => {
-    navigate("/profile/edit");
+    navigate("/profile");
     handleClose();
   };
 

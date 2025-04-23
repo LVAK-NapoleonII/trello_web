@@ -8,6 +8,9 @@ import {
   Container,
 } from "@mui/material";
 import { motion } from "framer-motion";
+import axios from "axios";
+import { toast } from "react-toastify";
+import { useNavigate } from "react-router-dom";
 
 const ForgotPassword = () => {
   const [step, setStep] = useState(1);
@@ -15,16 +18,64 @@ const ForgotPassword = () => {
   const [otp, setOtp] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
 
   // Hiệu ứng chuyển bước
   const transition = { duration: 0.5, ease: "easeInOut" };
 
-  const handleNextStep = () => {
+  const handleSendOTP = async () => {
     setLoading(true);
-    setTimeout(() => {
+    try {
+      const response = await axios.post(
+        "http://localhost:5000/api/auth/forgot-password",
+        { email }
+      );
+      toast.success(response.data.message);
+      setStep(2);
+    } catch (err) {
+      toast.error(
+        err.response?.data?.message || "Không thể gửi OTP. Vui lòng thử lại!"
+      );
+    } finally {
       setLoading(false);
-      setStep(step + 1);
-    }, 1000);
+    }
+  };
+
+  const handleVerifyOTP = async () => {
+    setLoading(true);
+    try {
+      const response = await axios.post(
+        "http://localhost:5000/api/auth/reset-password",
+        { email, otp, newPassword: password }
+      );
+      toast.success(response.data.message);
+      setStep(3);
+    } catch (err) {
+      toast.error(
+        err.response?.data?.message || "OTP không hợp lệ. Vui lòng thử lại!"
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    setLoading(true);
+    try {
+      const response = await axios.post(
+        "http://localhost:5000/api/auth/reset-password",
+        { email, otp, newPassword: password }
+      );
+      toast.success(response.data.message);
+      setTimeout(() => navigate("/login"), 2000);
+    } catch (err) {
+      toast.error(
+        err.response?.data?.message ||
+          "Không thể đặt lại mật khẩu. Vui lòng thử lại!"
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -83,8 +134,8 @@ const ForgotPassword = () => {
               fullWidth
               variant="contained"
               color="primary"
-              onClick={handleNextStep}
-              disabled={!email}
+              onClick={handleSendOTP}
+              disabled={!email || loading}
               sx={{
                 bgcolor: "#6a11cb",
                 "&:hover": { bgcolor: "#2575fc" },
@@ -115,8 +166,8 @@ const ForgotPassword = () => {
               fullWidth
               variant="contained"
               color="primary"
-              onClick={handleNextStep}
-              disabled={!otp}
+              onClick={handleVerifyOTP}
+              disabled={!otp || loading}
               sx={{
                 bgcolor: "#6a11cb",
                 "&:hover": { bgcolor: "#2575fc" },
@@ -148,13 +199,19 @@ const ForgotPassword = () => {
               fullWidth
               variant="contained"
               color="success"
+              onClick={handleResetPassword}
+              disabled={!password || loading}
               sx={{
                 bgcolor: "#28a745",
                 "&:hover": { bgcolor: "#218838" },
                 transition: "0.3s",
               }}
             >
-              Hoàn tất
+              {loading ? (
+                <CircularProgress size={24} color="inherit" />
+              ) : (
+                "Hoàn tất"
+              )}
             </Button>
           </motion.div>
         )}

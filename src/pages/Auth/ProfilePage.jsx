@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useContext } from "react";
 import {
   Avatar,
   Box,
@@ -15,35 +15,26 @@ import CameraAltIcon from "@mui/icons-material/CameraAlt";
 import { deepPurple } from "@mui/material/colors";
 import RecentActivities from "./RecentActivities";
 import { useAuth } from "../../context/AuthContext";
+import { SocketContext } from "../../context/SocketContext";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
+import { toast } from "react-toastify";
 
 const ProfilePage = () => {
   const theme = useTheme();
   const isDarkMode = theme.palette.mode === "dark";
-  const { user, login, loading } = useAuth();
+  const { user, updateUser, loading } = useAuth();
+  const socket = useContext(SocketContext);
   const navigate = useNavigate();
-
   const [isEditing, setIsEditing] = useState(false);
   const [profile, setProfile] = useState({
-    avatar: user?.avatar
-      ? user.avatar.startsWith("https://api.dicebear.com")
-        ? user.avatar
-        : `http://localhost:5000${user.avatar}`
-      : "",
-    name: user?.fullName || "Nguyễn Văn A",
-    email: user?.email || "nguyenvana@example.com",
-    bio: "Tôi là một lập trình viên đam mê công nghệ và thiết kế web.",
+    avatar: "",
+    name: "",
+    email: "",
+    bio: "",
   });
-
-  const [activities, setActivities] = useState([
-    {
-      id: 1,
-      text: "Bạn đã thêm một thẻ mới vào danh sách 'Công việc hôm nay'",
-    },
-    { id: 2, text: "Bạn đã cập nhật trạng thái của thẻ 'Gửi báo cáo dự án'" },
-    { id: 3, text: "Bạn đã đổi mật khẩu thành công" },
-  ]);
+  const [activities, setActivities] = useState([]);
+  const [isLoadingActivities, setIsLoadingActivities] = useState(false);
 
   useEffect(() => {
     if (loading) return;
@@ -59,13 +50,74 @@ const ProfilePage = () => {
           : "",
         name: user?.fullName || "Nguyễn Văn A",
         email: user?.email || "nguyenvana@example.com",
-        bio: "Tôi là một lập trình viên đam mê công nghệ và thiết kế web.",
+        bio:
+          user?.bio ||
+          "Tôi là một lập trình viên đam mê công nghệ và thiết kế web.",
       });
     }
   }, [user, navigate, loading]);
 
+  useEffect(() => {
+    if (!user) return;
+
+    const fetchActivities = async () => {
+      setIsLoadingActivities(true);
+      try {
+        const token = localStorage.getItem("token");
+        if (!token) {
+          console.log("ProfilePage: No token found, cannot fetch activities");
+          return;
+        }
+        const response = await axios.get(
+          "http://localhost:5000/api/activities",
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+        console.log("ProfilePage: Activities response:", response.data);
+        setActivities(response.data.activities || []);
+      } catch (err) {
+        console.error("ProfilePage: Error fetching activities:", err);
+        toast.error("Không thể tải hoạt động!");
+      } finally {
+        setIsLoadingActivities(false);
+      }
+    };
+    fetchActivities();
+
+    socket.on("new-activity", (activity) => {
+      console.log("ProfilePage: Received new activity:", activity);
+      if (!activity.isHidden) {
+        setActivities((prev) => [activity, ...prev]);
+        toast.info(activity.details || "Không có chi tiết", {
+          autoClose: 3000,
+        });
+      }
+    });
+
+    return () => {
+      socket.off("new-activity");
+    };
+  }, [user, socket]);
+
   const handleEdit = () => setIsEditing(true);
-  const handleSave = () => setIsEditing(false);
+
+  const handleSave = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      await axios.put(
+        "http://localhost:5000/api/auth/update-profile",
+        { fullName: profile.name, bio: profile.bio },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      updateUser({ ...user, fullName: profile.name, bio: profile.bio });
+      toast.success("Cập nhật hồ sơ thành công!");
+      setIsEditing(false);
+    } catch (err) {
+      console.error("ProfilePage: Error updating profile:", err);
+      toast.error("Không thể cập nhật hồ sơ!");
+    }
+  };
 
   const handleChange = (e) => {
     setProfile({ ...profile, [e.target.name]: e.target.value });
@@ -90,19 +142,69 @@ const ProfilePage = () => {
           },
         }
       );
-
-      setProfile({
-        ...profile,
-        avatar: `http://localhost:5000${response.data.user.avatar}`,
-      });
-      login(response.data.user, token);
+      const updatedAvatar = `http://localhost:5000${response.data.user.avatar}`;
+      setProfile({ ...profile, avatar: updatedAvatar });
+      updateUser(response.data.user);
+      toast.success("Cập nhật avatar thành công!");
     } catch (error) {
-      console.error("Error uploading avatar:", error);
-      alert("Không thể upload avatar. Vui lòng thử lại!");
+      console.error("ProfilePage: Error uploading avatar:", error);
+      toast.error("Không thể upload avatar. Vui lòng thử lại!");
     }
   };
 
-  if (loading) {
+  const handleHideActivity = async (activityId) => {
+    try {
+      const token = localStorage.getItem("token");
+      await axios.put(
+        `http://localhost:5000/api/activities/${activityId}/hide`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setActivities((prev) => prev.filter((a) => a._id !== activityId));
+      toast.success("Đã ẩn hoạt động!");
+    } catch (err) {
+      console.error("ProfilePage: Error hiding activity:", err);
+      toast.error("Không thể ẩn hoạt động!");
+    }
+  };
+
+  const handleHideAllActivities = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      await axios.put(
+        "http://localhost:5000/api/activities/hide-all",
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setActivities([]);
+      toast.success("Đã ẩn tất cả hoạt động!");
+    } catch (err) {
+      console.error("ProfilePage: Error hiding all activities:", err);
+      toast.error("Không thể ẩn tất cả hoạt động!");
+    }
+  };
+
+  const handleActivityClick = (activity) => {
+    if (activity.target && activity.targetModel) {
+      switch (activity.targetModel) {
+        case "Board":
+          navigate(`/boards/${activity.target._id}`);
+          break;
+        case "Workspace":
+          navigate(`/workspaces/${activity.target._id}`);
+          break;
+        case "Card":
+          navigate(
+            `/boards/${activity.target.board}/cards/${activity.target._id}`
+          );
+          break;
+        default:
+          break;
+      }
+    }
+  };
+
+  if (loading || isLoadingActivities) {
     return (
       <Box
         sx={{
@@ -218,8 +320,14 @@ const ProfilePage = () => {
           {isEditing ? "Lưu Thay Đổi" : "Chỉnh Sửa"}
         </Button>
 
-        {/* Hoạt động gần đây */}
-        <RecentActivities activities={activities} userName={profile.name} />
+        {/* Recent Activities */}
+        <RecentActivities
+          activities={activities}
+          userName={profile.name}
+          onHideActivity={handleHideActivity}
+          onHideAllActivities={handleHideAllActivities}
+          onActivityClick={handleActivityClick}
+        />
       </Box>
     </Box>
   );

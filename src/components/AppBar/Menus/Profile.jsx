@@ -30,7 +30,7 @@ function Profile() {
   useEffect(() => {
     if (!user) return;
 
-    console.log("Current user ID in Profile:", user._id);
+    console.log("Profile: Fetching activities for user:", user._id);
 
     const fetchActivities = async () => {
       setIsLoading(true);
@@ -46,18 +46,10 @@ function Profile() {
             headers: { Authorization: `Bearer ${token}` },
           }
         );
-        console.log("Activities response in Profile:", response.data);
-        if (!response.data.activities) {
-          throw new Error("Không nhận được danh sách hoạt động từ server");
-        }
-        if (response.data.activities.length === 0) {
-          console.log(
-            "Profile: Không có hoạt động nào khớp với điều kiện (isHidden: false)"
-          );
-        }
-        setActivities(response.data.activities);
+        console.log("Profile: Activities response:", response.data);
+        setActivities(response.data.activities || []);
       } catch (err) {
-        console.error("Lỗi khi lấy hoạt động:", err);
+        console.error("Profile: Error fetching activities:", err);
         toast.error("Không thể tải hoạt động!");
       } finally {
         setIsLoading(false);
@@ -66,7 +58,7 @@ function Profile() {
     fetchActivities();
 
     socket.on("new-activity", (activity) => {
-      console.log("Received new activity in Profile:", activity);
+      console.log("Profile: Received new activity:", activity);
       if (!activity.isHidden) {
         setActivities((prev) => [activity, ...prev]);
         toast.info(activity.details || "Không có chi tiết", {
@@ -111,7 +103,7 @@ function Profile() {
       setActivities((prev) => prev.filter((a) => a._id !== activityId));
       toast.success("Đã ẩn hoạt động!");
     } catch (err) {
-      console.error("Lỗi khi ẩn hoạt động:", err);
+      console.error("Profile: Error hiding activity:", err);
       toast.error("Không thể ẩn hoạt động!");
     }
   };
@@ -127,7 +119,7 @@ function Profile() {
       setActivities([]);
       toast.success("Đã ẩn tất cả hoạt động!");
     } catch (err) {
-      console.error("Lỗi khi ẩn tất cả hoạt động:", err);
+      console.error("Profile: Error hiding all activities:", err);
       toast.error("Không thể ẩn tất cả hoạt động!");
     }
   };

@@ -8,7 +8,7 @@ import {
   InputAdornment,
   IconButton,
 } from "@mui/material";
-import { Visibility, VisibilityOff } from "@mui/icons-material"; // Thêm icon
+import { Visibility, VisibilityOff } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import axios from "axios";
@@ -20,7 +20,7 @@ const LoginPage = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const [showPassword, setShowPassword] = useState(false); // Thêm trạng thái showPassword
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -41,7 +41,6 @@ const LoginPage = () => {
     }
   };
 
-  // Hàm xử lý hiện/ẩn mật khẩu
   const handleTogglePasswordVisibility = () => {
     setShowPassword((prev) => !prev);
   };
@@ -87,6 +86,7 @@ const LoginPage = () => {
             onChange={(e) => setEmail(e.target.value)}
             margin="normal"
             required
+            autoComplete="email"
             InputProps={{
               sx: {
                 borderRadius: 2,
@@ -98,11 +98,12 @@ const LoginPage = () => {
           <TextField
             fullWidth
             label="Mật khẩu"
-            type={showPassword ? "text" : "password"} // Chuyển đổi type dựa trên showPassword
+            type={showPassword ? "text" : "password"}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             margin="normal"
             required
+            autoComplete="current-password"
             InputProps={{
               endAdornment: (
                 <InputAdornment position="end">

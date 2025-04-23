@@ -48,9 +48,9 @@ const CustomIconButton = forwardRef(({ onClick, children, ...props }, ref) => (
 
 function AppBar() {
   const socket = useContext(SocketContext);
+  const { user, loading } = useAuth();
   const [searchValue, setSearchValue] = useState("");
   const navigate = useNavigate();
-  const { user } = useAuth();
   const [openModal, setOpenModal] = useState(false);
   const [workspaceData, setWorkspaceData] = useState({
     name: "",
@@ -58,7 +58,7 @@ function AppBar() {
     background: "",
     isPublic: false,
   });
-  const [loading, setLoading] = useState(false);
+  const [loadingModal, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -66,22 +66,39 @@ function AppBar() {
   const openNotifications = Boolean(anchorEl);
 
   useEffect(() => {
-    if (!user || !user._id) {
-      console.log("AppBar: No user or user ID found, redirecting to login");
-      navigate("/login");
+    console.log("AppBar: Trạng thái loading:", loading, "User:", user);
+
+    if (loading) {
+      console.log("AppBar: AuthContext đang tải, chờ...");
       return;
     }
 
-    console.log("AppBar: Current user ID:", user._id);
+    const token = localStorage.getItem("token");
+    if (!user || !user._id) {
+      console.log("AppBar: Không tìm thấy user hoặc user ID", {
+        user,
+        token: token ? "present" : "missing",
+      });
+      if (!token) {
+        console.log("AppBar: Không có token, chuyển hướng đến login");
+        navigate("/login");
+      } else {
+        console.log("AppBar: Token tồn tại, không chuyển hướng ngay");
+        // Không chuyển hướng ngay, đợi AuthContext thử lại
+      }
+      return;
+    }
+
+    console.log("AppBar: User ID hiện tại:", user._id);
 
     socket.emit("join-user", user._id);
-    console.log("AppBar: Joined socket room:", user._id);
+    console.log("AppBar: Đã tham gia phòng socket:", user._id);
 
     const fetchNotifications = async () => {
       try {
         const token = localStorage.getItem("token");
         if (!token) {
-          console.error("AppBar: No token found, redirecting to login");
+          console.error("AppBar: Không tìm thấy token, chuyển hướng đến login");
           toast.error("Vui lòng đăng nhập để xem thông báo!");
           navigate("/login");
           return;
@@ -92,17 +109,17 @@ function AppBar() {
             headers: { Authorization: `Bearer ${token}` },
           }
         );
-        console.log("AppBar: Notifications response:", response.data);
+        console.log("AppBar: Phản hồi thông báo:", response.data);
         if (!response.data.notifications) {
           throw new Error("Không nhận được danh sách thông báo từ server");
         }
         if (response.data.notifications.length === 0) {
-          console.log("AppBar: No notifications found (isHidden: false)");
+          console.log("AppBar: Không tìm thấy thông báo (isHidden: false)");
         }
         setNotifications(response.data.notifications.slice(0, 10));
         setUnreadCount(response.data.unreadCount || 0);
       } catch (err) {
-        console.error("AppBar: Error fetching notifications:", {
+        console.error("AppBar: Lỗi khi lấy thông báo:", {
           message: err.message,
           response: err.response?.data,
         });
@@ -111,25 +128,28 @@ function AppBar() {
     };
     fetchNotifications();
 
-    socket.on("new-notification", (notification) => {
-      console.log("AppBar: Received new notification:", notification);
+    const handleNewNotification = (notification) => {
+      console.log("AppBar: Nhận được thông báo mới:", notification);
       if (!notification.isHidden) {
         setNotifications((prev) => [notification, ...prev].slice(0, 10));
         setUnreadCount((prev) => prev + (notification.isRead ? 0 : 1));
         toast.info(notification.message, { autoClose: 3000 });
       }
-    });
+    };
 
-    socket.on("workspace-created", (data) => {
-      console.log("AppBar: Received workspace-created:", data);
+    const handleWorkspaceCreated = (data) => {
+      console.log("AppBar: Nhận được workspace-created:", data);
       toast.success(data.message);
-    });
+    };
+
+    socket.on("new-notification", handleNewNotification);
+    socket.on("workspace-created", handleWorkspaceCreated);
 
     return () => {
-      socket.off("new-notification");
-      socket.off("workspace-created");
+      socket.off("new-notification", handleNewNotification);
+      socket.off("workspace-created", handleWorkspaceCreated);
     };
-  }, [user, socket, navigate]);
+  }, [user, socket, navigate, loading]);
 
   const handleOpenNotifications = (event) => {
     setAnchorEl(event.currentTarget);
@@ -154,7 +174,7 @@ function AppBar() {
       setUnreadCount((prev) => prev - 1);
       toast.success("Đã đánh dấu là đã đọc!");
     } catch (err) {
-      console.error("AppBar: Error marking notification as read:", err);
+      console.error("AppBar: Lỗi khi đánh dấu thông báo đã đọc:", err);
       toast.error("Không thể đánh dấu thông báo!");
     }
   };
@@ -177,7 +197,7 @@ function AppBar() {
       );
       toast.success("Đã ẩn thông báo!");
     } catch (err) {
-      console.error("AppBar: Error hiding notification:", err);
+      console.error("AppBar: Lỗi khi ẩn thông báo:", err);
       toast.error("Không thể ẩn thông báo!");
     }
   };
@@ -192,7 +212,7 @@ function AppBar() {
       setUnreadCount(0);
       toast.success("Đã ẩn tất cả thông báo!");
     } catch (err) {
-      console.error("AppBar: Error hiding all notifications:", err);
+      console.error("AppBar: Lỗi khi ẩn tất cả thông báo:", err);
       toast.error("Không thể ẩn tất cả thông báo!");
     }
   };
@@ -263,7 +283,7 @@ function AppBar() {
         throw new Error("Vui lòng đăng nhập để tạo không gian làm việc!");
       }
 
-      console.log("AppBar: Sending workspace data:", workspaceData);
+      console.log("AppBar: Gửi dữ liệu workspace:", workspaceData);
 
       const response = await axios.post(
         "http://localhost:5000/api/workspaces",
@@ -271,7 +291,7 @@ function AppBar() {
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      console.log("AppBar: Workspace creation response:", response.data);
+      console.log("AppBar: Phản hồi tạo workspace:", response.data);
 
       socket.emit("workspace-created", {
         workspace: response.data,
@@ -281,7 +301,7 @@ function AppBar() {
       toast.success("Tạo không gian làm việc thành công!");
       handleCloseModal();
     } catch (error) {
-      console.error("AppBar: Error creating workspace:", error);
+      console.error("AppBar: Lỗi khi tạo workspace:", error);
       const message =
         error.response?.data?.message || "Lỗi khi tạo không gian làm việc!";
       setError(message);
@@ -575,7 +595,7 @@ function AppBar() {
             <Button
               onClick={handleCloseModal}
               color="inherit"
-              disabled={loading}
+              disabled={loadingModal}
             >
               Hủy
             </Button>
@@ -583,10 +603,10 @@ function AppBar() {
               onClick={handleCreateWorkspace}
               variant="contained"
               color="primary"
-              disabled={loading || !workspaceData.name.trim()}
-              startIcon={loading ? <CircularProgress size={16} /> : null}
+              disabled={loadingModal || !workspaceData.name.trim()}
+              startIcon={loadingModal ? <CircularProgress size={16} /> : null}
             >
-              {loading ? "Đang tạo..." : "Tạo"}
+              {loadingModal ? "Đang tạo..." : "Tạo"}
             </Button>
           </Box>
         </Box>

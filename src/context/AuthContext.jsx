@@ -42,12 +42,28 @@ export const AuthProvider = ({ children }) => {
           );
 
           const userData = response.data.user;
-          console.log("AuthContext: User profile fetched:", {
-            _id: userData._id,
-            email: userData.email,
-          });
-          setUser(userData);
-          localStorage.setItem("user", JSON.stringify(userData));
+          console.log("AuthContext: User profile fetched:", userData);
+
+          // Kiểm tra _id hoặc id
+          const userId = userData._id || userData.id;
+          if (!userId) {
+            console.error(
+              "AuthContext: User data missing both _id and id",
+              userData
+            );
+            throw new Error(
+              "Dữ liệu người dùng không hợp lệ: Thiếu _id hoặc id"
+            );
+          }
+
+          // Chuẩn hóa dữ liệu: đảm bảo userData có _id
+          const normalizedUserData = {
+            ...userData,
+            _id: userId,
+          };
+
+          setUser(normalizedUserData);
+          localStorage.setItem("user", JSON.stringify(normalizedUserData));
           setLoading(false);
           return;
         } catch (error) {
@@ -83,12 +99,31 @@ export const AuthProvider = ({ children }) => {
                 }
               );
               const userData = profileResponse.data.user;
-              console.log("AuthContext: User profile fetched with new token:", {
-                _id: userData._id,
-                email: userData.email,
-              });
-              setUser(userData);
-              localStorage.setItem("user", JSON.stringify(userData));
+              console.log(
+                "AuthContext: User profile fetched with new token:",
+                userData
+              );
+
+              // Kiểm tra _id hoặc id sau khi làm mới token
+              const userId = userData._id || userData.id;
+              if (!userId) {
+                console.error(
+                  "AuthContext: User data missing both _id and id after refresh",
+                  userData
+                );
+                throw new Error(
+                  "Dữ liệu người dùng không hợp lệ: Thiếu _id hoặc id"
+                );
+              }
+
+              // Chuẩn hóa dữ liệu
+              const normalizedUserData = {
+                ...userData,
+                _id: userId,
+              };
+
+              setUser(normalizedUserData);
+              localStorage.setItem("user", JSON.stringify(normalizedUserData));
               setLoading(false);
               return;
             } catch (refreshError) {
@@ -125,16 +160,35 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const login = async (userData, token) => {
-    console.log("AuthContext: Logging in user:", {
-      _id: userData._id,
-      email: userData.email,
-    });
-    setUser(userData);
+    console.log("AuthContext: Logging in user:", userData);
+    // Kiểm tra _id hoặc id
+    const userId = userData._id || userData.id;
+    if (!userId) {
+      console.error("AuthContext: Login user data missing _id or id", userData);
+      toast.error("Dữ liệu đăng nhập không hợp lệ!");
+      return;
+    }
+
+    // Chuẩn hóa dữ liệu
+    const normalizedUserData = {
+      ...userData,
+      _id: userId,
+    };
+
+    setUser(normalizedUserData);
     localStorage.setItem("token", token);
-    localStorage.setItem("user", JSON.stringify(userData));
+    localStorage.setItem("user", JSON.stringify(normalizedUserData));
     toast.success("Đăng nhập thành công!");
   };
-
+  const updateUser = (updatedUserData) => {
+    console.log("AuthContext: Updating user:", updatedUserData);
+    const normalizedUserData = {
+      ...updatedUserData,
+      _id: updatedUserData._id || updatedUserData.id,
+    };
+    setUser(normalizedUserData);
+    localStorage.setItem("user", JSON.stringify(normalizedUserData));
+  };
   const logout = async () => {
     console.log("AuthContext: Logging out user");
     const token = localStorage.getItem("token");
@@ -175,7 +229,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, loading }}>
+    <AuthContext.Provider value={{ user, login, logout, loading, updateUser }}>
       {children}
     </AuthContext.Provider>
   );
