@@ -39,10 +39,12 @@ function Column({
   boardMembers,
   setBoardMembers,
 }) {
-  const { socket } = useContext(SocketContext);
+  const { socket, socketReady } = useContext(SocketContext);
   const theme = useTheme();
   const isDarkMode = theme.palette.mode === "dark";
   const [isExpanded, setIsExpanded] = useState(initialExpanded);
+  const [openEditTitleDialog, setOpenEditTitleDialog] = useState(false);
+  const [newTitle, setNewTitle] = useState(column.title);
 
   const {
     attributes,
@@ -117,7 +119,7 @@ function Column({
         prevColumns.filter((c) => c._id !== column._id)
       );
 
-      if (socket) {
+      if (socket && socketReady) {
         socket.emit("list-deleted", {
           boardId,
           listId: column._id,
@@ -132,6 +134,52 @@ function Column({
       });
       toast.error(
         `Có lỗi xảy ra khi xóa cột: ${
+          err.response?.data?.message || err.message
+        }`
+      );
+    }
+  };
+
+  const handleEditTitle = async () => {
+    if (!newTitle.trim()) {
+      toast.error("Tiêu đề cột không được để trống!");
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        throw new Error("Không tìm thấy token! Vui lòng đăng nhập lại.");
+      }
+
+      const response = await axios.put(
+        `http://localhost:5000/api/lists/${column._id}`,
+        { title: newTitle },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      setColumns((prevColumns) =>
+        prevColumns.map((col) =>
+          col._id === column._id ? { ...col, title: newTitle } : col
+        )
+      );
+
+      if (socket && socketReady) {
+        socket.emit("list-updated", {
+          boardId,
+          list: response.data,
+        });
+        console.log("Emitted list-updated:", { boardId, list: response.data });
+      }
+      toast.success("Cập nhật tiêu đề cột thành công!");
+      setOpenEditTitleDialog(false);
+    } catch (err) {
+      console.error("Error updating column title:", {
+        message: err.message,
+        response: err.response?.data,
+      });
+      toast.error(
+        `Có lỗi xảy ra khi cập nhật tiêu đề cột: ${
           err.response?.data?.message || err.message
         }`
       );
@@ -180,7 +228,7 @@ function Column({
         )
       );
 
-      if (socket) {
+      if (socket && socketReady) {
         socket.emit("card-created", {
           boardId,
           listId: column._id,
@@ -217,8 +265,8 @@ function Column({
           ref={setDroppableNodeRef}
           {...listeners}
           sx={{
-            minWidth: "350px", // Tăng từ 300px lên 400px
-            maxWidth: "400px", // Tăng từ 300px lên 400px
+            minWidth: "350px",
+            maxWidth: "400px",
             ml: 2,
             borderRadius: "12px",
             bgcolor: isOver
@@ -275,6 +323,7 @@ function Column({
           >
             <Typography
               variant="h6"
+              onClick={() => setOpenEditTitleDialog(true)}
               sx={{
                 fontWeight: 600,
                 fontSize: "1.25rem",
@@ -287,12 +336,15 @@ function Column({
                   : `linear-gradient(90deg, ${theme.palette.primary.main}, ${theme.palette.primary.dark})`,
                 WebkitBackgroundClip: "text",
                 WebkitTextFillColor: "transparent",
+                "&:hover": {
+                  textDecoration: "underline",
+                },
               }}
             >
               {column?.title}
             </Typography>
             <Box>
-              <Tooltip title={isExpanded ? "Collapse column" : "Expand column"}>
+              <Tooltip title={isExpanded ? "Thu gọn cột" : "Mở rộng cột"}>
                 <span>
                   {isExpanded ? (
                     <ExpandMoreIcon
@@ -327,7 +379,7 @@ function Column({
                   )}
                 </span>
               </Tooltip>
-              <Tooltip title="More options">
+              <Tooltip title="Tùy chọn khác">
                 <span>
                   <PixIcon
                     sx={{
@@ -397,7 +449,32 @@ function Column({
                         : theme.palette.text.primary,
                     }}
                   >
-                    Add new card
+                    Thêm thẻ mới
+                  </ListItemText>
+                </MenuItem>
+                <MenuItem
+                  onClick={() => setOpenEditTitleDialog(true)}
+                  sx={{
+                    "&:hover": {
+                      bgcolor: isDarkMode
+                        ? theme.palette.grey[700]
+                        : theme.palette.grey[100],
+                      color: theme.palette.primary.main,
+                    },
+                  }}
+                >
+                  <ListItemIcon>
+                    <AddCardIcon fontSize="small" color="primary" />
+                  </ListItemIcon>
+                  <ListItemText
+                    primaryTypographyProps={{
+                      fontWeight: 500,
+                      color: isDarkMode
+                        ? theme.palette.grey[200]
+                        : theme.palette.text.primary,
+                    }}
+                  >
+                    Sửa tiêu đề cột
                   </ListItemText>
                 </MenuItem>
                 <Divider
@@ -429,7 +506,7 @@ function Column({
                         : theme.palette.text.primary,
                     }}
                   >
-                    Remove this column
+                    Xóa cột này
                   </ListItemText>
                 </MenuItem>
               </Menu>
@@ -531,9 +608,9 @@ function Column({
                     },
                   }}
                 >
-                  {loading ? "Đang tạo..." : "Add new card"}
+                  {loading ? "Đang tạo..." : "Thêm thẻ mới"}
                 </Button>
-                <Tooltip title="Drag to move">
+                <Tooltip title="Kéo để di chuyển">
                   <DragHandleIcon
                     sx={{
                       cursor: "pointer",
@@ -737,6 +814,135 @@ function Column({
             }}
           >
             {loading ? "Đang tạo..." : "Tạo"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={openEditTitleDialog}
+        onClose={() => setOpenEditTitleDialog(false)}
+        sx={{
+          "& .MuiDialog-paper": {
+            borderRadius: "12px",
+            boxShadow: isDarkMode
+              ? "0 4px 16px rgba(0,0,0,0.5)"
+              : theme.shadows[5],
+            bgcolor: isDarkMode ? "#2a2a3d" : theme.palette.background.paper,
+            color: isDarkMode
+              ? theme.palette.grey[200]
+              : theme.palette.text.primary,
+            p: 2,
+            minWidth: { xs: "90%", sm: "400px" },
+          },
+        }}
+      >
+        <DialogTitle
+          sx={{
+            fontWeight: 600,
+            fontSize: "1.25rem",
+            color: isDarkMode
+              ? theme.palette.grey[100]
+              : theme.palette.text.primary,
+          }}
+        >
+          Sửa tiêu đề cột
+        </DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus
+            margin="dense"
+            label="Tiêu đề cột"
+            fullWidth
+            value={newTitle}
+            onChange={(e) => setNewTitle(e.target.value)}
+            sx={{
+              mt: 1,
+              "& .MuiInputBase-root": {
+                borderRadius: "8px",
+                bgcolor: isDarkMode
+                  ? "rgba(255, 255, 255, 0.05)"
+                  : theme.palette.background.default,
+                color: isDarkMode
+                  ? theme.palette.grey[200]
+                  : theme.palette.text.primary,
+                transition: "all 0.2s ease",
+              },
+              "& .MuiInputLabel-root": {
+                fontWeight: 500,
+                color: isDarkMode
+                  ? theme.palette.grey[400]
+                  : theme.palette.text.secondary,
+                "&.Mui-focused": {
+                  color: theme.palette.primary.main,
+                },
+              },
+              "& .MuiOutlinedInput-notchedOutline": {
+                borderColor: isDarkMode
+                  ? theme.palette.grey[600]
+                  : theme.palette.grey[300],
+                transition: "border-color 0.2s ease",
+              },
+              "&:hover .MuiOutlinedInput-notchedOutline": {
+                borderColor: isDarkMode
+                  ? theme.palette.grey[500]
+                  : theme.palette.primary.main,
+              },
+              "& .Mui-focused .MuiOutlinedInput-notchedOutline": {
+                borderColor: theme.palette.primary.main,
+                borderWidth: "2px",
+              },
+            }}
+          />
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <Button
+            onClick={() => setOpenEditTitleDialog(false)}
+            sx={{
+              color: isDarkMode
+                ? theme.palette.grey[400]
+                : theme.palette.text.secondary,
+              fontWeight: 500,
+              borderRadius: "8px",
+              px: 2,
+              transition: "all 0.2s ease",
+              "&:hover": {
+                bgcolor: isDarkMode
+                  ? theme.palette.grey[700]
+                  : theme.palette.grey[100],
+                transform: "scale(1.05)",
+              },
+            }}
+          >
+            Hủy
+          </Button>
+          <Button
+            onClick={handleEditTitle}
+            variant="contained"
+            sx={{
+              fontWeight: 500,
+              borderRadius: "8px",
+              px: 3,
+              py: 0.75,
+              background: isDarkMode
+                ? `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`
+                : `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.primary.dark})`,
+              color: theme.palette.primary.contrastText,
+              boxShadow: isDarkMode
+                ? "0 2px 8px rgba(0,0,0,0.3)"
+                : theme.shadows[2],
+              transition: "all 0.2s ease",
+              "&:hover": {
+                background: isDarkMode
+                  ? `linear-gradient(135deg, ${theme.palette.primary.dark}, ${theme.palette.secondary.dark})`
+                  : `linear-gradient(135deg, ${theme.palette.primary.dark}, ${theme.palette.primary.main})`,
+                transform: "scale(1.05)",
+                boxShadow: isDarkMode
+                  ? "0 4px 12px rgba(0,0,0,0.4)"
+                  : theme.shadows[3],
+              },
+            }}
+          >
+            Lưu
           </Button>
         </DialogActions>
       </Dialog>

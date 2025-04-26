@@ -27,12 +27,11 @@ function ListCards({
   boardMembers,
   setBoardMembers,
 }) {
-  const { socket } = useContext(SocketContext);
+  const { socket, socketReady } = useContext(SocketContext);
   const theme = useTheme();
   const isDarkMode = theme.palette.mode === "dark";
   const [cards, setCards] = useState([]);
   const [activeCard, setActiveCard] = useState(null);
-  const [socketReady, setSocketReady] = useState(false);
 
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
@@ -64,23 +63,21 @@ function ListCards({
   }, [listId]);
 
   useEffect(() => {
-    if (!socket) {
-      console.warn("Socket not available in ListCards");
+    if (!socket || !socketReady) {
+      console.warn("Socket not available or not ready in ListCards");
       return;
     }
 
-    socket.on("connect", () => {
+    const handleConnect = () => {
       console.log("ListCards: Socket connected");
-      setSocketReady(true);
-    });
+    };
 
-    socket.on("connect_error", (err) => {
+    const handleConnectError = (err) => {
       console.error("ListCards: Socket error:", err.message);
       toast.error("Lỗi kết nối server!");
-      setSocketReady(false);
-    });
+    };
 
-    socket.on("card-order-updated", ({ listId: updatedListId, cardOrder }) => {
+    const handleCardOrderUpdated = ({ listId: updatedListId, cardOrder }) => {
       if (updatedListId === listId) {
         console.log("Received card-order-updated:", { listId, cardOrder });
         setCards((prevCards) => {
@@ -93,9 +90,9 @@ function ListCards({
           return [...reorderedCards, ...remainingCards];
         });
       }
-    });
+    };
 
-    socket.on("card-moved", ({ card, oldListId, newListId }) => {
+    const handleCardMoved = ({ card, oldListId, newListId }) => {
       console.log("Received card-moved:", {
         cardId: card._id,
         oldListId,
@@ -111,9 +108,9 @@ function ListCards({
           return prevCards;
         });
       }
-    });
+    };
 
-    socket.on("card-created", ({ listId: updatedListId, card }) => {
+    const handleCardCreated = ({ listId: updatedListId, card }) => {
       if (updatedListId === listId) {
         console.log("Received card-created:", { listId, cardId: card._id });
         setCards((prevCards) => {
@@ -123,16 +120,22 @@ function ListCards({
           return prevCards;
         });
       }
-    });
+    };
+
+    socket.on("connect", handleConnect);
+    socket.on("connect_error", handleConnectError);
+    socket.on("card-order-updated", handleCardOrderUpdated);
+    socket.on("card-moved", handleCardMoved);
+    socket.on("card-created", handleCardCreated);
 
     return () => {
-      socket.off("connect");
-      socket.off("connect_error");
-      socket.off("card-order-updated");
-      socket.off("card-moved");
-      socket.off("card-created");
+      socket.off("connect", handleConnect);
+      socket.off("connect_error", handleConnectError);
+      socket.off("card-order-updated", handleCardOrderUpdated);
+      socket.off("card-moved", handleCardMoved);
+      socket.off("card-created", handleCardCreated);
     };
-  }, [socket, listId]);
+  }, [socket, socketReady, listId]);
 
   useEffect(() => {
     if (!listId) {

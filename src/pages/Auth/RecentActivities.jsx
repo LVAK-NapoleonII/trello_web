@@ -11,6 +11,7 @@ import {
 import DeleteIcon from "@mui/icons-material/Delete";
 import { formatDistanceToNow } from "date-fns";
 import vi from "date-fns/locale/vi";
+import { motion } from "framer-motion";
 
 const RecentActivities = ({
   activities,
@@ -33,7 +34,12 @@ const RecentActivities = ({
           Hoạt động gần đây của {userName}
         </Typography>
         {activities.length > 0 && (
-          <Button size="small" onClick={onHideAllActivities} color="error">
+          <Button
+            size="small"
+            onClick={onHideAllActivities}
+            color="error"
+            sx={{ textTransform: "none", borderRadius: 8 }}
+          >
             Ẩn tất cả
           </Button>
         )}
@@ -42,14 +48,34 @@ const RecentActivities = ({
         <Typography color="text.secondary">Không có hoạt động nào</Typography>
       ) : (
         <List dense sx={{ py: 0 }}>
-          {activities.map((activity) => (
-            <Box key={activity._id}>
+          {activities.map((activity, index) => (
+            <motion.div
+              key={activity._id}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: index * 0.1 }}
+            >
               <ListItem
                 sx={{
-                  borderRadius: 1,
-                  py: 0.5,
-                  px: 1,
-                  "&:hover": { bgcolor: "action.hover" },
+                  borderRadius: 8,
+                  py: 1,
+                  px: 2,
+                  mb: 1,
+                  background: (theme) =>
+                    theme.palette.mode === "dark"
+                      ? "rgba(255,255,255,0.05)"
+                      : "rgba(0,0,0,0.03)",
+                  boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+                  "&:hover": {
+                    background: (theme) =>
+                      theme.palette.mode === "dark"
+                        ? "rgba(255,255,255,0.1)"
+                        : "rgba(0,0,0,0.05)",
+                    transform: "scale(1.02)",
+                    boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
+                  },
+                  transition: "all 0.2s ease",
+                  cursor: "pointer",
                 }}
                 onClick={() => onActivityClick(activity)}
               >
@@ -61,8 +87,8 @@ const RecentActivities = ({
                   })}
                   primaryTypographyProps={{
                     variant: "body2",
-                    noWrap: true,
-                    sx: { maxWidth: 350 },
+                    fontWeight: "medium",
+                    sx: { maxWidth: 300 },
                   }}
                   secondaryTypographyProps={{
                     variant: "caption",
@@ -71,13 +97,18 @@ const RecentActivities = ({
                 />
                 <IconButton
                   edge="end"
-                  onClick={() => onHideActivity(activity._id)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onHideActivity(activity._id);
+                  }}
+                  sx={{
+                    "&:hover": { color: (theme) => theme.palette.error.main },
+                  }}
                 >
-                  <DeleteIcon fontSize="small" color="error" />
+                  <DeleteIcon fontSize="small" />
                 </IconButton>
               </ListItem>
-              <Divider component="li" />
-            </Box>
+            </motion.div>
           ))}
         </List>
       )}

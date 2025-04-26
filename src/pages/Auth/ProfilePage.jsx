@@ -19,12 +19,12 @@ import { SocketContext } from "../../context/SocketContext";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
+import { motion } from "framer-motion";
 
 const ProfilePage = () => {
   const theme = useTheme();
-  const isDarkMode = theme.palette.mode === "dark";
-  const { user, updateUser, loading } = useAuth();
-  const socket = useContext(SocketContext);
+  const { user, updateUser, loading, logout } = useAuth();
+  const { socket, socketReady, joinRoom } = useContext(SocketContext);
   const navigate = useNavigate();
   const [isEditing, setIsEditing] = useState(false);
   const [profile, setProfile] = useState({
@@ -39,7 +39,8 @@ const ProfilePage = () => {
   useEffect(() => {
     if (loading) return;
 
-    if (!user) {
+    if (!user?._id) {
+      console.log("ProfilePage: No user, redirecting to login");
       navigate("/login");
     } else {
       setProfile({
@@ -58,7 +59,10 @@ const ProfilePage = () => {
   }, [user, navigate, loading]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user?._id) {
+      console.log("ProfilePage: No user ID, skipping activities fetch");
+      return;
+    }
 
     const fetchActivities = async () => {
       setIsLoadingActivities(true);
@@ -66,8 +70,11 @@ const ProfilePage = () => {
         const token = localStorage.getItem("token");
         if (!token) {
           console.log("ProfilePage: No token found, cannot fetch activities");
+          toast.error("Vui lòng đăng nhập lại!");
+          navigate("/login");
           return;
         }
+        console.log("ProfilePage: Fetching activities for user:", user._id);
         const response = await axios.get(
           "http://localhost:5000/api/activities",
           {
@@ -75,20 +82,37 @@ const ProfilePage = () => {
           }
         );
         console.log("ProfilePage: Activities response:", response.data);
-        setActivities(response.data.activities || []);
+        setActivities(response.data.activities?.slice(0, 50) || []);
       } catch (err) {
         console.error("ProfilePage: Error fetching activities:", err);
         toast.error("Không thể tải hoạt động!");
+        if (err.response?.status === 401) {
+          console.log("ProfilePage: Unauthorized, logging out");
+          localStorage.removeItem("token");
+          logout();
+          navigate("/login");
+        }
       } finally {
         setIsLoadingActivities(false);
       }
     };
     fetchActivities();
 
+    if (!socketReady || !socket) {
+      console.log("ProfilePage: Socket not ready, skipping listeners");
+      return;
+    }
+
+    console.log(
+      "ProfilePage: Joining user room and setting up listeners for:",
+      user._id
+    );
+    joinRoom("user", user._id);
+
     socket.on("new-activity", (activity) => {
       console.log("ProfilePage: Received new activity:", activity);
       if (!activity.isHidden) {
-        setActivities((prev) => [activity, ...prev]);
+        setActivities((prev) => [activity, ...prev].slice(0, 50));
         toast.info(activity.details || "Không có chi tiết", {
           autoClose: 3000,
         });
@@ -96,15 +120,23 @@ const ProfilePage = () => {
     });
 
     return () => {
-      socket.off("new-activity");
+      if (socket) {
+        console.log("ProfilePage: Cleaning up socket listeners");
+        socket.off("new-activity");
+      }
     };
-  }, [user, socket]);
+  }, [user, socket, socketReady, joinRoom, navigate, logout]);
 
   const handleEdit = () => setIsEditing(true);
 
   const handleSave = async () => {
     try {
       const token = localStorage.getItem("token");
+      if (!token) {
+        toast.error("Vui lòng đăng nhập lại!");
+        navigate("/login");
+        return;
+      }
       await axios.put(
         "http://localhost:5000/api/auth/update-profile",
         { fullName: profile.name, bio: profile.bio },
@@ -116,6 +148,12 @@ const ProfilePage = () => {
     } catch (err) {
       console.error("ProfilePage: Error updating profile:", err);
       toast.error("Không thể cập nhật hồ sơ!");
+      if (err.response?.status === 401) {
+        console.log("ProfilePage: Unauthorized, logging out");
+        localStorage.removeItem("token");
+        logout();
+        navigate("/login");
+      }
     }
   };
 
@@ -127,11 +165,25 @@ const ProfilePage = () => {
     const file = e.target.files[0];
     if (!file) return;
 
+    if (!["image/jpeg", "image/png", "image/gif"].includes(file.type)) {
+      toast.error("Chỉ hỗ trợ file JPEG, PNG hoặc GIF!");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("File phải nhỏ hơn 5MB!");
+      return;
+    }
+
     const formData = new FormData();
     formData.append("avatar", file);
 
     try {
       const token = localStorage.getItem("token");
+      if (!token) {
+        toast.error("Vui lòng đăng nhập lại!");
+        navigate("/login");
+        return;
+      }
       const response = await axios.post(
         "http://localhost:5000/api/auth/update-avatar",
         formData,
@@ -149,12 +201,23 @@ const ProfilePage = () => {
     } catch (error) {
       console.error("ProfilePage: Error uploading avatar:", error);
       toast.error("Không thể upload avatar. Vui lòng thử lại!");
+      if (error.response?.status === 401) {
+        console.log("ProfilePage: Unauthorized, logging out");
+        localStorage.removeItem("token");
+        logout();
+        navigate("/login");
+      }
     }
   };
 
   const handleHideActivity = async (activityId) => {
     try {
       const token = localStorage.getItem("token");
+      if (!token) {
+        toast.error("Vui lòng đăng nhập lại!");
+        navigate("/login");
+        return;
+      }
       await axios.put(
         `http://localhost:5000/api/activities/${activityId}/hide`,
         {},
@@ -165,12 +228,23 @@ const ProfilePage = () => {
     } catch (err) {
       console.error("ProfilePage: Error hiding activity:", err);
       toast.error("Không thể ẩn hoạt động!");
+      if (err.response?.status === 401) {
+        console.log("ProfilePage: Unauthorized, logging out");
+        localStorage.removeItem("token");
+        logout();
+        navigate("/login");
+      }
     }
   };
 
   const handleHideAllActivities = async () => {
     try {
       const token = localStorage.getItem("token");
+      if (!token) {
+        toast.error("Vui lòng đăng nhập lại!");
+        navigate("/login");
+        return;
+      }
       await axios.put(
         "http://localhost:5000/api/activities/hide-all",
         {},
@@ -181,6 +255,12 @@ const ProfilePage = () => {
     } catch (err) {
       console.error("ProfilePage: Error hiding all activities:", err);
       toast.error("Không thể ẩn tất cả hoạt động!");
+      if (err.response?.status === 401) {
+        console.log("ProfilePage: Unauthorized, logging out");
+        localStorage.removeItem("token");
+        logout();
+        navigate("/login");
+      }
     }
   };
 
@@ -194,9 +274,17 @@ const ProfilePage = () => {
           navigate(`/workspaces/${activity.target._id}`);
           break;
         case "Card":
-          navigate(
-            `/boards/${activity.target.board}/cards/${activity.target._id}`
-          );
+          if (activity.target.board) {
+            navigate(
+              `/boards/${activity.target.board.id}/cards/${activity.target._id}`
+            );
+          } else {
+            console.warn(
+              "ProfilePage: Missing board ID for card activity",
+              activity
+            );
+            toast.error("Không thể điều hướng: Thiếu thông tin bảng!");
+          }
           break;
         default:
           break;
@@ -212,6 +300,10 @@ const ProfilePage = () => {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
+          background: (theme) =>
+            theme.palette.mode === "dark"
+              ? "linear-gradient(135deg, #1e3a8a, #3b0764)"
+              : "linear-gradient(135deg, #6a11cb, #2575fc)",
         }}
       >
         <CircularProgress />
@@ -219,7 +311,7 @@ const ProfilePage = () => {
     );
   }
 
-  if (!user) {
+  if (!user?._id) {
     return null;
   }
 
@@ -230,105 +322,199 @@ const ProfilePage = () => {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        background: "linear-gradient(135deg, #667eea, #764ba2)",
+        background: (theme) =>
+          theme.palette.mode === "dark"
+            ? "linear-gradient(135deg, #1e3a8a, #3b0764)"
+            : "linear-gradient(135deg, #6a11cb, #2575fc)",
         p: 3,
       }}
     >
-      <Box
-        sx={{
-          width: "480px",
-          p: 4,
-          borderRadius: 3,
-          background: isDarkMode ? "#161b22" : "#fff",
-          boxShadow: isDarkMode ? 3 : "0px 4px 10px rgba(0, 0, 0, 0.1)",
-          textAlign: "center",
-        }}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
       >
-        {/* Avatar */}
-        <Box sx={{ position: "relative", width: "100px", margin: "0 auto" }}>
-          <Avatar
-            src={profile.avatar}
-            sx={{
-              width: 100,
-              height: 100,
-              bgcolor: deepPurple[500],
-              fontSize: "2rem",
-            }}
-          >
-            {profile.name.charAt(0)}
-          </Avatar>
-          <IconButton
-            sx={{
-              position: "absolute",
-              bottom: 0,
-              right: 0,
-              background: "#fff",
-              boxShadow: 1,
-              "&:hover": { background: "#eee" },
-            }}
-            component="label"
-          >
-            <CameraAltIcon fontSize="small" />
-            <input
-              type="file"
-              accept="image/*"
-              hidden
-              onChange={handleAvatarUpload}
-            />
-          </IconButton>
-        </Box>
-
-        {/* User Information */}
-        <Typography variant="h5" fontWeight="bold" mt={2}>
-          {profile.name}
-        </Typography>
-        <Typography variant="body2" color="textSecondary">
-          {profile.email}
-        </Typography>
-
-        {/* Bio */}
-        {isEditing ? (
-          <TextField
-            fullWidth
-            name="bio"
-            value={profile.bio}
-            onChange={handleChange}
-            margin="normal"
-            multiline
-            sx={{ mt: 2 }}
-          />
-        ) : (
-          <Typography variant="body1" mt={2} sx={{ fontStyle: "italic" }}>
-            {profile.bio}
-          </Typography>
-        )}
-
-        {/* Edit / Save Button */}
-        <Button
-          variant="contained"
-          startIcon={isEditing ? <SaveIcon /> : <EditIcon />}
+        <Box
           sx={{
-            mt: 2,
-            width: "100%",
-            bgcolor: "#6a11cb",
-            "&:hover": { bgcolor: "#2575fc" },
-            color: "white",
-            transition: "0.3s",
+            width: { xs: "90%", sm: 480 },
+            p: 4,
+            borderRadius: 12,
+            background: (theme) =>
+              theme.palette.mode === "dark"
+                ? "rgba(30,30,30,0.9)"
+                : "rgba(255,255,255,0.9)",
+            backdropFilter: "blur(10px)",
+            boxShadow: "0 10px 30px rgba(0,0,0,0.3)",
+            border: (theme) =>
+              theme.palette.mode === "dark"
+                ? "1px solid rgba(255,255,255,0.1)"
+                : "1px solid rgba(0,0,0,0.05)",
+            textAlign: "center",
+            transition: "all 0.3s ease",
+            "&:hover": {
+              transform: "scale(1.02)",
+              boxShadow: "0 12px 40px rgba(0,0,0,0.4)",
+            },
           }}
-          onClick={isEditing ? handleSave : handleEdit}
         >
-          {isEditing ? "Lưu Thay Đổi" : "Chỉnh Sửa"}
-        </Button>
+          {/* Avatar */}
+          <Box
+            sx={{
+              position: "relative",
+              width: 120,
+              height: 120,
+              margin: "0 auto",
+              mb: 2,
+            }}
+          >
+            <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
+              <Avatar
+                src={profile.avatar}
+                sx={{
+                  width: 120,
+                  height: 120,
+                  bgcolor: deepPurple[500],
+                  fontSize: "2.5rem",
+                  border: "3px solid",
+                  borderColor: (theme) =>
+                    theme.palette.mode === "dark" ? "#6a11cb" : "#2575fc",
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
+                }}
+              >
+                {profile.name.charAt(0)}
+              </Avatar>
+            </motion.div>
+            <IconButton
+              sx={{
+                position: "absolute",
+                bottom: 0,
+                right: 0,
+                background: (theme) =>
+                  theme.palette.mode === "dark" ? "#2c2c2c" : "#fff",
+                border: "2px solid",
+                borderColor: (theme) =>
+                  theme.palette.mode === "dark" ? "#6a11cb" : "#2575fc",
+                "&:hover": {
+                  background: (theme) => theme.palette.action.hover,
+                },
+              }}
+              component="label"
+              disabled={isEditing}
+            >
+              <CameraAltIcon fontSize="small" />
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/gif"
+                hidden
+                onChange={handleAvatarUpload}
+              />
+            </IconButton>
+          </Box>
 
-        {/* Recent Activities */}
-        <RecentActivities
-          activities={activities}
-          userName={profile.name}
-          onHideActivity={handleHideActivity}
-          onHideAllActivities={handleHideAllActivities}
-          onActivityClick={handleActivityClick}
-        />
-      </Box>
+          {/* User Information */}
+          {isEditing ? (
+            <TextField
+              fullWidth
+              name="name"
+              value={profile.name}
+              onChange={handleChange}
+              margin="normal"
+              label="Họ và tên"
+              sx={{ mt: 2, "& .MuiOutlinedInput-root": { borderRadius: 8 } }}
+            />
+          ) : (
+            <Typography
+              variant="h5"
+              fontWeight="bold"
+              mt={2}
+              sx={{
+                color: (theme) =>
+                  theme.palette.mode === "dark" ? "#fff" : "#333",
+              }}
+              component={motion.div}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.3 }}
+            >
+              {profile.name}
+            </Typography>
+          )}
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={{ mt: 1, fontStyle: "italic" }}
+            component={motion.div}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.3, delay: 0.1 }}
+          >
+            {profile.email}
+          </Typography>
+
+          {/* Bio */}
+          {isEditing ? (
+            <TextField
+              fullWidth
+              name="bio"
+              value={profile.bio}
+              onChange={handleChange}
+              margin="normal"
+              multiline
+              rows={3}
+              label="Tiểu sử"
+              sx={{ mt: 2, "& .MuiOutlinedInput-root": { borderRadius: 8 } }}
+            />
+          ) : (
+            <Typography
+              variant="body1"
+              mt={2}
+              sx={{
+                fontStyle: "italic",
+                color: (theme) =>
+                  theme.palette.mode === "dark" ? "#ddd" : "#555",
+              }}
+              component={motion.div}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.3, delay: 0.2 }}
+            >
+              {profile.bio}
+            </Typography>
+          )}
+
+          {/* Edit / Save Button */}
+          <Button
+            variant="contained"
+            startIcon={isEditing ? <SaveIcon /> : <EditIcon />}
+            sx={{
+              mt: 3,
+              width: "100%",
+              py: 1.2,
+              borderRadius: 8,
+              background: "linear-gradient(45deg, #6a11cb, #2575fc)",
+              "&:hover": {
+                background: "linear-gradient(45deg, #5b0ec9, #1f66e5)",
+              },
+              boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
+            }}
+            onClick={isEditing ? handleSave : handleEdit}
+            component={motion.button}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+          >
+            {isEditing ? "Lưu Thay Đổi" : "Chỉnh Sửa"}
+          </Button>
+
+          {/* Recent Activities */}
+          <RecentActivities
+            activities={activities}
+            userName={profile.name}
+            onHideActivity={handleHideActivity}
+            onHideAllActivities={handleHideAllActivities}
+            onActivityClick={handleActivityClick}
+          />
+        </Box>
+      </motion.div>
     </Box>
   );
 };

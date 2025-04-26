@@ -21,7 +21,7 @@ import { formatDistanceToNow } from "date-fns";
 import vi from "date-fns/locale/vi";
 
 const Profiles = forwardRef((props, ref) => {
-  const socket = useContext(SocketContext);
+  const { socket, socketReady } = useContext(SocketContext); // Lấy cả socket và socketReady
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [anchorEl, setAnchorEl] = useState(null);
@@ -55,7 +55,12 @@ const Profiles = forwardRef((props, ref) => {
     };
     fetchActivities();
 
-    socket.on("new-activity", (activity) => {
+    if (!socket || !socketReady) {
+      console.warn("Socket not available or not ready in Profiles");
+      return;
+    }
+
+    const handleNewActivity = (activity) => {
       console.log("Profiles: Received new activity:", activity);
       if (!activity.isHidden) {
         setActivities((prev) => [activity, ...prev].slice(0, 10));
@@ -63,12 +68,14 @@ const Profiles = forwardRef((props, ref) => {
           autoClose: 3000,
         });
       }
-    });
+    };
+
+    socket.on("new-activity", handleNewActivity);
 
     return () => {
-      socket.off("new-activity");
+      socket.off("new-activity", handleNewActivity);
     };
-  }, [user, socket]);
+  }, [user, socket, socketReady]);
 
   const handleOpen = (event) => {
     setAnchorEl(event.currentTarget);

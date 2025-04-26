@@ -29,15 +29,16 @@ import { useParams } from "react-router-dom";
 import { toast } from "react-toastify";
 import { SocketContext } from "../../../../context/SocketContext";
 import { useTheme } from "@mui/material/styles";
+import Cards from "./Column/ListCards/Cards/Cards"; // Thêm import Cards
 
 function ListColumns({ boardId: propBoardId }) {
   const { boardId: urlBoardId } = useParams();
   const boardId = propBoardId || urlBoardId;
-  const { socket } = useContext(SocketContext);
+  const { socket, socketReady } = useContext(SocketContext);
   const theme = useTheme();
   const isDarkMode = theme.palette.mode === "dark";
   const [columns, setColumns] = useState([]);
-  const [boardMembers, setBoardMembers] = useState([]); // Thêm state cho boardMembers
+  const [boardMembers, setBoardMembers] = useState([]);
   const [openCreateColumnDialog, setOpenCreateColumnDialog] = useState(false);
   const [newColumnTitle, setNewColumnTitle] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
@@ -67,94 +68,7 @@ function ListColumns({ boardId: propBoardId }) {
     }
   }, [boardId]);
 
-  useEffect(() => {
-    if (!socket) {
-      console.warn("Socket not available in ListColumns");
-      return;
-    }
-
-    socket.on("connect", () => {
-      console.log("ListColumns: Socket connected");
-      if (boardId) {
-        socket.emit("join-board", { boardId });
-      }
-    });
-
-    socket.on("connect_error", (err) => {
-      console.error("ListColumns: Socket error:", err.message);
-      toast.error("Lỗi kết nối server!");
-    });
-
-    socket.on(
-      "list-order-updated",
-      ({ boardId: updatedBoardId, columnOrder }) => {
-        if (updatedBoardId === boardId) {
-          setColumns((prevColumns) => {
-            const reorderedColumns = columnOrder
-              .map((id) => prevColumns.find((col) => col._id === id))
-              .filter((col) => col);
-            return reorderedColumns;
-          });
-        }
-      }
-    );
-
-    socket.on("card-moved", ({ card, oldListId, newListId, newPosition }) => {
-      setColumns((prevColumns) => {
-        const newColumns = [...prevColumns];
-        const oldColumn = newColumns.find((c) => c._id === oldListId);
-        const newColumn = newColumns.find((c) => c._id === newListId);
-
-        if (oldColumn) {
-          oldColumn.cards = oldColumn.cards.filter((c) => c._id !== card._id);
-        }
-        if (newColumn) {
-          newColumn.cards.splice(newPosition, 0, {
-            ...card,
-            list: newListId,
-          });
-        }
-
-        return newColumns;
-      });
-    });
-
-    socket.on("member-deactivated", (data) => {
-      if (data.deactivatedUserId === localStorage.getItem("userId")) {
-        if (data.boardId === boardId) {
-          toast.info("Bạn đã bị xóa khỏi bảng này!");
-          setColumns([]);
-          setBoardMembers([]); // Xóa boardMembers
-        }
-      } else {
-        setBoardMembers((prev) =>
-          prev.map((member) =>
-            member.user._id.toString() === data.deactivatedUserId
-              ? { ...member, isActive: false }
-              : member
-          )
-        );
-      }
-    });
-
-    socket.on("member-invited", ({ board, invitedUser }) => {
-      console.log("ListColumns: Received member-invited:", {
-        board,
-        invitedUser,
-      });
-      setBoardMembers(board.members || []);
-    });
-
-    return () => {
-      socket.off("connect");
-      socket.off("connect_error");
-      socket.off("list-order-updated");
-      socket.off("card-moved");
-      socket.off("member-deactivated");
-      socket.off("member-invited");
-    };
-  }, [boardId, socket]);
-
+  // Hàm lấy danh sách cột
   const fetchColumns = useCallback(async () => {
     try {
       const token = localStorage.getItem("token");
@@ -201,9 +115,181 @@ function ListColumns({ boardId: propBoardId }) {
       return;
     }
     fetchColumns();
-    fetchBoardMembers(); // Lấy boardMembers khi component mount
+    fetchBoardMembers();
   }, [boardId, refreshKey, fetchColumns, fetchBoardMembers]);
 
+  // Xử lý Socket.IO events
+  useEffect(() => {
+    if (!socket || !socketReady) {
+      console.warn("Socket not available or not ready in ListColumns");
+      return;
+    }
+
+    const handleConnect = () => {
+      console.log("ListColumns: Socket connected");
+      if (boardId) {
+        socket.emit("join-board", { boardId });
+      }
+    };
+
+    const handleConnectError = (err) => {
+      console.error("ListColumns: Socket error:", err.message);
+      toast.error("Lỗi kết nối server!");
+    };
+
+    const handleListCreated = ({ boardId: updatedBoardId, list }) => {
+      if (updatedBoardId === boardId) {
+        setColumns((prev) => [
+          ...prev,
+          { ...list, cards: [], isExpanded: true },
+        ]);
+        toast.info("Một cột mới đã được thêm!");
+      }
+    };
+
+    const handleListDeleted = ({ boardId: updatedBoardId, listId }) => {
+      if (updatedBoardId === boardId) {
+        setColumns((prev) => prev.filter((col) => col._id !== listId));
+        toast.info("Một cột đã bị xóa!");
+      }
+    };
+
+    const handleListOrderUpdated = ({
+      boardId: updatedBoardId,
+      columnOrder,
+    }) => {
+      if (updatedBoardId === boardId) {
+        setColumns((prevColumns) => {
+          const reorderedColumns = columnOrder
+            .map((id) => prevColumns.find((col) => col._id === id))
+            .filter((col) => col);
+          return reorderedColumns;
+        });
+        toast.info("Thứ tự cột đã được cập nhật!");
+      }
+    };
+
+    const handleCardCreated = ({ boardId: updatedBoardId, listId, card }) => {
+      if (updatedBoardId === boardId) {
+        setColumns((prevColumns) => {
+          const newColumns = [...prevColumns];
+          const targetColumn = newColumns.find((col) => col._id === listId);
+          if (targetColumn) {
+            targetColumn.cards.push(card);
+          }
+          return newColumns;
+        });
+        toast.info("Một thẻ mới đã được thêm!");
+      }
+    };
+
+    const handleCardDeleted = ({ boardId: updatedBoardId, listId, cardId }) => {
+      if (updatedBoardId === boardId) {
+        setColumns((prevColumns) => {
+          const newColumns = [...prevColumns];
+          const targetColumn = newColumns.find((col) => col._id === listId);
+          if (targetColumn) {
+            targetColumn.cards = targetColumn.cards.filter(
+              (card) => card._id !== cardId
+            );
+          }
+          return newColumns;
+        });
+        toast.info("Một thẻ đã bị xóa!");
+      }
+    };
+
+    const handleCardMoved = ({ card, oldListId, newListId, newPosition }) => {
+      if (card.board === boardId) {
+        setColumns((prevColumns) => {
+          const newColumns = [...prevColumns];
+          const oldColumn = newColumns.find((c) => c._id === oldListId);
+          const newColumn = newColumns.find((c) => c._id === newListId);
+
+          if (oldColumn) {
+            oldColumn.cards = oldColumn.cards.filter((c) => c._id !== card._id);
+          }
+          if (newColumn) {
+            newColumn.cards.splice(newPosition, 0, {
+              ...card,
+              list: newListId,
+            });
+          }
+
+          return newColumns;
+        });
+        toast.info("Một thẻ đã được di chuyển!");
+      }
+    };
+
+    const handleCardOrderUpdated = ({ listId, cardOrder }) => {
+      setColumns((prevColumns) => {
+        const newColumns = [...prevColumns];
+        const targetColumn = newColumns.find((c) => c._id === listId);
+        if (targetColumn) {
+          targetColumn.cards = cardOrder
+            .map((id) => targetColumn.cards.find((card) => card._id === id))
+            .filter((card) => card);
+        }
+        return newColumns;
+      });
+      toast.info("Thứ tự thẻ đã được cập nhật!");
+    };
+
+    const handleMemberDeactivated = (data) => {
+      if (data.deactivatedUserId === localStorage.getItem("userId")) {
+        if (data.boardId === boardId) {
+          toast.info("Bạn đã bị xóa khỏi bảng này!");
+          setColumns([]);
+          setBoardMembers([]);
+        }
+      } else {
+        setBoardMembers((prev) =>
+          prev.map((member) =>
+            member.user._id.toString() === data.deactivatedUserId
+              ? { ...member, isActive: false }
+              : member
+          )
+        );
+      }
+    };
+
+    const handleMemberInvited = ({ board, invitedUser }) => {
+      console.log("ListColumns: Received member-invited:", {
+        board,
+        invitedUser,
+      });
+      setBoardMembers(board.members || []);
+    };
+
+    socket.on("connect", handleConnect);
+    socket.on("connect_error", handleConnectError);
+    socket.on("list-created", handleListCreated);
+    socket.on("list-deleted", handleListDeleted);
+    socket.on("list-order-updated", handleListOrderUpdated);
+    socket.on("card-created", handleCardCreated);
+    socket.on("card-deleted", handleCardDeleted);
+    socket.on("card-moved", handleCardMoved);
+    socket.on("card-order-updated", handleCardOrderUpdated);
+    socket.on("member-deactivated", handleMemberDeactivated);
+    socket.on("member-invited", handleMemberInvited);
+
+    return () => {
+      socket.off("connect", handleConnect);
+      socket.off("connect_error", handleConnectError);
+      socket.off("list-created", handleListCreated);
+      socket.off("list-deleted", handleListDeleted);
+      socket.off("list-order-updated", handleListOrderUpdated);
+      socket.off("card-created", handleCardCreated);
+      socket.off("card-deleted", handleCardDeleted);
+      socket.off("card-moved", handleCardMoved);
+      socket.off("card-order-updated", handleCardOrderUpdated);
+      socket.off("member-deactivated", handleMemberDeactivated);
+      socket.off("member-invited", handleMemberInvited);
+    };
+  }, [boardId, socket, socketReady]);
+
+  // Tạo cột mới
   const handleCreateColumn = async () => {
     if (!newColumnTitle.trim()) {
       toast.error("Tiêu đề cột không được để trống!");
@@ -236,7 +322,7 @@ function ListColumns({ boardId: propBoardId }) {
         ...columns,
         { ...response.data, cards: [], isExpanded: true },
       ]);
-      if (socket) {
+      if (socket && socketReady) {
         socket.emit("list-created", {
           boardId,
           list: response.data,
@@ -259,6 +345,7 @@ function ListColumns({ boardId: propBoardId }) {
     }
   };
 
+  // Xử lý kéo thả
   const handleDragStart = (event) => {
     setActiveDragItem({
       id: event.active.id,
@@ -305,7 +392,7 @@ function ListColumns({ boardId: propBoardId }) {
           );
           console.log("Update list order response:", response.data);
 
-          if (socket) {
+          if (socket && socketReady) {
             socket.emit("list-order-updated", {
               boardId,
               columnOrder,
@@ -419,12 +506,20 @@ function ListColumns({ boardId: propBoardId }) {
             ),
           ]);
 
-          if (socket) {
+          if (socket && socketReady) {
             socket.emit("card-moved", {
               card: updatedCard,
               oldListId: activeColumnId,
               newListId: overColumnId,
               newPosition: insertIndex,
+            });
+            socket.emit("card-order-updated", {
+              listId: activeColumnId,
+              cardOrder: newColumns[activeColumnIndex].cards.map((c) => c._id),
+            });
+            socket.emit("card-order-updated", {
+              listId: overColumnId,
+              cardOrder: newColumns[overColumnIndex].cards.map((c) => c._id),
             });
             console.log("Emitted card-moved:", {
               cardId: updatedCard._id,
@@ -449,7 +544,7 @@ function ListColumns({ boardId: propBoardId }) {
         }
       }
     },
-    [columns, boardId, socket, fetchColumns]
+    [columns, boardId, socket, socketReady, fetchColumns]
   );
 
   const sortableItems = [
@@ -504,8 +599,8 @@ function ListColumns({ boardId: propBoardId }) {
                 column={column}
                 setColumns={setColumns}
                 boardId={boardId}
-                boardMembers={boardMembers} // Truyền boardMembers xuống Column
-                setBoardMembers={setBoardMembers} // Truyền setBoardMembers
+                boardMembers={boardMembers}
+                setBoardMembers={setBoardMembers}
                 onDragStart={handleDragStart}
                 onDragEnd={handleDragEnd}
                 initialExpanded={column.isExpanded ?? true}
@@ -651,8 +746,8 @@ function ListColumns({ boardId: propBoardId }) {
                 column={activeDragItem.data}
                 setColumns={setColumns}
                 boardId={boardId}
-                boardMembers={boardMembers} // Truyền boardMembers
-                setBoardMembers={setBoardMembers} // Truyền setBoardMembers
+                boardMembers={boardMembers}
+                setBoardMembers={setBoardMembers}
                 onDragStart={handleDragStart}
                 onDragEnd={handleDragEnd}
                 initialExpanded={activeDragItem.data.isExpanded}
@@ -684,8 +779,8 @@ function ListColumns({ boardId: propBoardId }) {
                 card={activeDragItem.data.card}
                 setCards={() => {}}
                 setColumns={setColumns}
-                boardMembers={boardMembers} // Truyền boardMembers
-                setBoardMembers={setBoardMembers} // Truyền setBoardMembers
+                boardMembers={boardMembers}
+                setBoardMembers={setBoardMembers}
                 onDragStart={handleDragStart}
                 onDragEnd={handleDragEnd}
               />
