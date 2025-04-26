@@ -9,10 +9,15 @@ const BoardList = ({
   onUpdate,
   onDelete,
 }) => {
-  const socket = useContext(SocketContext);
+  const { socket, socketReady } = useContext(SocketContext); // Use socket and socketReady
   const [boards, setBoards] = useState(initialBoards);
 
   useEffect(() => {
+    if (!socket || !socketReady) {
+      console.warn("Socket not available or not ready in BoardList");
+      return;
+    }
+
     const userId = localStorage.getItem("userId");
     if (userId) {
       socket.emit("join", userId);
@@ -21,7 +26,7 @@ const BoardList = ({
 
     setBoards(initialBoards);
 
-    socket.on("board-created", (data) => {
+    const handleBoardCreated = (data) => {
       console.log("Nhận board-created:", data);
       setBoards((prevBoards) => {
         if (!prevBoards.some((b) => b._id === data.board._id)) {
@@ -30,30 +35,34 @@ const BoardList = ({
         return prevBoards;
       });
       onUpdate(data.board);
-    });
+    };
 
-    socket.on("boardUpdated", (data) => {
+    const handleBoardUpdated = (data) => {
       console.log("Nhận boardUpdated:", data);
       setBoards((prevBoards) =>
         prevBoards.map((board) => (board._id === data._id ? data : board))
       );
       onUpdate(data);
-    });
+    };
 
-    socket.on("board-deleted", (data) => {
+    const handleBoardDeleted = (data) => {
       console.log("Nhận board-deleted:", data);
       setBoards((prevBoards) =>
         prevBoards.filter((board) => board._id !== data.boardId)
       );
       onDelete(data.boardId);
-    });
+    };
+
+    socket.on("board-created", handleBoardCreated);
+    socket.on("boardUpdated", handleBoardUpdated);
+    socket.on("board-deleted", handleBoardDeleted);
 
     return () => {
-      socket.off("board-created");
-      socket.off("boardUpdated");
-      socket.off("board-deleted");
+      socket.off("board-created", handleBoardCreated);
+      socket.off("boardUpdated", handleBoardUpdated);
+      socket.off("board-deleted", handleBoardDeleted);
     };
-  }, [initialBoards, onUpdate, onDelete, socket]);
+  }, [initialBoards, onUpdate, onDelete, socket, socketReady]);
 
   const filteredBoards = boards.filter((board) =>
     board.title.toLowerCase().includes(searchValue.toLowerCase())

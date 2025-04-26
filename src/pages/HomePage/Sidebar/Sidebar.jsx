@@ -38,7 +38,7 @@ import { toast } from "react-toastify";
 import { SocketContext } from "../../../context/SocketContext";
 
 const Sidebar = ({ onSelectWorkspace, selectedWorkspaceId }) => {
-  const socket = useContext(SocketContext);
+  const { socket, socketReady } = useContext(SocketContext); // Correctly destructure socket and socketReady
   const [workspaces, setWorkspaces] = useState([]);
   const [openWorkspaces, setOpenWorkspaces] = useState({});
   const [loading, setLoading] = useState(true);
@@ -82,23 +82,32 @@ const Sidebar = ({ onSelectWorkspace, selectedWorkspaceId }) => {
     }
   };
 
+  // Fetch workspaces on mount
   useEffect(() => {
+    fetchWorkspaces();
+  }, [navigate]);
+
+  // Handle socket events when socket is ready
+  useEffect(() => {
+    if (!socket || !socketReady) {
+      console.warn("Socket not available or not ready in Sidebar");
+      return;
+    }
+
     const userId = localStorage.getItem("userId");
     if (userId) {
       socket.emit("join", userId);
       console.log("Sidebar tham gia phòng socket:", userId);
     }
 
-    fetchWorkspaces();
-
-    socket.on("workspaces-loaded", (workspaceIds) => {
+    const handleWorkspacesLoaded = (workspaceIds) => {
       workspaceIds.forEach((workspaceId) => {
         socket.emit("join", workspaceId);
         console.log("Sidebar tham gia phòng workspace:", workspaceId);
       });
-    });
+    };
 
-    socket.on("workspace-created", (data) => {
+    const handleWorkspaceCreated = (data) => {
       console.log("Nhận workspace-created:", data);
       setWorkspaces((prev) => {
         if (!prev.some((ws) => ws._id === data.workspace._id)) {
@@ -110,18 +119,17 @@ const Sidebar = ({ onSelectWorkspace, selectedWorkspaceId }) => {
         ...prev,
         [data.workspace._id]: true,
       }));
-      // Tham gia phòng workspace mới
       socket.emit("join", data.workspace._id);
-    });
+    };
 
-    socket.on("workspace-updated", (data) => {
+    const handleWorkspaceUpdated = (data) => {
       console.log("Nhận workspace-updated:", data);
       setWorkspaces((prev) =>
         prev.map((ws) => (ws._id === data.workspace._id ? data.workspace : ws))
       );
-    });
+    };
 
-    socket.on("workspace-hidden", (data) => {
+    const handleWorkspaceHidden = (data) => {
       console.log("Nhận workspace-hidden:", data);
       setWorkspaces((prev) => {
         const updated = prev.filter((ws) => ws._id !== data.workspaceId);
@@ -138,13 +146,12 @@ const Sidebar = ({ onSelectWorkspace, selectedWorkspaceId }) => {
         console.log("Reset selectedWorkspaceId");
         onSelectWorkspace("");
       }
-    });
+    };
 
-    socket.on("member-deactivated", (data) => {
+    const handleMemberDeactivated = (data) => {
       console.log("Nhận member-deactivated:", data);
       if (data.deactivatedUserId === localStorage.getItem("userId")) {
         if (data.workspaceRemoved) {
-          // Xóa workspace khỏi danh sách
           setWorkspaces((prev) =>
             prev.filter((ws) => ws._id !== data.board.workspace._id)
           );
@@ -158,24 +165,31 @@ const Sidebar = ({ onSelectWorkspace, selectedWorkspaceId }) => {
           }
         }
       }
-    });
+    };
 
-    socket.on("refresh-sidebar", (data) => {
+    const handleRefreshSidebar = (data) => {
       console.log("Nhận refresh-sidebar:", data);
       if (data.userId === localStorage.getItem("userId")) {
         fetchWorkspaces();
       }
-    });
+    };
+
+    socket.on("workspaces-loaded", handleWorkspacesLoaded);
+    socket.on("workspace-created", handleWorkspaceCreated);
+    socket.on("workspace-updated", handleWorkspaceUpdated);
+    socket.on("workspace-hidden", handleWorkspaceHidden);
+    socket.on("member-deactivated", handleMemberDeactivated);
+    socket.on("refresh-sidebar", handleRefreshSidebar);
 
     return () => {
-      socket.off("workspaces-loaded");
-      socket.off("workspace-created");
-      socket.off("workspace-updated");
-      socket.off("workspace-hidden");
-      socket.off("member-deactivated");
-      socket.off("refresh-sidebar");
+      socket.off("workspaces-loaded", handleWorkspacesLoaded);
+      socket.off("workspace-created", handleWorkspaceCreated);
+      socket.off("workspace-updated", handleWorkspaceUpdated);
+      socket.off("workspace-hidden", handleWorkspaceHidden);
+      socket.off("member-deactivated", handleMemberDeactivated);
+      socket.off("refresh-sidebar", handleRefreshSidebar);
     };
-  }, [navigate, socket, onSelectWorkspace, selectedWorkspaceId]);
+  }, [socket, socketReady, onSelectWorkspace, selectedWorkspaceId]);
 
   const handleToggleWorkspace = (workspaceId) => {
     setOpenWorkspaces((prev) => ({
@@ -218,10 +232,14 @@ const Sidebar = ({ onSelectWorkspace, selectedWorkspaceId }) => {
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      socket.emit("workspace-created", {
-        workspace: response.data,
-        message: `Workspace "${response.data.name}" đã được tạo.`,
-      });
+      if (socket && socketReady) {
+        socket.emit("workspace-created", {
+          workspace: response.data,
+          message: `Workspace "${response.data.name}" đã được tạo.`,
+        });
+      } else {
+        console.warn("Socket not available or not ready for workspace-created");
+      }
 
       setOpenCreateDialog(false);
       setNewWorkspaceName("");

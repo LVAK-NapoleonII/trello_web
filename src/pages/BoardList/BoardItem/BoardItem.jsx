@@ -38,7 +38,7 @@ const isDarkColor = (hexColor) => {
 };
 
 const BoardItem = ({ board, onUpdate, onDelete }) => {
-  const socket = useContext(SocketContext);
+  const { socket, socketReady } = useContext(SocketContext); // Use socket and socketReady
   const navigate = useNavigate();
   const theme = useTheme();
   const isDarkMode = theme.palette.mode === "dark";
@@ -91,7 +91,11 @@ const BoardItem = ({ board, onUpdate, onDelete }) => {
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      socket.emit("boardUpdated", response.data);
+      if (socket && socketReady) {
+        socket.emit("boardUpdated", response.data);
+      } else {
+        console.warn("Socket not available or not ready for boardUpdated");
+      }
       onUpdate(response.data);
       handleCloseEditDialog();
       toast.success("Cập nhật bảng thành công!");
@@ -113,7 +117,11 @@ const BoardItem = ({ board, onUpdate, onDelete }) => {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      socket.emit("board-deleted", { boardId: board._id });
+      if (socket && socketReady) {
+        socket.emit("board-deleted", { boardId: board._id });
+      } else {
+        console.warn("Socket not available or not ready for board-deleted");
+      }
       onDelete(board._id);
       toast.success("Xóa bảng thành công!");
     } catch (err) {

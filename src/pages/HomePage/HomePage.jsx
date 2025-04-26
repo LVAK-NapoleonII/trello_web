@@ -33,7 +33,7 @@ const generateGradient = () => {
 };
 
 const HomePage = () => {
-  const socket = useContext(SocketContext);
+  const { socket, socketReady } = useContext(SocketContext); // Sử dụng socket và socketReady
   const theme = useTheme();
   const isDarkMode = theme.palette.mode === "dark";
   const navigate = useNavigate();
@@ -109,6 +109,11 @@ const HomePage = () => {
   };
 
   useEffect(() => {
+    if (!socket || !socketReady) {
+      console.warn("Socket not available or not ready in HomePage");
+      return;
+    }
+
     const userId = localStorage.getItem("userId");
     if (userId) {
       socket.emit("join", userId);
@@ -118,14 +123,14 @@ const HomePage = () => {
     fetchWorkspaces();
     fetchBoards();
 
-    socket.on("workspaces-loaded", (workspaceIds) => {
+    const handleWorkspacesLoaded = (workspaceIds) => {
       workspaceIds.forEach((workspaceId) => {
         socket.emit("join", workspaceId);
         console.log("HomePage tham gia phòng workspace:", workspaceId);
       });
-    });
+    };
 
-    socket.on("workspace-created", (data) => {
+    const handleWorkspaceCreated = (data) => {
       console.log("Nhận workspace-created:", data);
       setWorkspaces((prev) => {
         if (!prev.some((ws) => ws._id === data.workspace._id)) {
@@ -134,9 +139,9 @@ const HomePage = () => {
         return prev;
       });
       socket.emit("join", data.workspace._id);
-    });
+    };
 
-    socket.on("workspace-updated", (data) => {
+    const handleWorkspaceUpdated = (data) => {
       console.log("Nhận workspace-updated:", data);
       setWorkspaces((prev) =>
         prev.map((ws) => (ws._id === data.workspace._id ? data.workspace : ws))
@@ -144,9 +149,9 @@ const HomePage = () => {
       if (selectedWorkspaceId === data.workspace._id) {
         setSelectedWorkspaceBackground(data.workspace.background || null);
       }
-    });
+    };
 
-    socket.on("workspace-hidden", (data) => {
+    const handleWorkspaceHidden = (data) => {
       console.log("Nhận workspace-hidden:", data);
       setWorkspaces((prev) => prev.filter((ws) => ws._id !== data.workspaceId));
       if (selectedWorkspaceId === data.workspaceId) {
@@ -154,9 +159,9 @@ const HomePage = () => {
         setSelectedWorkspaceBackground(null);
         setBoards([]);
       }
-    });
+    };
 
-    socket.on("board-created", (data) => {
+    const handleBoardCreated = (data) => {
       console.log("Nhận board-created:", data);
       if (
         !selectedWorkspaceId ||
@@ -169,27 +174,25 @@ const HomePage = () => {
           return prev;
         });
       }
-    });
+    };
 
-    socket.on("boardUpdated", (data) => {
+    const handleBoardUpdated = (data) => {
       console.log("Nhận boardUpdated:", data);
       if (!selectedWorkspaceId || data.workspace?._id === selectedWorkspaceId) {
         setBoards((prev) => prev.map((b) => (b._id === data._id ? data : b)));
       }
-    });
+    };
 
-    socket.on("board-deleted", (data) => {
+    const handleBoardDeleted = (data) => {
       console.log("Nhận board-deleted:", data);
       setBoards((prev) => prev.filter((b) => b._id !== data.boardId));
-    });
+    };
 
-    socket.on("member-deactivated", (data) => {
+    const handleMemberDeactivated = (data) => {
       console.log("Nhận member-deactivated:", data);
       if (data.deactivatedUserId === localStorage.getItem("userId")) {
-        // Xóa board khỏi danh sách của người dùng
         setBoards((prev) => prev.filter((b) => b._id !== data.board._id));
         if (data.workspaceRemoved) {
-          // Xóa workspace nếu không còn board nào trong workspace
           setWorkspaces((prev) =>
             prev.filter((ws) => ws._id !== data.board.workspace._id)
           );
@@ -200,32 +203,41 @@ const HomePage = () => {
           }
         }
       } else {
-        // Cập nhật board cho các thành viên còn lại
         setBoards((prev) =>
           prev.map((b) => (b._id === data.board._id ? data.board : b))
         );
       }
-    });
+    };
 
-    socket.on("refresh-sidebar", (data) => {
+    const handleRefreshSidebar = (data) => {
       console.log("Nhận refresh-sidebar:", data);
       if (data.userId === localStorage.getItem("userId")) {
         fetchWorkspaces();
       }
-    });
+    };
+
+    socket.on("workspaces-loaded", handleWorkspacesLoaded);
+    socket.on("workspace-created", handleWorkspaceCreated);
+    socket.on("workspace-updated", handleWorkspaceUpdated);
+    socket.on("workspace-hidden", handleWorkspaceHidden);
+    socket.on("board-created", handleBoardCreated);
+    socket.on("boardUpdated", handleBoardUpdated);
+    socket.on("board-deleted", handleBoardDeleted);
+    socket.on("member-deactivated", handleMemberDeactivated);
+    socket.on("refresh-sidebar", handleRefreshSidebar);
 
     return () => {
-      socket.off("workspaces-loaded");
-      socket.off("workspace-created");
-      socket.off("workspace-updated");
-      socket.off("workspace-hidden");
-      socket.off("board-created");
-      socket.off("boardUpdated");
-      socket.off("board-deleted");
-      socket.off("member-deactivated");
-      socket.off("refresh-sidebar");
+      socket.off("workspaces-loaded", handleWorkspacesLoaded);
+      socket.off("workspace-created", handleWorkspaceCreated);
+      socket.off("workspace-updated", handleWorkspaceUpdated);
+      socket.off("workspace-hidden", handleWorkspaceHidden);
+      socket.off("board-created", handleBoardCreated);
+      socket.off("boardUpdated", handleBoardUpdated);
+      socket.off("board-deleted", handleBoardDeleted);
+      socket.off("member-deactivated", handleMemberDeactivated);
+      socket.off("refresh-sidebar", handleRefreshSidebar);
     };
-  }, [navigate, selectedWorkspaceId, socket]);
+  }, [navigate, selectedWorkspaceId, socket, socketReady]);
 
   const handleSelectWorkspace = (workspaceId) => {
     setSelectedWorkspaceId(workspaceId);
@@ -254,7 +266,11 @@ const HomePage = () => {
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      socket.emit("board-created", { board: response.data });
+      if (socket && socketReady) {
+        socket.emit("board-created", { board: response.data });
+      } else {
+        console.warn("Socket not available or not ready for board-created");
+      }
       toast.success("Tạo bảng thành công!");
       fetchBoards();
     } catch (error) {
