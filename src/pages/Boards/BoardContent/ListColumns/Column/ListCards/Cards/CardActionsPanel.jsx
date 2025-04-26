@@ -1,3 +1,4 @@
+import { useState, useEffect, useContext } from "react";
 import { CardActions, Button, Chip, IconButton, Tooltip } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
@@ -5,17 +6,85 @@ import Groups3Icon from "@mui/icons-material/Groups3";
 import AssistantIcon from "@mui/icons-material/Assistant";
 import AttachmentIcon from "@mui/icons-material/Attachment";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import AddIcon from "@mui/icons-material/Add";
 import axios from "axios";
 import { toast } from "react-toastify";
 import EditCardDialog from "./EditCardDialog";
 import { SocketContext } from "../../../../../../../context/SocketContext";
-import { useContext, useState } from "react";
 import { Stack } from "@mui/system";
 
-function CardActionsPanel({ card, setCards, setColumns, boardMembers }) {
-  const { socket } = useContext(SocketContext);
+function CardActionsPanel({
+  card,
+  setCards,
+  setColumns,
+  boardMembers,
+  boardId,
+}) {
+  const { socket, socketReady } = useContext(SocketContext);
   const [openEditDialog, setOpenEditDialog] = useState(false);
+
+  useEffect(() => {
+    if (!socket || !socketReady || !boardId) {
+      console.warn(
+        "CardActionsPanel: Socket not available, not ready, or no boardId"
+      );
+      return;
+    }
+
+    // Xử lý khi thẻ bị xóa
+    const handleCardDeleted = ({ listId, cardId }) => {
+      if (cardId === card._id) {
+        console.log("CardActionsPanel: Received card-deleted:", {
+          listId,
+          cardId,
+        });
+        setCards((prevCards) => prevCards.filter((c) => c._id !== cardId));
+        setColumns((prevColumns) =>
+          prevColumns.map((col) =>
+            col._id === listId
+              ? { ...col, cards: col.cards.filter((c) => c._id !== cardId) }
+              : col
+          )
+        );
+        toast.info("Thẻ đã được xóa.");
+      }
+    };
+
+    // Xử lý khi trạng thái hoàn thành thay đổi
+    const handleCardCompletionToggled = ({ cardId, completed }) => {
+      if (cardId === card._id) {
+        console.log("CardActionsPanel: Received card-completion-toggled:", {
+          cardId,
+          completed,
+        });
+        setCards((prevCards) =>
+          prevCards.map((c) => (c._id === cardId ? { ...c, completed } : c))
+        );
+        setColumns((prevColumns) =>
+          prevColumns.map((col) =>
+            col._id === card.list
+              ? {
+                  ...col,
+                  cards: col.cards.map((c) =>
+                    c._id === cardId ? { ...c, completed } : c
+                  ),
+                }
+              : col
+          )
+        );
+        toast.info(
+          `Thẻ đã được ${completed ? "đánh dấu hoàn thành" : "bỏ hoàn thành"}.`
+        );
+      }
+    };
+
+    socket.on("card-deleted", handleCardDeleted);
+    socket.on("card-completion-toggled", handleCardCompletionToggled);
+
+    return () => {
+      socket.off("card-deleted", handleCardDeleted);
+      socket.off("card-completion-toggled", handleCardCompletionToggled);
+    };
+  }, [socket, socketReady, boardId, card._id, card.list, setCards, setColumns]);
 
   const isMemberInBoard = (memberId) => {
     if (!memberId) return false;
@@ -43,8 +112,12 @@ function CardActionsPanel({ card, setCards, setColumns, boardMembers }) {
         }))
       );
 
-      if (socket) {
-        socket.emit("card-deleted", { cardId: card._id });
+      if (socket && socketReady) {
+        socket.emit("card-deleted", {
+          boardId,
+          listId: card.list,
+          cardId: card._id,
+        });
       }
 
       toast.success("Xóa thẻ thành công!");
@@ -84,7 +157,7 @@ function CardActionsPanel({ card, setCards, setColumns, boardMembers }) {
         }))
       );
 
-      if (socket) {
+      if (socket && socketReady) {
         socket.emit("card-completion-toggled", {
           cardId: card._id,
           completed: response.data.card.completed,
@@ -113,12 +186,10 @@ function CardActionsPanel({ card, setCards, setColumns, boardMembers }) {
     );
   };
 
-  // Đếm số thành viên còn trong bảng
   const activeMembersCount = (card?.members || []).filter((member) =>
     isMemberInBoard(member._id)
   ).length;
 
-  // Tạo tooltip hiển thị trạng thái thành viên
   const membersTooltip = (card?.members || [])
     .map(
       (member) =>
@@ -148,7 +219,6 @@ function CardActionsPanel({ card, setCards, setColumns, boardMembers }) {
           gap: 1,
         }}
       >
-        {/* Chips Section */}
         <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: 1 }}>
           {(card?.members || []).length > 0 && (
             <Tooltip title={membersTooltip}>
@@ -217,7 +287,6 @@ function CardActionsPanel({ card, setCards, setColumns, boardMembers }) {
           )}
         </Stack>
 
-        {/* Icon Buttons Section */}
         <Stack direction="row" spacing={1}>
           <Tooltip
             title={card.completed ? "Bỏ hoàn thành" : "Đánh dấu hoàn thành"}

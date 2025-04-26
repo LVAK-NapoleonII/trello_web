@@ -1,4 +1,4 @@
-import { useState, useContext } from "react";
+import { useState, useEffect, useContext } from "react"; // Added useEffect
 import { Button, Typography } from "@mui/material";
 import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
@@ -45,6 +45,11 @@ function Column({
   const [isExpanded, setIsExpanded] = useState(initialExpanded);
   const [openEditTitleDialog, setOpenEditTitleDialog] = useState(false);
   const [newTitle, setNewTitle] = useState(column.title);
+  const [openCreateCardDialog, setOpenCreateCardDialog] = useState(false);
+  const [newCardTitle, setNewCardTitle] = useState("");
+  const [newCardDescription, setNewCardDescription] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [refreshCards, setRefreshCards] = useState(false);
 
   const {
     attributes,
@@ -86,11 +91,46 @@ function Column({
     setAnchorEl(null);
   };
 
-  const [openCreateCardDialog, setOpenCreateCardDialog] = useState(false);
-  const [newCardTitle, setNewCardTitle] = useState("");
-  const [newCardDescription, setNewCardDescription] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [refreshCards, setRefreshCards] = useState(false);
+  // Join the board's socket room and handle real-time card creation
+  useEffect(() => {
+    if (!socket || !socketReady || !boardId) {
+      console.warn("Socket not available, not ready, or no boardId in Column");
+      return;
+    }
+
+    // Join the board's room
+    socket.emit("join", boardId);
+    console.log("Column joined board room:", boardId);
+
+    // Handle incoming card-created events
+    const handleCardCreated = (data) => {
+      console.log("Received card-created:", data);
+      const { listId, card } = data;
+
+      // Update columns state to add the new card to the correct list
+      setColumns((prevColumns) =>
+        prevColumns.map((col) =>
+          col._id === listId
+            ? {
+                ...col,
+                cards: [...(col.cards || []), card],
+              }
+            : col
+        )
+      );
+      // Trigger refresh for ListCards
+      setRefreshCards((prev) => !prev);
+    };
+
+    socket.on("card-created", handleCardCreated);
+
+    // Cleanup: Leave the room and remove the listener
+    return () => {
+      socket.emit("leave", boardId);
+      console.log("Column left board room:", boardId);
+      socket.off("card-created", handleCardCreated);
+    };
+  }, [socket, socketReady, boardId, setColumns]);
 
   const handleToggleExpand = () => {
     const newExpanded = !isExpanded;
@@ -220,6 +260,7 @@ function Column({
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
+      // Update local state for the current client
       setColumns((prevColumns) =>
         prevColumns.map((col) =>
           col._id === column._id

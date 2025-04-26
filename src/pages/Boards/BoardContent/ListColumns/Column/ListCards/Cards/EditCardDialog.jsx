@@ -8,20 +8,40 @@ import {
   Button,
   InputAdornment,
   Box,
+  Typography,
 } from "@mui/material";
 import axios from "axios";
 import { toast } from "react-toastify";
 import { SocketContext } from "../../../../../../../context/SocketContext";
+import { useTheme } from "@mui/material/styles";
 
 function EditCardDialog({ open, onClose, card, setCards, setColumns }) {
-  const { socket } = useContext(SocketContext);
-  const [title, setTitle] = useState(card.title);
+  const { socket, socketReady } = useContext(SocketContext);
+  const theme = useTheme();
+  const isDarkMode = theme.palette.mode === "dark";
+  const [title, setTitle] = useState(card.title || "");
   const [description, setDescription] = useState(card.description || "");
   const [dueDate, setDueDate] = useState(
     card.dueDate ? new Date(card.dueDate).toISOString().slice(0, 16) : ""
   );
   const [cover, setCover] = useState(card.cover || "");
   const [loading, setLoading] = useState(false);
+  const [coverError, setCoverError] = useState(null);
+
+  // Kiểm tra định dạng HEX
+  const isValidHexColor = (value) => {
+    return !value || /^#[0-9A-Fa-f]{6}$/.test(value);
+  };
+
+  const handleCoverChange = (e) => {
+    const value = e.target.value;
+    setCover(value);
+    if (!isValidHexColor(value)) {
+      setCoverError("Màu bìa phải là mã HEX hợp lệ (ví dụ: #FF0000) hoặc rỗng");
+    } else {
+      setCoverError(null);
+    }
+  };
 
   const handleUpdateCard = async () => {
     if (!title.trim()) {
@@ -29,16 +49,25 @@ function EditCardDialog({ open, onClose, card, setCards, setColumns }) {
       return;
     }
 
+    if (!isValidHexColor(cover)) {
+      toast.error("Màu bìa không hợp lệ!");
+      return;
+    }
+
     try {
       setLoading(true);
       const token = localStorage.getItem("token");
+      if (!token) {
+        throw new Error("Không tìm thấy token! Vui lòng đăng nhập lại.");
+      }
+
       const response = await axios.put(
         `http://localhost:5000/api/cards/${card._id}`,
         {
           title,
-          description,
+          description: description.trim() || null,
           dueDate: dueDate ? new Date(dueDate).toISOString() : null,
-          cover,
+          cover: cover || null,
         },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -58,8 +87,14 @@ function EditCardDialog({ open, onClose, card, setCards, setColumns }) {
         }))
       );
 
-      if (socket) {
+      if (socket && socketReady) {
         socket.emit("card-updated", { cardId: card._id, card: response.data });
+        console.log("Emitted card-updated:", {
+          cardId: card._id,
+          card: response.data,
+        });
+      } else {
+        console.warn("Socket chưa sẵn sàng, bỏ qua emit");
       }
 
       toast.success("Cập nhật thẻ thành công!");
@@ -75,8 +110,34 @@ function EditCardDialog({ open, onClose, card, setCards, setColumns }) {
   };
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>Chỉnh sửa thẻ</DialogTitle>
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth="sm"
+      fullWidth
+      sx={{
+        "& .MuiDialog-paper": {
+          borderRadius: "12px",
+          bgcolor: isDarkMode ? "#2a2a3d" : theme.palette.background.paper,
+          color: isDarkMode
+            ? theme.palette.grey[200]
+            : theme.palette.text.primary,
+          boxShadow: isDarkMode
+            ? "0 4px 16px rgba(0,0,0,0.5)"
+            : theme.shadows[5],
+        },
+      }}
+    >
+      <DialogTitle
+        sx={{
+          color: isDarkMode
+            ? theme.palette.grey[100]
+            : theme.palette.text.primary,
+          fontWeight: 600,
+        }}
+      >
+        Chỉnh sửa thẻ
+      </DialogTitle>
       <DialogContent>
         <TextField
           autoFocus
@@ -87,6 +148,40 @@ function EditCardDialog({ open, onClose, card, setCards, setColumns }) {
           onChange={(e) => setTitle(e.target.value)}
           disabled={loading}
           variant="outlined"
+          sx={{
+            "& .MuiOutlinedInput-root": {
+              bgcolor: isDarkMode
+                ? "rgba(255, 255, 255, 0.05)"
+                : theme.palette.background.default,
+              borderRadius: 2,
+              "& fieldset": {
+                borderColor: isDarkMode
+                  ? theme.palette.grey[600]
+                  : theme.palette.divider,
+              },
+              "&:hover fieldset": {
+                borderColor: isDarkMode
+                  ? theme.palette.grey[500]
+                  : theme.palette.text.secondary,
+              },
+              "&.Mui-focused fieldset": {
+                borderColor: theme.palette.primary.main,
+              },
+            },
+            "& .MuiInputLabel-root": {
+              color: isDarkMode
+                ? theme.palette.grey[400]
+                : theme.palette.text.secondary,
+              "&.Mui-focused": {
+                color: theme.palette.primary.main,
+              },
+            },
+            "& .MuiInputBase-input": {
+              color: isDarkMode
+                ? theme.palette.grey[200]
+                : theme.palette.text.primary,
+            },
+          }}
         />
         <TextField
           margin="dense"
@@ -98,6 +193,40 @@ function EditCardDialog({ open, onClose, card, setCards, setColumns }) {
           onChange={(e) => setDescription(e.target.value)}
           disabled={loading}
           variant="outlined"
+          sx={{
+            "& .MuiOutlinedInput-root": {
+              bgcolor: isDarkMode
+                ? "rgba(255, 255, 255, 0.05)"
+                : theme.palette.background.default,
+              borderRadius: 2,
+              "& fieldset": {
+                borderColor: isDarkMode
+                  ? theme.palette.grey[600]
+                  : theme.palette.divider,
+              },
+              "&:hover fieldset": {
+                borderColor: isDarkMode
+                  ? theme.palette.grey[500]
+                  : theme.palette.text.secondary,
+              },
+              "&.Mui-focused fieldset": {
+                borderColor: theme.palette.primary.main,
+              },
+            },
+            "& .MuiInputLabel-root": {
+              color: isDarkMode
+                ? theme.palette.grey[400]
+                : theme.palette.text.secondary,
+              "&.Mui-focused": {
+                color: theme.palette.primary.main,
+              },
+            },
+            "& .MuiInputBase-input": {
+              color: isDarkMode
+                ? theme.palette.grey[200]
+                : theme.palette.text.primary,
+            },
+          }}
         />
         <TextField
           margin="dense"
@@ -109,13 +238,49 @@ function EditCardDialog({ open, onClose, card, setCards, setColumns }) {
           InputLabelProps={{ shrink: true }}
           disabled={loading}
           variant="outlined"
+          sx={{
+            "& .MuiOutlinedInput-root": {
+              bgcolor: isDarkMode
+                ? "rgba(255, 255, 255, 0.05)"
+                : theme.palette.background.default,
+              borderRadius: 2,
+              "& fieldset": {
+                borderColor: isDarkMode
+                  ? theme.palette.grey[600]
+                  : theme.palette.divider,
+              },
+              "&:hover fieldset": {
+                borderColor: isDarkMode
+                  ? theme.palette.grey[500]
+                  : theme.palette.text.secondary,
+              },
+              "&.Mui-focused fieldset": {
+                borderColor: theme.palette.primary.main,
+              },
+            },
+            "& .MuiInputLabel-root": {
+              color: isDarkMode
+                ? theme.palette.grey[400]
+                : theme.palette.text.secondary,
+              "&.Mui-focused": {
+                color: theme.palette.primary.main,
+              },
+            },
+            "& .MuiInputBase-input": {
+              color: isDarkMode
+                ? theme.palette.grey[200]
+                : theme.palette.text.primary,
+            },
+          }}
         />
         <TextField
           margin="dense"
           label="Màu bìa (HEX)"
           fullWidth
           value={cover}
-          onChange={(e) => setCover(e.target.value)}
+          onChange={handleCoverChange}
+          error={!!coverError}
+          helperText={coverError}
           InputProps={{
             startAdornment: (
               <InputAdornment position="start">
@@ -123,8 +288,10 @@ function EditCardDialog({ open, onClose, card, setCards, setColumns }) {
                   sx={{
                     width: 20,
                     height: 20,
-                    bgcolor: cover,
-                    border: "1px solid #ccc",
+                    bgcolor: isValidHexColor(cover) ? cover : "#ccc",
+                    border: `1px solid ${
+                      isDarkMode ? theme.palette.grey[600] : "#ccc"
+                    }`,
                     borderRadius: 1,
                   }}
                 />
@@ -133,16 +300,75 @@ function EditCardDialog({ open, onClose, card, setCards, setColumns }) {
           }}
           disabled={loading}
           variant="outlined"
+          sx={{
+            "& .MuiOutlinedInput-root": {
+              bgcolor: isDarkMode
+                ? "rgba(255, 255, 255, 0.05)"
+                : theme.palette.background.default,
+              borderRadius: 2,
+              "& fieldset": {
+                borderColor: isDarkMode
+                  ? theme.palette.grey[600]
+                  : theme.palette.divider,
+              },
+              "&:hover fieldset": {
+                borderColor: isDarkMode
+                  ? theme.palette.grey[500]
+                  : theme.palette.text.secondary,
+              },
+              "&.Mui-focused fieldset": {
+                borderColor: theme.palette.primary.main,
+              },
+            },
+            "& .MuiInputLabel-root": {
+              color: isDarkMode
+                ? theme.palette.grey[400]
+                : theme.palette.text.secondary,
+              "&.Mui-focused": {
+                color: theme.palette.primary.main,
+              },
+            },
+            "& .MuiInputBase-input": {
+              color: isDarkMode
+                ? theme.palette.grey[200]
+                : theme.palette.text.primary,
+            },
+            "& .MuiFormHelperText-root": {
+              color: theme.palette.error.main,
+            },
+          }}
         />
       </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose} disabled={loading}>
+      <DialogActions sx={{ p: 2 }}>
+        <Button
+          onClick={onClose}
+          disabled={loading}
+          sx={{
+            color: isDarkMode
+              ? theme.palette.grey[400]
+              : theme.palette.text.secondary,
+            "&:hover": {
+              bgcolor: isDarkMode
+                ? theme.palette.grey[700]
+                : theme.palette.grey[100],
+            },
+          }}
+        >
           Hủy
         </Button>
         <Button
           onClick={handleUpdateCard}
           variant="contained"
-          disabled={loading || !title.trim()}
+          disabled={loading || !title.trim() || !!coverError}
+          sx={{
+            bgcolor: theme.palette.primary.main,
+            "&:hover": {
+              bgcolor: theme.palette.primary.dark,
+            },
+            "&:disabled": {
+              bgcolor: theme.palette.grey[400],
+            },
+          }}
         >
           {loading ? "Đang cập nhật..." : "Cập nhật"}
         </Button>

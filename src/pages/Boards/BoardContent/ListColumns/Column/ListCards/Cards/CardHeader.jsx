@@ -1,18 +1,93 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useContext } from "react";
 import { Box, Radio, Typography, IconButton } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import DeleteIcon from "@mui/icons-material/Delete";
 import axios from "axios";
+import { toast } from "react-toastify";
 import EditCardDialog from "./EditCardDialog";
+import { SocketContext } from "../../../../../../../context/SocketContext";
 
 function CardHeader({ card, setCards, setColumns, setExpanded }) {
+  const { socket, socketReady } = useContext(SocketContext);
   const [isCompleted, setIsCompleted] = useState(card.completed || false);
   const [openEditDialog, setOpenEditDialog] = useState(false);
 
   useEffect(() => {
     setIsCompleted(card.completed || false);
   }, [card.completed]);
+
+  useEffect(() => {
+    if (!socket || !socketReady) {
+      console.warn("CardHeader: Socket not available or not ready");
+      return;
+    }
+
+    // Xử lý khi trạng thái hoàn thành thay đổi
+    const handleCardCompletionToggled = ({ cardId, completed }) => {
+      if (cardId === card._id) {
+        console.log("CardHeader: Received card-completion-toggled:", {
+          cardId,
+          completed,
+        });
+        setIsCompleted(completed);
+        setCards((prevCards) =>
+          prevCards.map((c) => (c._id === cardId ? { ...c, completed } : c))
+        );
+        setColumns((prevColumns) =>
+          prevColumns.map((col) =>
+            col._id === card.list
+              ? {
+                  ...col,
+                  cards: col.cards.map((c) =>
+                    c._id === cardId ? { ...c, completed } : c
+                  ),
+                }
+              : col
+          )
+        );
+        toast.info(
+          `Thẻ đã được ${completed ? "đánh dấu hoàn thành" : "bỏ hoàn thành"}.`
+        );
+      }
+    };
+
+    // Xử lý khi thẻ được cập nhật (ví dụ: tiêu đề)
+    const handleCardUpdated = ({ cardId, card: updatedCard }) => {
+      if (cardId === card._id) {
+        console.log("CardHeader: Received card-updated:", {
+          cardId,
+          updatedCard,
+        });
+        setCards((prevCards) =>
+          prevCards.map((c) =>
+            c._id === cardId ? { ...c, ...updatedCard } : c
+          )
+        );
+        setColumns((prevColumns) =>
+          prevColumns.map((col) =>
+            col._id === card.list
+              ? {
+                  ...col,
+                  cards: col.cards.map((c) =>
+                    c._id === cardId ? { ...c, ...updatedCard } : c
+                  ),
+                }
+              : col
+          )
+        );
+        toast.info("Tiêu đề thẻ đã được cập nhật.");
+      }
+    };
+
+    socket.on("card-completion-toggled", handleCardCompletionToggled);
+    socket.on("card-updated", handleCardUpdated);
+
+    return () => {
+      socket.off("card-completion-toggled", handleCardCompletionToggled);
+      socket.off("card-updated", handleCardUpdated);
+    };
+  }, [socket, socketReady, card._id, card.list, setCards, setColumns]);
 
   const handleToggleComplete = async (e) => {
     e.stopPropagation();
@@ -53,10 +128,17 @@ function CardHeader({ card, setCards, setColumns, setExpanded }) {
             : col
         )
       );
+
+      if (socket && socketReady) {
+        socket.emit("card-completion-toggled", {
+          cardId: card._id,
+          completed: response.data.card.completed,
+        });
+      }
     } catch (err) {
       console.error("Error updating card completion:", err);
       setIsCompleted(previousState);
-      alert(
+      toast.error(
         `Có lỗi khi cập nhật trạng thái hoàn thành: ${
           err.response?.data?.message || err.message
         }`

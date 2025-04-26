@@ -16,7 +16,7 @@ import {
   Box,
 } from "@mui/material";
 import axios from "axios";
-import { toast } from "react-toastify";
+import { toast } from "react-toastify"; // Thêm import
 import { SocketContext } from "../../../../../../../context/SocketContext";
 import { useTheme } from "@mui/material/styles";
 
@@ -28,7 +28,7 @@ function AddMemberDialog({
   setColumns,
   boardMembers,
 }) {
-  const { socket, socketReady } = useContext(SocketContext); // Sử dụng socketReady
+  const { socket, socketReady } = useContext(SocketContext);
   const theme = useTheme();
   const isDarkMode = theme.palette.mode === "dark";
   const [searchQuery, setSearchQuery] = useState("");
@@ -37,8 +37,8 @@ function AddMemberDialog({
 
   // Kiểm tra socket sẵn sàng
   useEffect(() => {
-    if (!socket) {
-      console.warn("Socket không khả dụng trong AddMemberDialog");
+    if (!socket || !socketReady) {
+      console.warn("AddMemberDialog: Socket không khả dụng hoặc chưa sẵn sàng");
       return;
     }
 
@@ -55,7 +55,7 @@ function AddMemberDialog({
       socket.off("connect");
       socket.off("connect_error");
     };
-  }, [socket]);
+  }, [socket, socketReady]);
 
   // Hàm tìm kiếm người dùng
   const handleSearchUsers = useCallback(async () => {
@@ -154,6 +154,10 @@ function AddMemberDialog({
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
+      const newMember = response.data.members.find(
+        (m) => m._id.toString() === memberId.toString()
+      );
+
       setCards((prevCards) =>
         prevCards.map((c) =>
           c._id === card._id ? { ...c, members: response.data.members } : c
@@ -171,16 +175,12 @@ function AddMemberDialog({
 
       if (socket && socketReady) {
         socket.emit("member-added", {
-          boardId: card.board,
-          listId: card.list,
           cardId: card._id,
-          members: response.data.members,
+          member: newMember, // Đồng bộ với handleMemberAdded trong CardDetails.jsx
         });
         console.log("Emitted member-added:", {
-          boardId: card.board,
-          listId: card.list,
           cardId: card._id,
-          members: response.data.members,
+          member: newMember,
         });
       } else {
         console.warn("Socket chưa sẵn sàng, bỏ qua emit");
@@ -239,6 +239,19 @@ function AddMemberDialog({
         Thêm thành viên vào thẻ
       </DialogTitle>
       <DialogContent>
+        {(!boardMembers || boardMembers.length === 0) && (
+          <Typography
+            sx={{
+              p: 2,
+              textAlign: "center",
+              color: isDarkMode
+                ? theme.palette.grey[400]
+                : theme.palette.text.secondary,
+            }}
+          >
+            Không có thành viên trong bảng để thêm.
+          </Typography>
+        )}
         <TextField
           autoFocus
           margin="dense"
@@ -246,7 +259,7 @@ function AddMemberDialog({
           fullWidth
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          disabled={loading}
+          disabled={loading || !boardMembers || boardMembers.length === 0}
           sx={{
             mt: 1,
             "& .MuiInputBase-root": {
