@@ -8,8 +8,10 @@ import {
   Button,
   Divider,
   CircularProgress,
+  IconButton,
 } from "@mui/material";
 import CommentIcon from "@mui/icons-material/Comment";
+import DeleteIcon from "@mui/icons-material/Delete";
 import { useTheme } from "@mui/material/styles";
 
 const CommentsSection = ({
@@ -18,10 +20,16 @@ const CommentsSection = ({
   setComment,
   loading,
   handleAddComment,
+  handleHideComment,
   isMemberInBoard,
+  currentUserId,
+  isBoardOwner,
 }) => {
   const theme = useTheme();
   const isDarkMode = theme.palette.mode === "dark";
+
+  // Filter out deleted comments
+  const visibleComments = comments.filter((c) => !c.isDeleted);
 
   return (
     <Box sx={{ mb: 3 }}>
@@ -36,10 +44,30 @@ const CommentsSection = ({
       >
         Bình luận
       </Typography>
-      {comments?.length > 0 ? (
+      {visibleComments?.length > 0 ? (
         <List dense>
-          {comments.map((comment, index) => (
-            <ListItem key={index} sx={{ py: 0.5 }}>
+          {visibleComments.map((comment, index) => (
+            <ListItem
+              key={comment._id || index}
+              sx={{ py: 0.5 }}
+              secondaryAction={
+                (currentUserId === comment.user?._id || isBoardOwner) && (
+                  <IconButton
+                    edge="end"
+                    aria-label="hide"
+                    onClick={() => handleHideComment(comment._id)}
+                    disabled={loading.comment}
+                    sx={{
+                      color: isDarkMode
+                        ? theme.palette.grey[400]
+                        : theme.palette.text.secondary,
+                    }}
+                  >
+                    <DeleteIcon fontSize="small" />
+                  </IconButton>
+                )
+              }
+            >
               <ListItemText
                 primary={comment.text}
                 primaryTypographyProps={{

@@ -23,7 +23,12 @@ function MembersSection({
   const theme = useTheme();
   const isDarkMode = theme.palette.mode === "dark";
 
-  console.log("MembersSection props:", { members, boardMembers, isBoardOwner });
+  console.log("MembersSection props:", {
+    members,
+    boardMembers,
+    isBoardOwner,
+    isMemberInBoard,
+  });
 
   return (
     <Box sx={{ mb: 2 }}>
@@ -64,7 +69,11 @@ function MembersSection({
       {members?.length > 0 ? (
         <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
           {members.map((member) => {
-            const isActive = isMemberInBoard(member._id);
+            // Kiểm tra xem isMemberInBoard có phải là hàm không
+            const isActive =
+              typeof isMemberInBoard === "function"
+                ? isMemberInBoard(member._id)
+                : true;
             console.log(
               `Member ${member._id} (${member.fullName}): isMemberInBoard = ${isActive}`
             );

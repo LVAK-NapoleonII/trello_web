@@ -14,10 +14,9 @@ import CommentsSection from "./CommentsSection";
 
 // Hàm chuẩn hóa checklists
 const normalizeChecklists = (checklists) => {
-  console.log("normalizeChecklists input:", checklists); // Log để debug
+  console.log("normalizeChecklists input:", checklists);
   let checklistsArray = checklists;
 
-  // Xử lý trường hợp checklists là đối tượng chứa mảng
   if (checklists && !Array.isArray(checklists) && checklists.checklists) {
     console.warn(
       "Checklists là đối tượng, lấy thuộc tính checklists:",
@@ -51,15 +50,24 @@ const normalizeChecklists = (checklists) => {
 // Hàm chuẩn hóa user
 const normalizeUser = (user) => {
   console.log("Normalizing user:", user);
+  if (!user || (!user._id && !user.id)) {
+    console.error("Invalid user data, missing _id:", user);
+    return {
+      _id: null,
+      fullName: "Unknown User",
+      avatar: `https://api.dicebear.com/9.x/initials/svg?seed=Unknown`,
+      email: "",
+    };
+  }
   const normalized = {
-    _id: user?._id || "unknown",
-    fullName: user?.fullName || user?.email || "Unknown User",
+    _id: user._id || user.id,
+    fullName: user.fullName || user.email || "Unknown User",
     avatar:
-      user?.avatar ||
+      user.avatar ||
       `https://api.dicebear.com/9.x/initials/svg?seed=${
-        user?.fullName || user?.email || "Unknown"
+        user.fullName || user.email || "Unknown"
       }`,
-    email: user?.email || "",
+    email: user.email || "",
   };
   console.log("Normalized user:", normalized);
   return normalized;
@@ -112,10 +120,14 @@ function CardDetails({
 
   // Xử lý boardMembers
   useEffect(() => {
+    console.log("Received boardMembers:", boardMembers);
     if (boardMembers && Array.isArray(boardMembers)) {
       const uniqueBoardMembers = boardMembers.reduce((acc, member) => {
         const memberId = member.user?._id || member._id;
-        if (!memberId) return acc;
+        if (!memberId) {
+          console.warn("Invalid member, missing _id:", member);
+          return acc;
+        }
         const existingMember = acc.find(
           (m) => (m.user?._id || m._id)?.toString() === memberId.toString()
         );
@@ -151,16 +163,24 @@ function CardDetails({
       try {
         setLoading((prev) => ({ ...prev, user: true }));
         const token = localStorage.getItem("token");
-        if (!token) throw new Error("Không tìm thấy token!");
+        if (!token) {
+          throw new Error("Không tìm thấy token!");
+        }
         const response = await axios.get(
           "http://localhost:5000/api/auth/profile",
           { headers: { Authorization: `Bearer ${token}` } }
         );
         const userId = response.data.user._id || response.data.user.id;
+        if (!userId) {
+          throw new Error("Không tìm thấy user ID trong dữ liệu!");
+        }
         setCurrentUserId(userId);
+        console.log("Fetched currentUserId:", userId);
       } catch (err) {
         console.error("Lỗi lấy thông tin người dùng:", err);
-        toast.error("Không thể lấy thông tin người dùng hiện tại.");
+        toast.error("Không thể lấy thông tin người dùng hiện tại!");
+        // Có thể chuyển hướng đến trang đăng nhập
+        // window.location.href = "/login";
       } finally {
         setLoading((prev) => ({ ...prev, user: false }));
       }
@@ -171,7 +191,13 @@ function CardDetails({
   // Kiểm tra quyền chủ phòng
   useEffect(() => {
     const checkBoardOwner = async () => {
-      if (!card.board || !currentUserId) return;
+      if (!card.board || !currentUserId) {
+        console.warn("Missing card.board or currentUserId", {
+          board: card.board,
+          currentUserId,
+        });
+        return;
+      }
       try {
         const token = localStorage.getItem("token");
         const response = await axios.get(
@@ -183,6 +209,9 @@ function CardDetails({
           ? board.owner._id.toString()
           : board.owner.toString();
         setIsBoardOwner(currentUserId === ownerId);
+        console.log("Checked board owner:", {
+          isBoardOwner: currentUserId === ownerId,
+        });
       } catch (err) {
         console.error("Lỗi kiểm tra chủ phòng:", err);
         toast.error("Không thể xác minh quyền chủ phòng!");
@@ -268,67 +297,111 @@ function CardDetails({
   // Kiểm tra thành viên trong bảng
   const isMemberInBoard = useCallback(
     (memberId) => {
-      if (!memberId || !localBoardMembers?.length) {
-        console.log("isMemberInBoard: Invalid input", {
-          memberId,
-          localBoardMembers,
-        });
+      if (!memberId || memberId === null) {
+        console.warn("isMemberInBoard: Invalid memberId", { memberId });
         return false;
       }
-
+      if (!localBoardMembers?.length) {
+        console.warn("isMemberInBoard: localBoardMembers is empty");
+        return false;
+      }
       const boardMember = localBoardMembers.find((boardMember) => {
         const memberIdFromBoard = boardMember.user?._id || boardMember._id;
         return memberIdFromBoard?.toString() === memberId.toString();
       });
-
       if (!boardMember) {
         console.log(
           `isMemberInBoard: No matching member found for ${memberId}`
         );
         return false;
       }
-
       const isActive =
         boardMember.isActive !== undefined ? boardMember.isActive : true;
       console.log(`isMemberInBoard: Member ${memberId}, isActive: ${isActive}`);
-
       return isActive;
     },
     [localBoardMembers]
   );
 
-  // Làm mới dữ liệu thẻ
-  const refreshCardData = async () => {
+  // Thu hồi bình luận
+  const handleHideComment = async (commentId) => {
+    if (!window.confirm("Bạn có chắc muốn thu hồi bình luận này?")) return;
+
+    setLoading((prev) => ({ ...prev, comment: true }));
+
     try {
-      console.log("Refreshing card data with card._id:", card._id);
       const token = localStorage.getItem("token");
-      const response = await axios.get(
-        `http://localhost:5000/api/cards/${card._id}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
+      await axios.delete(
+        `http://localhost:5000/api/cards/${card._id}/comments/${commentId}`,
+        { headers: { Authorization: `Bearer ${token}` } }
       );
-      console.log("Raw card data from API:", response.data);
-      const newData = {
-        ...response.data,
-        members: response.data.members.map(normalizeUser),
-        comments: response.data.comments.map((c) => ({
-          ...c,
-          user: normalizeUser(c.user),
-        })),
-        notes: response.data.notes.map((n) => ({
-          ...n,
-          createdBy: normalizeUser(n.createdBy),
-        })),
-        checklists: normalizeChecklists(response.data.checklists),
-      };
-      updateCardState(card._id, newData);
-    } catch (err) {
-      console.error("Error refreshing card data:", err);
-      if (err.response?.status === 404) {
-        console.log("Card not found, closing modal");
-        setExpanded(false); // Đóng modal nếu thẻ không tồn tại
+
+      updateCardState(card._id, {
+        comments: card.comments.map((c) =>
+          c._id === commentId ? { ...c, isDeleted: true } : c
+        ),
+      });
+
+      if (socket && socketReady) {
+        socket.emit("comment-hidden", {
+          cardId: card._id,
+          commentId,
+          boardId: card.board,
+          actorId: currentUserId,
+        });
       }
+
+      toast.success("Thu hồi bình luận thành công!");
+    } catch (err) {
+      console.error("Lỗi thu hồi bình luận:", err);
+      toast.error(
+        err.response?.status === 403
+          ? "Bạn không có quyền thu hồi bình luận!"
+          : err.response?.data?.message || "Không thể thu hồi bình luận!"
+      );
+    } finally {
+      setLoading((prev) => ({ ...prev, comment: false }));
+    }
+  };
+
+  // Thu hồi ghi chú
+  const handleHideNote = async (noteId) => {
+    if (!window.confirm("Bạn có chắc muốn thu hồi ghi chú này?")) return;
+
+    setLoading((prev) => ({ ...prev, note: true }));
+
+    try {
+      const token = localStorage.getItem("token");
+      await axios.delete(
+        `http://localhost:5000/api/cards/${card._id}/notes/${noteId}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      updateCardState(card._id, {
+        notes: card.notes.map((n) =>
+          n._id === noteId ? { ...n, isDeleted: true } : n
+        ),
+      });
+
+      if (socket && socketReady) {
+        socket.emit("note-hidden", {
+          cardId: card._id,
+          noteId,
+          boardId: card.board,
+          actorId: currentUserId,
+        });
+      }
+
+      toast.success("Thu hồi ghi chú thành công!");
+    } catch (err) {
+      console.error("Lỗi thu hồi ghi chú:", err);
+      toast.error(
+        err.response?.status === 403
+          ? "Bạn không có quyền thu hồi ghi chú!"
+          : err.response?.data?.message || "Không thể thu hồi ghi chú!"
+      );
+    } finally {
+      setLoading((prev) => ({ ...prev, note: false }));
     }
   };
 
@@ -435,11 +508,11 @@ function CardDetails({
                         ...movedCard,
                         checklists: normalizeChecklists(movedCard.checklists),
                         members: (movedCard.members || []).map(normalizeUser),
-                        comments: (movedCard.comments || []).map((c) => ({
+                        comments: (newCard.comments || []).map((c) => ({
                           ...c,
                           user: normalizeUser(c.user),
                         })),
-                        notes: (movedCard.notes || []).map((n) => ({
+                        notes: (newCard.notes || []).map((n) => ({
                           ...n,
                           createdBy: normalizeUser(n.createdBy),
                         })),
@@ -649,6 +722,25 @@ function CardDetails({
         }
       },
 
+      "comment-hidden": ({ cardId, commentId, actorId }) => {
+        if (cardId === card._id && actorId !== currentUserId) {
+          console.log("Received comment-hidden:", {
+            cardId,
+            commentId,
+            actorId,
+          });
+          updateCardState(cardId, {
+            comments: card.comments.map((c) =>
+              c._id === commentId ? { ...c, isDeleted: true } : c
+            ),
+          });
+          setPendingNotifications((prev) => [
+            ...prev,
+            "Một bình luận đã được thu hồi.",
+          ]);
+        }
+      },
+
       "note-added": ({ cardId, note, actorId }) => {
         if (cardId === card._id && actorId !== currentUserId) {
           console.log("Received note-added:", { cardId, note, actorId });
@@ -665,6 +757,21 @@ function CardDetails({
           setPendingNotifications((prev) => [
             ...prev,
             "Ghi chú mới đã được thêm.",
+          ]);
+        }
+      },
+
+      "note-hidden": ({ cardId, noteId, actorId }) => {
+        if (cardId === card._id && actorId !== currentUserId) {
+          console.log("Received note-hidden:", { cardId, noteId, actorId });
+          updateCardState(cardId, {
+            notes: card.notes.map((n) =>
+              n._id === noteId ? { ...n, isDeleted: true } : n
+            ),
+          });
+          setPendingNotifications((prev) => [
+            ...prev,
+            "Một ghi chú đã được thu hồi.",
           ]);
         }
       },
@@ -691,76 +798,70 @@ function CardDetails({
 
       "checklist-item-added": ({
         cardId,
-        checklistIndex,
+        checklistId,
+        item,
         checklist,
         actorId,
       }) => {
         if (cardId === card._id && actorId !== currentUserId) {
           console.log("Received checklist-item-added:", {
             cardId,
-            checklistIndex,
+            checklistId,
+            item,
             checklist,
             actorId,
           });
-          const currentChecklists = normalizeChecklists(card.checklists || []);
-          if (currentChecklists[checklistIndex] !== undefined) {
-            currentChecklists[checklistIndex] = normalizeChecklists([
-              checklist,
-            ])[0];
-            updateCardState(cardId, { checklists: currentChecklists });
-            setPendingNotifications((prev) => [
-              ...prev,
-              "Item checklist mới đã được thêm.",
-            ]);
-          } else {
-            console.warn(
-              `Checklist index ${checklistIndex} không tồn tại trong card ${cardId}`
-            );
-            refreshCardData();
-          }
+          updateCardState(cardId, {
+            checklists: normalizeChecklists(card.checklists || []).map((cl) =>
+              cl._id === checklistId ? normalizeChecklists([checklist])[0] : cl
+            ),
+          });
+          setPendingNotifications((prev) => [
+            ...prev,
+            "Item checklist mới đã được thêm.",
+          ]);
         }
       },
 
       "checklist-item-toggled": ({
         cardId,
-        checklistIndex,
-        itemIndex,
+        checklistId,
+        itemId,
         completed,
         actorId,
       }) => {
         if (cardId === card._id && actorId !== currentUserId) {
           console.log("Received checklist-item-toggled:", {
             cardId,
-            checklistIndex,
-            itemIndex,
+            checklistId,
+            itemId,
             completed,
             actorId,
           });
-          const currentChecklists = normalizeChecklists(card.checklists || []);
-          if (
-            currentChecklists[checklistIndex]?.items[itemIndex] !== undefined
-          ) {
-            currentChecklists[checklistIndex].items[itemIndex].completed =
-              completed;
-            updateCardState(cardId, { checklists: currentChecklists });
-            setPendingNotifications((prev) => [
-              ...prev,
-              `Item checklist đã được ${
-                completed ? "đánh dấu hoàn thành" : "bỏ hoàn thành"
-              }.`,
-            ]);
-          } else {
-            console.warn(
-              `Checklist index ${checklistIndex} hoặc item index ${itemIndex} không tồn tại trong card ${cardId}`
-            );
-            refreshCardData();
-          }
+          updateCardState(cardId, {
+            checklists: normalizeChecklists(card.checklists || []).map((cl) =>
+              cl._id === checklistId
+                ? {
+                    ...cl,
+                    items: cl.items.map((item) =>
+                      item._id === itemId ? { ...item, completed } : item
+                    ),
+                  }
+                : cl
+            ),
+          });
+          setPendingNotifications((prev) => [
+            ...prev,
+            `Item checklist đã được ${
+              completed ? "đánh dấu hoàn thành" : "bỏ hoàn thành"
+            }.`,
+          ]);
         }
       },
 
       "checklist-updated": ({
         cardId,
-        checklistIndex,
+        checklistId,
         title,
         checklist,
         actorId,
@@ -768,58 +869,46 @@ function CardDetails({
         if (cardId === card._id && actorId !== currentUserId) {
           console.log("Received checklist-updated:", {
             cardId,
-            checklistIndex,
+            checklistId,
             title,
             checklist,
             actorId,
           });
-          const currentChecklists = normalizeChecklists(card.checklists || []);
-          if (currentChecklists[checklistIndex] !== undefined) {
-            currentChecklists[checklistIndex] = normalizeChecklists([
-              checklist,
-            ])[0];
-            updateCardState(cardId, { checklists: currentChecklists });
-            setPendingNotifications((prev) => [
-              ...prev,
-              "Checklist đã được cập nhật.",
-            ]);
-          } else {
-            console.warn(
-              `Checklist index ${checklistIndex} không tồn tại trong card ${cardId}`
-            );
-            refreshCardData();
-          }
+          updateCardState(cardId, {
+            checklists: normalizeChecklists(card.checklists || []).map((cl) =>
+              cl._id === checklistId ? normalizeChecklists([checklist])[0] : cl
+            ),
+          });
+          setPendingNotifications((prev) => [
+            ...prev,
+            "Checklist đã được cập nhật.",
+          ]);
         }
       },
 
-      "checklist-deleted": ({ cardId, checklistIndex, actorId }) => {
+      "checklist-deleted": ({ cardId, checklistId, actorId }) => {
         if (cardId === card._id && actorId !== currentUserId) {
           console.log("Received checklist-deleted:", {
             cardId,
-            checklistIndex,
+            checklistId,
             actorId,
           });
-          const currentChecklists = normalizeChecklists(card.checklists || []);
-          if (currentChecklists[checklistIndex] !== undefined) {
-            currentChecklists.splice(checklistIndex, 1);
-            updateCardState(cardId, { checklists: currentChecklists });
-            setPendingNotifications((prev) => [
-              ...prev,
-              "Checklist đã được xóa.",
-            ]);
-          } else {
-            console.warn(
-              `Checklist index ${checklistIndex} không tồn tại trong card ${cardId}`
-            );
-            refreshCardData();
-          }
+          updateCardState(cardId, {
+            checklists: normalizeChecklists(card.checklists || []).filter(
+              (cl) => cl._id !== checklistId
+            ),
+          });
+          setPendingNotifications((prev) => [
+            ...prev,
+            "Checklist đã được xóa.",
+          ]);
         }
       },
 
       "checklist-item-updated": ({
         cardId,
-        checklistIndex,
-        itemIndex,
+        checklistId,
+        itemId,
         item,
         checklist,
         actorId,
@@ -827,62 +916,46 @@ function CardDetails({
         if (cardId === card._id && actorId !== currentUserId) {
           console.log("Received checklist-item-updated:", {
             cardId,
-            checklistIndex,
-            itemIndex,
+            checklistId,
+            itemId,
             item,
             checklist,
             actorId,
           });
-          const currentChecklists = normalizeChecklists(card.checklists || []);
-          if (
-            currentChecklists[checklistIndex]?.items[itemIndex] !== undefined
-          ) {
-            currentChecklists[checklistIndex] = normalizeChecklists([
-              checklist,
-            ])[0];
-            updateCardState(cardId, { checklists: currentChecklists });
-            setPendingNotifications((prev) => [
-              ...prev,
-              "Item checklist đã được cập nhật.",
-            ]);
-          } else {
-            console.warn(
-              `Checklist index ${checklistIndex} hoặc item index ${itemIndex} không tồn tại trong card ${cardId}`
-            );
-            refreshCardData();
-          }
+          updateCardState(cardId, {
+            checklists: normalizeChecklists(card.checklists || []).map((cl) =>
+              cl._id === checklistId ? normalizeChecklists([checklist])[0] : cl
+            ),
+          });
+          setPendingNotifications((prev) => [
+            ...prev,
+            "Item checklist đã được cập nhật.",
+          ]);
         }
       },
 
-      "checklist-item-deleted": ({
-        cardId,
-        checklistIndex,
-        itemIndex,
-        actorId,
-      }) => {
+      "checklist-item-deleted": ({ cardId, checklistId, itemId, actorId }) => {
         if (cardId === card._id && actorId !== currentUserId) {
           console.log("Received checklist-item-deleted:", {
             cardId,
-            checklistIndex,
-            itemIndex,
+            checklistId,
+            itemId,
             actorId,
           });
-          const currentChecklists = normalizeChecklists(card.checklists || []);
-          if (
-            currentChecklists[checklistIndex]?.items[itemIndex] !== undefined
-          ) {
-            currentChecklists[checklistIndex].items.splice(itemIndex, 1);
-            updateCardState(cardId, { checklists: currentChecklists });
-            setPendingNotifications((prev) => [
-              ...prev,
-              "Item checklist đã được xóa.",
-            ]);
-          } else {
-            console.warn(
-              `Checklist index ${checklistIndex} hoặc item index ${itemIndex} không tồn tại trong card ${cardId}`
-            );
-            refreshCardData();
-          }
+          updateCardState(cardId, {
+            checklists: normalizeChecklists(card.checklists || []).map((cl) =>
+              cl._id === checklistId
+                ? {
+                    ...cl,
+                    items: cl.items.filter((item) => item._id !== itemId),
+                  }
+                : cl
+            ),
+          });
+          setPendingNotifications((prev) => [
+            ...prev,
+            "Item checklist đã được xóa.",
+          ]);
         }
       },
     };
@@ -920,6 +993,14 @@ function CardDetails({
       toast.error("Bình luận không được để trống!");
       return;
     }
+    if (!currentUserId) {
+      toast.error("Không tìm thấy thông tin người dùng hiện tại!");
+      return;
+    }
+    if (!isMemberInBoard(currentUserId)) {
+      toast.error("Bạn không có quyền thêm bình luận trong bảng này!");
+      return;
+    }
 
     setLoading((prev) => ({ ...prev, comment: true }));
 
@@ -927,11 +1008,12 @@ function CardDetails({
       _id: new Date().toISOString(),
       text: comment,
       user: {
-        _id: currentUserId || "temp",
+        _id: currentUserId,
         fullName: "Bạn",
         avatar: "",
       },
       createdAt: new Date().toISOString(),
+      isDeleted: false,
     };
     updateCardState(card._id, {
       comments: [...(card.comments || []), tempComment],
@@ -955,6 +1037,7 @@ function CardDetails({
             ...latestComment,
             user: normalizeUser(latestComment.user),
           },
+          boardId: card.board,
           actorId: currentUserId,
         });
       }
@@ -965,9 +1048,9 @@ function CardDetails({
       console.error("Lỗi thêm bình luận:", err);
       updateCardState(card._id, { comments: card.comments });
       toast.error(
-        `Có lỗi khi thêm bình luận: ${
-          err.response?.data?.message || err.message
-        }`
+        err.response?.status === 403
+          ? "Bạn không có quyền thêm bình luận!"
+          : err.response?.data?.message || "Không thể thêm bình luận!"
       );
     } finally {
       setLoading((prev) => ({ ...prev, comment: false }));
@@ -980,6 +1063,14 @@ function CardDetails({
       toast.error("Ghi chú không được để trống!");
       return;
     }
+    if (!currentUserId) {
+      toast.error("Không tìm thấy thông tin người dùng hiện tại!");
+      return;
+    }
+    if (!isMemberInBoard(currentUserId)) {
+      toast.error("Bạn không có quyền thêm ghi chú trong bảng này!");
+      return;
+    }
 
     setLoading((prev) => ({ ...prev, note: true }));
 
@@ -987,11 +1078,12 @@ function CardDetails({
       _id: new Date().toISOString(),
       content: note,
       createdBy: {
-        _id: currentUserId || "temp",
+        _id: currentUserId,
         fullName: "Bạn",
         avatar: "",
       },
       createdAt: new Date().toISOString(),
+      isDeleted: false,
     };
     updateCardState(card._id, {
       notes: [...(card.notes || []), tempNote],
@@ -1015,6 +1107,7 @@ function CardDetails({
             ...latestNote,
             createdBy: normalizeUser(latestNote.createdBy),
           },
+          boardId: card.board,
           actorId: currentUserId,
         });
       }
@@ -1025,7 +1118,9 @@ function CardDetails({
       console.error("Lỗi thêm ghi chú:", err);
       updateCardState(card._id, { notes: card.notes });
       toast.error(
-        `Có lỗi khi thêm ghi chú: ${err.response?.data?.message || err.message}`
+        err.response?.status === 403
+          ? "Bạn không có quyền thêm ghi chú!"
+          : err.response?.data?.message || "Không thể thêm ghi chú!"
       );
     } finally {
       setLoading((prev) => ({ ...prev, note: false }));
@@ -1036,6 +1131,14 @@ function CardDetails({
   const handleAddChecklist = async () => {
     if (!checklistTitle.trim()) {
       toast.error("Tiêu đề checklist không được để trống!");
+      return;
+    }
+    if (!currentUserId) {
+      toast.error("Không tìm thấy thông tin người dùng hiện tại!");
+      return;
+    }
+    if (!isMemberInBoard(currentUserId)) {
+      toast.error("Bạn không có quyền thêm checklist trong bảng này!");
       return;
     }
 
@@ -1070,11 +1173,13 @@ function CardDetails({
         socket.emit("checklist-added", {
           cardId: card._id,
           checklist: newChecklist,
+          boardId: card.board,
           actorId: currentUserId,
         });
         console.log("Emitted checklist-added:", {
           cardId: card._id,
           checklist: newChecklist,
+          boardId: card.board,
           actorId: currentUserId,
         });
       }
@@ -1085,9 +1190,9 @@ function CardDetails({
       console.error("Lỗi thêm checklist:", err);
       updateCardState(card._id, { checklists: card.checklists });
       toast.error(
-        `Có lỗi khi thêm checklist: ${
-          err.response?.data?.message || err.message
-        }`
+        err.response?.status === 403
+          ? "Bạn không có quyền thêm checklist!"
+          : err.response?.data?.message || "Không thể thêm checklist!"
       );
     } finally {
       setLoading((prev) => ({ ...prev, checklist: false }));
@@ -1095,13 +1200,23 @@ function CardDetails({
   };
 
   // Thêm item checklist
-  const handleAddChecklistItem = async (checklistIndex) => {
+  const handleAddChecklistItem = async (checklistId) => {
     if (!checklistItem.trim()) {
       toast.error("Item checklist không được để trống!");
       return;
     }
+    if (!currentUserId) {
+      toast.error("Không tìm thấy thông tin người dùng hiện tại!");
+      return;
+    }
+    if (!isMemberInBoard(currentUserId)) {
+      toast.error("Bạn không có quyền thêm item checklist trong bảng này!");
+      return;
+    }
+
     const currentChecklists = normalizeChecklists(card.checklists || []);
-    if (!currentChecklists[checklistIndex]) {
+    const checklist = currentChecklists.find((cl) => cl._id === checklistId);
+    if (!checklist) {
       toast.error("Checklist không tồn tại!");
       return;
     }
@@ -1114,13 +1229,16 @@ function CardDetails({
       completed: false,
       createdAt: new Date().toISOString(),
     };
-    currentChecklists[checklistIndex].items.push(newItem);
-    updateCardState(card._id, { checklists: currentChecklists });
+    updateCardState(card._id, {
+      checklists: currentChecklists.map((cl) =>
+        cl._id === checklistId ? { ...cl, items: [...cl.items, newItem] } : cl
+      ),
+    });
 
     try {
       const token = localStorage.getItem("token");
       const response = await axios.post(
-        `http://localhost:5000/api/cards/${card._id}/checklists/${checklistIndex}/items`,
+        `http://localhost:5000/api/cards/${card._id}/checklists/${checklistId}/items`,
         { text: checklistItem },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -1130,16 +1248,25 @@ function CardDetails({
       });
 
       if (socket && socketReady) {
+        const updatedChecklist = normalizeChecklists(response.data).find(
+          (cl) => cl._id === checklistId
+        );
+        const newItem =
+          updatedChecklist.items[updatedChecklist.items.length - 1];
         socket.emit("checklist-item-added", {
           cardId: card._id,
-          checklistIndex,
-          checklist: normalizeChecklists(response.data)[checklistIndex],
+          checklistId,
+          item: newItem,
+          checklist: updatedChecklist,
+          boardId: card.board,
           actorId: currentUserId,
         });
         console.log("Emitted checklist-item-added:", {
           cardId: card._id,
-          checklistIndex,
-          checklist: normalizeChecklists(response.data)[checklistIndex],
+          checklistId,
+          item: newItem,
+          checklist: updatedChecklist,
+          boardId: card.board,
           actorId: currentUserId,
         });
       }
@@ -1150,9 +1277,9 @@ function CardDetails({
       console.error("Lỗi thêm item checklist:", err);
       updateCardState(card._id, { checklists: card.checklists });
       toast.error(
-        `Có lỗi khi thêm item checklist: ${
-          err.response?.data?.message || err.message
-        }`
+        err.response?.status === 403
+          ? "Bạn không có quyền thêm item checklist!"
+          : err.response?.data?.message || "Không thể thêm item checklist!"
       );
     } finally {
       setLoading((prev) => ({ ...prev, checklistItem: false }));
@@ -1160,24 +1287,48 @@ function CardDetails({
   };
 
   // Toggle item checklist
-  const handleToggleChecklistItem = async (checklistIndex, itemIndex) => {
+  const handleToggleChecklistItem = async (checklistId, itemId) => {
+    if (!currentUserId) {
+      toast.error("Không tìm thấy thông tin người dùng hiện tại!");
+      return;
+    }
+    if (!isMemberInBoard(currentUserId)) {
+      toast.error("Bạn không có quyền cập nhật item checklist trong bảng này!");
+      return;
+    }
+
     const currentChecklists = normalizeChecklists(card.checklists || []);
-    if (!currentChecklists[checklistIndex]?.items[itemIndex]) {
+    const checklist = currentChecklists.find((cl) => cl._id === checklistId);
+    if (!checklist) {
+      toast.error("Checklist không tồn tại!");
+      return;
+    }
+    const item = checklist.items.find((item) => item._id === itemId);
+    if (!item) {
       toast.error("Item checklist không tồn tại!");
       return;
     }
 
     setLoading((prev) => ({ ...prev, checklistToggle: true }));
 
-    const currentItem = currentChecklists[checklistIndex].items[itemIndex];
-    const newCompleted = !currentItem.completed;
-    currentChecklists[checklistIndex].items[itemIndex].completed = newCompleted;
-    updateCardState(card._id, { checklists: currentChecklists });
+    const newCompleted = !item.completed;
+    updateCardState(card._id, {
+      checklists: currentChecklists.map((cl) =>
+        cl._id === checklistId
+          ? {
+              ...cl,
+              items: cl.items.map((it) =>
+                it._id === itemId ? { ...it, completed: newCompleted } : it
+              ),
+            }
+          : cl
+      ),
+    });
 
     try {
       const token = localStorage.getItem("token");
       const response = await axios.put(
-        `http://localhost:5000/api/cards/${card._id}/checklists/${checklistIndex}/items/${itemIndex}/toggle`,
+        `http://localhost:5000/api/cards/${card._id}/checklists/${checklistId}/items/${itemId}/toggle`,
         { completed: newCompleted },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -1189,16 +1340,18 @@ function CardDetails({
       if (socket && socketReady) {
         socket.emit("checklist-item-toggled", {
           cardId: card._id,
-          checklistIndex,
-          itemIndex,
+          checklistId,
+          itemId,
           completed: newCompleted,
+          boardId: card.board,
           actorId: currentUserId,
         });
         console.log("Emitted checklist-item-toggled:", {
           cardId: card._id,
-          checklistIndex,
-          itemIndex,
+          checklistId,
+          itemId,
           completed: newCompleted,
+          boardId: card.board,
           actorId: currentUserId,
         });
       }
@@ -1208,9 +1361,9 @@ function CardDetails({
       console.error("Lỗi toggle item checklist:", err);
       updateCardState(card._id, { checklists: card.checklists });
       toast.error(
-        `Có lỗi khi toggle item checklist: ${
-          err.response?.data?.message || err.message
-        }`
+        err.response?.status === 403
+          ? "Bạn không có quyền cập nhật item checklist!"
+          : err.response?.data?.message || "Không thể toggle item checklist!"
       );
     } finally {
       setLoading((prev) => ({ ...prev, checklistToggle: false }));
@@ -1218,27 +1371,39 @@ function CardDetails({
   };
 
   // Cập nhật checklist
-  const handleUpdateChecklist = async (checklistIndex, title) => {
+  const handleUpdateChecklist = async (checklistId, title) => {
     if (!title.trim()) {
       toast.error("Tiêu đề checklist không được để trống!");
       return;
     }
+    if (!currentUserId) {
+      toast.error("Không tìm thấy thông tin người dùng hiện tại!");
+      return;
+    }
+    if (!isMemberInBoard(currentUserId)) {
+      toast.error("Bạn không có quyền cập nhật checklist trong bảng này!");
+      return;
+    }
 
     const currentChecklists = normalizeChecklists(card.checklists || []);
-    if (!currentChecklists[checklistIndex]) {
+    const checklist = currentChecklists.find((cl) => cl._id === checklistId);
+    if (!checklist) {
       toast.error("Checklist không tồn tại!");
       return;
     }
 
     setLoading((prev) => ({ ...prev, checklist: true }));
 
-    currentChecklists[checklistIndex].title = title;
-    updateCardState(card._id, { checklists: currentChecklists });
+    updateCardState(card._id, {
+      checklists: currentChecklists.map((cl) =>
+        cl._id === checklistId ? { ...cl, title } : cl
+      ),
+    });
 
     try {
       const token = localStorage.getItem("token");
       const response = await axios.put(
-        `http://localhost:5000/api/cards/${card._id}/checklists/${checklistIndex}`,
+        `http://localhost:5000/api/cards/${card._id}/checklists/${checklistId}`,
         { title },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -1248,18 +1413,23 @@ function CardDetails({
       });
 
       if (socket && socketReady) {
+        const updatedChecklist = normalizeChecklists(response.data).find(
+          (cl) => cl._id === checklistId
+        );
         socket.emit("checklist-updated", {
           cardId: card._id,
-          checklistIndex,
+          checklistId,
           title,
-          checklist: normalizeChecklists(response.data)[checklistIndex],
+          checklist: updatedChecklist,
+          boardId: card.board,
           actorId: currentUserId,
         });
         console.log("Emitted checklist-updated:", {
           cardId: card._id,
-          checklistIndex,
+          checklistId,
           title,
-          checklist: normalizeChecklists(response.data)[checklistIndex],
+          checklist: updatedChecklist,
+          boardId: card.board,
           actorId: currentUserId,
         });
       }
@@ -1269,9 +1439,9 @@ function CardDetails({
       console.error("Lỗi cập nhật checklist:", err);
       updateCardState(card._id, { checklists: card.checklists });
       toast.error(
-        `Có lỗi khi cập nhật checklist: ${
-          err.response?.data?.message || err.message
-        }`
+        err.response?.status === 403
+          ? "Bạn không có quyền cập nhật checklist!"
+          : err.response?.data?.message || "Không thể cập nhật checklist!"
       );
     } finally {
       setLoading((prev) => ({ ...prev, checklist: false }));
@@ -1279,34 +1449,47 @@ function CardDetails({
   };
 
   // Xóa checklist
-  const handleDeleteChecklist = async (checklistIndex) => {
+  const handleDeleteChecklist = async (checklistId) => {
+    if (!currentUserId) {
+      toast.error("Không tìm thấy thông tin người dùng hiện tại!");
+      return;
+    }
+    if (!isMemberInBoard(currentUserId)) {
+      toast.error("Bạn không có quyền xóa checklist trong bảng này!");
+      return;
+    }
+
     const currentChecklists = normalizeChecklists(card.checklists || []);
-    if (!currentChecklists[checklistIndex]) {
+    const checklist = currentChecklists.find((cl) => cl._id === checklistId);
+    if (!checklist) {
       toast.error("Checklist không tồn tại!");
       return;
     }
 
     setLoading((prev) => ({ ...prev, checklist: true }));
 
-    currentChecklists.splice(checklistIndex, 1);
-    updateCardState(card._id, { checklists: currentChecklists });
+    updateCardState(card._id, {
+      checklists: currentChecklists.filter((cl) => cl._id !== checklistId),
+    });
 
     try {
       const token = localStorage.getItem("token");
       await axios.delete(
-        `http://localhost:5000/api/cards/${card._id}/checklists/${checklistIndex}`,
+        `http://localhost:5000/api/cards/${card._id}/checklists/${checklistId}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
       if (socket && socketReady) {
         socket.emit("checklist-deleted", {
           cardId: card._id,
-          checklistIndex,
+          checklistId,
+          boardId: card.board,
           actorId: currentUserId,
         });
         console.log("Emitted checklist-deleted:", {
           cardId: card._id,
-          checklistIndex,
+          checklistId,
+          boardId: card.board,
           actorId: currentUserId,
         });
       }
@@ -1316,9 +1499,9 @@ function CardDetails({
       console.error("Lỗi xóa checklist:", err);
       updateCardState(card._id, { checklists: card.checklists });
       toast.error(
-        `Có lỗi khi xóa checklist: ${
-          err.response?.data?.message || err.message
-        }`
+        err.response?.status === 403
+          ? "Bạn không có quyền xóa checklist!"
+          : err.response?.data?.message || "Không thể xóa checklist!"
       );
     } finally {
       setLoading((prev) => ({ ...prev, checklist: false }));
@@ -1326,27 +1509,51 @@ function CardDetails({
   };
 
   // Cập nhật item checklist
-  const handleUpdateChecklistItem = async (checklistIndex, itemIndex, text) => {
+  const handleUpdateChecklistItem = async (checklistId, itemId, text) => {
     if (!text.trim()) {
       toast.error("Item checklist không được để trống!");
       return;
     }
+    if (!currentUserId) {
+      toast.error("Không tìm thấy thông tin người dùng hiện tại!");
+      return;
+    }
+    if (!isMemberInBoard(currentUserId)) {
+      toast.error("Bạn không có quyền cập nhật item checklist trong bảng này!");
+      return;
+    }
 
     const currentChecklists = normalizeChecklists(card.checklists || []);
-    if (!currentChecklists[checklistIndex]?.items[itemIndex]) {
+    const checklist = currentChecklists.find((cl) => cl._id === checklistId);
+    if (!checklist) {
+      toast.error("Checklist không tồn tại!");
+      return;
+    }
+    const item = checklist.items.find((item) => item._id === itemId);
+    if (!item) {
       toast.error("Item checklist không tồn tại!");
       return;
     }
 
     setLoading((prev) => ({ ...prev, checklistItem: true }));
 
-    currentChecklists[checklistIndex].items[itemIndex].text = text;
-    updateCardState(card._id, { checklists: currentChecklists });
+    updateCardState(card._id, {
+      checklists: currentChecklists.map((cl) =>
+        cl._id === checklistId
+          ? {
+              ...cl,
+              items: cl.items.map((it) =>
+                it._id === itemId ? { ...it, text } : it
+              ),
+            }
+          : cl
+      ),
+    });
 
     try {
       const token = localStorage.getItem("token");
       const response = await axios.put(
-        `http://localhost:5000/api/cards/${card._id}/checklists/${checklistIndex}/items/${itemIndex}`,
+        `http://localhost:5000/api/cards/${card._id}/checklists/${checklistId}/items/${itemId}`,
         { text },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -1356,20 +1563,25 @@ function CardDetails({
       });
 
       if (socket && socketReady) {
+        const updatedChecklist = normalizeChecklists(response.data).find(
+          (cl) => cl._id === checklistId
+        );
         socket.emit("checklist-item-updated", {
           cardId: card._id,
-          checklistIndex,
-          itemIndex,
+          checklistId,
+          itemId,
           item: { text },
-          checklist: normalizeChecklists(response.data)[checklistIndex],
+          checklist: updatedChecklist,
+          boardId: card.board,
           actorId: currentUserId,
         });
         console.log("Emitted checklist-item-updated:", {
           cardId: card._id,
-          checklistIndex,
-          itemIndex,
+          checklistId,
+          itemId,
           item: { text },
-          checklist: normalizeChecklists(response.data)[checklistIndex],
+          checklist: updatedChecklist,
+          boardId: card.board,
           actorId: currentUserId,
         });
       }
@@ -1379,9 +1591,9 @@ function CardDetails({
       console.error("Lỗi cập nhật item checklist:", err);
       updateCardState(card._id, { checklists: card.checklists });
       toast.error(
-        `Có lỗi khi cập nhật item checklist: ${
-          err.response?.data?.message || err.message
-        }`
+        err.response?.status === 403
+          ? "Bạn không có quyền cập nhật item checklist!"
+          : err.response?.data?.message || "Không thể cập nhật item checklist!"
       );
     } finally {
       setLoading((prev) => ({ ...prev, checklistItem: false }));
@@ -1389,36 +1601,61 @@ function CardDetails({
   };
 
   // Xóa item checklist
-  const handleDeleteChecklistItem = async (checklistIndex, itemIndex) => {
+  const handleDeleteChecklistItem = async (checklistId, itemId) => {
+    if (!currentUserId) {
+      toast.error("Không tìm thấy thông tin người dùng hiện tại!");
+      return;
+    }
+    if (!isMemberInBoard(currentUserId)) {
+      toast.error("Bạn không có quyền xóa item checklist trong bảng này!");
+      return;
+    }
+
     const currentChecklists = normalizeChecklists(card.checklists || []);
-    if (!currentChecklists[checklistIndex]?.items[itemIndex]) {
+    const checklist = currentChecklists.find((cl) => cl._id === checklistId);
+    if (!checklist) {
+      toast.error("Checklist không tồn tại!");
+      return;
+    }
+    const item = checklist.items.find((item) => item._id === itemId);
+    if (!item) {
       toast.error("Item checklist không tồn tại!");
       return;
     }
 
     setLoading((prev) => ({ ...prev, checklistItem: true }));
 
-    currentChecklists[checklistIndex].items.splice(itemIndex, 1);
-    updateCardState(card._id, { checklists: currentChecklists });
+    updateCardState(card._id, {
+      checklists: currentChecklists.map((cl) =>
+        cl._id === checklistId
+          ? {
+              ...cl,
+              items: cl.items.filter((it) => it._id !== itemId),
+            }
+          : cl
+      ),
+    });
 
     try {
       const token = localStorage.getItem("token");
       await axios.delete(
-        `http://localhost:5000/api/cards/${card._id}/checklists/${checklistIndex}/items/${itemIndex}`,
+        `http://localhost:5000/api/cards/${card._id}/checklists/${checklistId}/items/${itemId}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
       if (socket && socketReady) {
         socket.emit("checklist-item-deleted", {
           cardId: card._id,
-          checklistIndex,
-          itemIndex,
+          checklistId,
+          itemId,
+          boardId: card.board,
           actorId: currentUserId,
         });
         console.log("Emitted checklist-item-deleted:", {
           cardId: card._id,
-          checklistIndex,
-          itemIndex,
+          checklistId,
+          itemId,
+          boardId: card.board,
           actorId: currentUserId,
         });
       }
@@ -1428,9 +1665,9 @@ function CardDetails({
       console.error("Lỗi xóa item checklist:", err);
       updateCardState(card._id, { checklists: card.checklists });
       toast.error(
-        `Có lỗi khi xóa item checklist: ${
-          err.response?.data?.message || err.message
-        }`
+        err.response?.status === 403
+          ? "Bạn không có quyền xóa item checklist!"
+          : err.response?.data?.message || "Không thể xóa item checklist!"
       );
     } finally {
       setLoading((prev) => ({ ...prev, checklistItem: false }));
@@ -1441,6 +1678,10 @@ function CardDetails({
   const handleRemoveMember = async (memberId) => {
     if (memberId === currentUserId) {
       toast.error("Bạn không thể xóa chính mình khỏi thẻ!");
+      return;
+    }
+    if (!isMemberInBoard(currentUserId)) {
+      toast.error("Bạn không có quyền xóa thành viên trong bảng này!");
       return;
     }
 
@@ -1462,6 +1703,8 @@ function CardDetails({
         socket.emit("member-removed-from-card", {
           cardId: card._id,
           memberId,
+          boardId: card.board,
+          actorId: currentUserId,
           message: "Thành viên đã được xóa khỏi thẻ.",
         });
       }
@@ -1470,9 +1713,9 @@ function CardDetails({
     } catch (err) {
       console.error("Lỗi xóa thành viên khỏi card:", err);
       toast.error(
-        `Có lỗi khi xóa thành viên: ${
-          err.response?.data?.message || err.message
-        }`
+        err.response?.status === 403
+          ? "Bạn không có quyền xóa thành viên!"
+          : err.response?.data?.message || "Không thể xóa thành viên!"
       );
     } finally {
       setLoading((prev) => ({ ...prev, removeMember: false }));
@@ -1529,8 +1772,11 @@ function CardDetails({
               setNote={setNote}
               notes={card.notes || []}
               handleAddNote={handleAddNote}
-              loading={loading.note}
+              handleHideNote={handleHideNote}
+              loading={loading}
               isMemberInBoard={isMemberInBoard}
+              currentUserId={currentUserId}
+              isBoardOwner={isBoardOwner}
             />
             <ChecklistsSection
               checklists={card.checklists || []}
@@ -1552,8 +1798,11 @@ function CardDetails({
               comment={comment}
               setComment={setComment}
               handleAddComment={handleAddComment}
-              loading={loading.comment}
+              handleHideComment={handleHideComment}
+              loading={loading}
               isMemberInBoard={isMemberInBoard}
+              currentUserId={currentUserId}
+              isBoardOwner={isBoardOwner}
             />
             <AddMemberDialog
               open={openAddMemberDialog}

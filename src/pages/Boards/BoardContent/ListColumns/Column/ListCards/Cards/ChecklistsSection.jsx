@@ -38,63 +38,63 @@ const ChecklistsSection = ({
 }) => {
   const theme = useTheme();
   const isDarkMode = theme.palette.mode === "dark";
-  const [editChecklistIndex, setEditChecklistIndex] = useState(null);
+  const [editChecklistId, setEditChecklistId] = useState(null); // Thay index bằng ID
   const [editChecklistTitle, setEditChecklistTitle] = useState("");
   const [editItem, setEditItem] = useState({
-    checklistIndex: null,
-    itemIndex: null,
+    checklistId: null, // Thay index bằng ID
+    itemId: null, // Thay index bằng ID
     text: "",
   });
   const [deleteConfirm, setDeleteConfirm] = useState({
     open: false,
     type: "",
-    checklistIndex: null,
-    itemIndex: null,
+    checklistId: null, // Thay index bằng ID
+    itemId: null, // Thay index bằng ID
   });
 
   if (!Array.isArray(checklists)) {
     console.warn("Checklists không phải là mảng:", checklists);
   } else {
-    checklists.forEach((checklist, index) => {
+    checklists.forEach((checklist) => {
       if (
         !checklist ||
         typeof checklist !== "object" ||
         !Array.isArray(checklist.items)
       ) {
-        console.warn(`Checklist tại index ${index} không hợp lệ:`, checklist);
+        console.warn(`Checklist không hợp lệ:`, checklist);
       }
     });
   }
 
-  const openEditChecklist = (index, title) => {
-    setEditChecklistIndex(index);
+  const openEditChecklist = (checklistId, title) => {
+    setEditChecklistId(checklistId);
     setEditChecklistTitle(title || "");
   };
 
-  const openEditItem = (checklistIndex, itemIndex, text) => {
-    setEditItem({ checklistIndex, itemIndex, text: text || "" });
+  const openEditItem = (checklistId, itemId, text) => {
+    setEditItem({ checklistId, itemId, text: text || "" });
   };
 
-  const handleConfirmDelete = (type, checklistIndex, itemIndex = null) => {
-    setDeleteConfirm({ open: true, type, checklistIndex, itemIndex });
+  const handleConfirmDelete = (type, checklistId, itemId = null) => {
+    setDeleteConfirm({ open: true, type, checklistId, itemId });
   };
 
   const handleCloseConfirm = () => {
     setDeleteConfirm({
       open: false,
       type: "",
-      checklistIndex: null,
-      itemIndex: null,
+      checklistId: null,
+      itemId: null,
     });
   };
 
-  const handleSubmitEditChecklist = async (index) => {
+  const handleSubmitEditChecklist = async (checklistId) => {
     if (!editChecklistTitle.trim()) {
       toast.error("Tiêu đề checklist không được để trống!");
       return;
     }
-    await handleEditChecklist(index, editChecklistTitle);
-    setEditChecklistIndex(null);
+    await handleEditChecklist(checklistId, editChecklistTitle);
+    setEditChecklistId(null);
     setEditChecklistTitle("");
   };
 
@@ -104,11 +104,11 @@ const ChecklistsSection = ({
       return;
     }
     await handleEditChecklistItem(
-      editItem.checklistIndex,
-      editItem.itemIndex,
+      editItem.checklistId,
+      editItem.itemId,
       editItem.text
     );
-    setEditItem({ checklistIndex: null, itemIndex: null, text: "" });
+    setEditItem({ checklistId: null, itemId: null, text: "" });
   };
 
   return (
@@ -126,22 +126,22 @@ const ChecklistsSection = ({
       </Typography>
       {Array.isArray(checklists) && checklists.length > 0 ? (
         <>
-          {checklists.map((checklist, checklistIndex) => {
+          {checklists.map((checklist) => {
             if (!checklist || typeof checklist !== "object") {
               return (
                 <Typography
-                  key={checklistIndex}
+                  key={checklist._id}
                   color="error"
                   sx={{ pl: 2, mb: 2 }}
                 >
-                  Checklist không hợp lệ tại index {checklistIndex}
+                  Checklist không hợp lệ
                 </Typography>
               );
             }
 
             return (
-              <Box key={checklist._id || checklistIndex} sx={{ mb: 3, pl: 2 }}>
-                {editChecklistIndex === checklistIndex ? (
+              <Box key={checklist._id} sx={{ mb: 3, pl: 2 }}>
+                {editChecklistId === checklist._id ? (
                   <Box
                     sx={{
                       display: "flex",
@@ -187,7 +187,7 @@ const ChecklistsSection = ({
                     <Button
                       variant="contained"
                       size="small"
-                      onClick={() => handleSubmitEditChecklist(checklistIndex)}
+                      onClick={() => handleSubmitEditChecklist(checklist._id)}
                       disabled={loading.checklist || !editChecklistTitle.trim()}
                       sx={{
                         bgcolor: theme.palette.primary.main,
@@ -201,7 +201,7 @@ const ChecklistsSection = ({
                     <Button
                       variant="outlined"
                       size="small"
-                      onClick={() => setEditChecklistIndex(null)}
+                      onClick={() => setEditChecklistId(null)}
                       sx={{
                         color: isDarkMode
                           ? theme.palette.grey[400]
@@ -229,7 +229,7 @@ const ChecklistsSection = ({
                     </Typography>
                     <IconButton
                       onClick={() =>
-                        openEditChecklist(checklistIndex, checklist.title)
+                        openEditChecklist(checklist._id, checklist.title)
                       }
                       size="small"
                     >
@@ -244,7 +244,7 @@ const ChecklistsSection = ({
                     </IconButton>
                     <IconButton
                       onClick={() =>
-                        handleConfirmDelete("checklist", checklistIndex)
+                        handleConfirmDelete("checklist", checklist._id)
                       }
                       size="small"
                     >
@@ -259,9 +259,9 @@ const ChecklistsSection = ({
                 )}
                 {Array.isArray(checklist.items) ? (
                   <List dense>
-                    {checklist.items.map((item, itemIndex) => (
+                    {checklist.items.map((item) => (
                       <ListItem
-                        key={item._id || itemIndex}
+                        key={item._id}
                         sx={{ py: 0 }}
                         secondaryAction={
                           <>
@@ -270,8 +270,8 @@ const ChecklistsSection = ({
                               checked={item.completed || false}
                               onChange={() =>
                                 handleToggleChecklistItem(
-                                  checklistIndex,
-                                  itemIndex
+                                  checklist._id,
+                                  item._id
                                 )
                               }
                               disabled={loading.checklistToggle}
@@ -279,11 +279,7 @@ const ChecklistsSection = ({
                             />
                             <IconButton
                               onClick={() =>
-                                openEditItem(
-                                  checklistIndex,
-                                  itemIndex,
-                                  item.text
-                                )
+                                openEditItem(checklist._id, item._id, item.text)
                               }
                               size="small"
                             >
@@ -300,8 +296,8 @@ const ChecklistsSection = ({
                               onClick={() =>
                                 handleConfirmDelete(
                                   "item",
-                                  checklistIndex,
-                                  itemIndex
+                                  checklist._id,
+                                  item._id
                                 )
                               }
                               size="small"
@@ -318,8 +314,8 @@ const ChecklistsSection = ({
                       >
                         <ListItemText
                           primary={
-                            editItem.checklistIndex === checklistIndex &&
-                            editItem.itemIndex === itemIndex ? (
+                            editItem.checklistId === checklist._id &&
+                            editItem.itemId === item._id ? (
                               <TextField
                                 fullWidth
                                 size="small"
@@ -374,8 +370,8 @@ const ChecklistsSection = ({
                         />
                       </ListItem>
                     ))}
-                    {editItem.checklistIndex === checklistIndex &&
-                      editItem.itemIndex !== null && (
+                    {editItem.checklistId === checklist._id &&
+                      editItem.itemId !== null && (
                         <Box sx={{ display: "flex", gap: 1, mt: 1 }}>
                           <Button
                             variant="contained"
@@ -398,8 +394,8 @@ const ChecklistsSection = ({
                             size="small"
                             onClick={() =>
                               setEditItem({
-                                checklistIndex: null,
-                                itemIndex: null,
+                                checklistId: null,
+                                itemId: null,
                                 text: "",
                               })
                             }
@@ -471,7 +467,7 @@ const ChecklistsSection = ({
                   <Button
                     variant="contained"
                     size="small"
-                    onClick={() => handleAddChecklistItem(checklistIndex)}
+                    onClick={() => handleAddChecklistItem(checklist._id)}
                     disabled={loading.checklistItem || !checklistItem.trim()}
                     sx={{
                       bgcolor: theme.palette.primary.main,
@@ -615,11 +611,11 @@ const ChecklistsSection = ({
           <Button
             onClick={() => {
               if (deleteConfirm.type === "checklist") {
-                handleDeleteChecklist(deleteConfirm.checklistIndex);
+                handleDeleteChecklist(deleteConfirm.checklistId);
               } else {
                 handleDeleteChecklistItem(
-                  deleteConfirm.checklistIndex,
-                  deleteConfirm.itemIndex
+                  deleteConfirm.checklistId,
+                  deleteConfirm.itemId
                 );
               }
               handleCloseConfirm();

@@ -1,15 +1,15 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useContext } from "react";
 import { useNavigate } from "react-router-dom";
 import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
 import Button from "@mui/material/Button";
 import WorkspacesIcon from "@mui/icons-material/Workspaces";
 import axios from "axios";
-import io from "socket.io-client";
-
-const socket = io("http://localhost:5000");
+import { SocketContext } from "../../../context/SocketContext";
+import { toast } from "react-toastify";
 
 const WorkSpace = () => {
+  const { socket, socketReady, userId } = useContext(SocketContext);
   const [anchorEl, setAnchorEl] = useState(null);
   const [workspaces, setWorkspaces] = useState([]);
   const navigate = useNavigate();
@@ -19,18 +19,25 @@ const WorkSpace = () => {
     try {
       const token = localStorage.getItem("token");
       if (!token) {
-        throw new Error("Không tìm thấy token!");
+        throw new Error("Không tìm thấy token! Vui lòng đăng nhập lại.");
       }
       const response = await axios.get("http://localhost:5000/api/workspaces", {
         headers: {
           Authorization: `Bearer ${token}`,
         },
+        timeout: 5000, // Thêm timeout để tránh chờ quá lâu
       });
       console.log("Fetched workspaces:", response.data);
       setWorkspaces(response.data);
     } catch (error) {
       console.error("Error fetching workspaces:", error);
-      alert("Không thể tải danh sách không gian làm việc!");
+      toast.error(
+        error.message || "Không thể tải danh sách không gian làm việc!"
+      );
+      if (error.message.includes("token")) {
+        localStorage.removeItem("token");
+        navigate("/login");
+      }
     }
   };
 
@@ -40,6 +47,11 @@ const WorkSpace = () => {
 
   // Lắng nghe các sự kiện Socket.IO
   useEffect(() => {
+    if (!socket || !socketReady) {
+      console.log("Socket not available or not ready in WorkSpace");
+      return;
+    }
+
     // Khi workspace được tạo
     socket.on("workspace-created", (data) => {
       console.log("Received workspace-created:", data);
@@ -49,6 +61,7 @@ const WorkSpace = () => {
         }
         return prev;
       });
+      toast.info(`Không gian làm việc mới: ${data.workspace.name}`);
     });
 
     // Khi workspace được cập nhật
@@ -57,12 +70,14 @@ const WorkSpace = () => {
       setWorkspaces((prev) =>
         prev.map((ws) => (ws._id === data.workspace._id ? data.workspace : ws))
       );
+      toast.info(`Không gian làm việc ${data.workspace.name} đã được cập nhật`);
     });
 
     // Khi workspace bị ẩn
     socket.on("workspace-hidden", (data) => {
       console.log("Received workspace-hidden:", data);
       setWorkspaces((prev) => prev.filter((ws) => ws._id !== data.workspaceId));
+      toast.info(`Không gian làm việc ${data.workspaceId} đã bị ẩn`);
     });
 
     // Dọn dẹp khi component unmount
@@ -71,7 +86,7 @@ const WorkSpace = () => {
       socket.off("workspace-updated");
       socket.off("workspace-hidden");
     };
-  }, []);
+  }, [socket, socketReady]);
 
   const handleClick = (event) => {
     setAnchorEl(event.currentTarget);

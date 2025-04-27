@@ -7,8 +7,10 @@ import {
   TextField,
   Button,
   CircularProgress,
+  IconButton,
 } from "@mui/material";
 import NoteIcon from "@mui/icons-material/Note";
+import DeleteIcon from "@mui/icons-material/Delete";
 import { useTheme } from "@mui/material/styles";
 
 const NotesSection = ({
@@ -17,10 +19,16 @@ const NotesSection = ({
   setNote,
   loading,
   handleAddNote,
+  handleHideNote,
   isMemberInBoard,
+  currentUserId,
+  isBoardOwner,
 }) => {
   const theme = useTheme();
   const isDarkMode = theme.palette.mode === "dark";
+
+  // Filter out deleted notes
+  const visibleNotes = notes.filter((n) => !n.isDeleted);
 
   return (
     <Box sx={{ mb: 3 }}>
@@ -35,10 +43,30 @@ const NotesSection = ({
       >
         Ghi chú
       </Typography>
-      {notes?.length > 0 ? (
+      {visibleNotes?.length > 0 ? (
         <List dense>
-          {notes.map((note, index) => (
-            <ListItem key={index} sx={{ py: 0.5 }}>
+          {visibleNotes.map((note, index) => (
+            <ListItem
+              key={note._id || index}
+              sx={{ py: 0.5 }}
+              secondaryAction={
+                (currentUserId === note.createdBy?._id || isBoardOwner) && (
+                  <IconButton
+                    edge="end"
+                    aria-label="hide"
+                    onClick={() => handleHideNote(note._id)}
+                    disabled={loading.note}
+                    sx={{
+                      color: isDarkMode
+                        ? theme.palette.grey[400]
+                        : theme.palette.text.secondary,
+                    }}
+                  >
+                    <DeleteIcon fontSize="small" />
+                  </IconButton>
+                )
+              }
+            >
               <ListItemText
                 primary={note.content}
                 primaryTypographyProps={{
