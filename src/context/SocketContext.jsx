@@ -10,6 +10,7 @@ export const SocketProvider = ({ children }) => {
   const [socketReady, setSocketReady] = useState(false);
   const [userId, setUserId] = useState(null);
   const [token, setToken] = useState(null);
+  const [onlineUsers, setOnlineUsers] = useState(new Set()); // Added onlineUsers
 
   const log = (message, data = {}) => {
     console.log(`[SocketProvider] ${message}`, data);
@@ -76,6 +77,7 @@ export const SocketProvider = ({ children }) => {
       socket.off("reconnect");
       socket.off("error");
       socket.off("disconnect");
+      socket.off("user-status-changed"); // Added cleanup
     }
 
     const newSocket = io("http://localhost:5000", {
@@ -133,6 +135,20 @@ export const SocketProvider = ({ children }) => {
       });
     });
 
+    // Handle user-status-changed event
+    newSocket.on("user-status-changed", ({ userId, isOnline }) => {
+      log("Received user-status-changed:", { userId, isOnline });
+      setOnlineUsers((prev) => {
+        const newSet = new Set(prev);
+        if (isOnline) {
+          newSet.add(userId);
+        } else {
+          newSet.delete(userId);
+        }
+        return newSet;
+      });
+    });
+
     setSocket(newSocket);
 
     return () => {
@@ -141,6 +157,7 @@ export const SocketProvider = ({ children }) => {
       newSocket.off("reconnect");
       newSocket.off("error");
       newSocket.off("disconnect");
+      newSocket.off("user-status-changed");
       newSocket.disconnect();
       setSocketReady(false);
       setSocket(null);
@@ -168,7 +185,9 @@ export const SocketProvider = ({ children }) => {
   }, []);
 
   return (
-    <SocketContext.Provider value={{ socket, socketReady, userId }}>
+    <SocketContext.Provider
+      value={{ socket, socketReady, userId, onlineUsers, setOnlineUsers }}
+    >
       {children}
     </SocketContext.Provider>
   );

@@ -27,6 +27,7 @@ function ManageMembersDialog({
   activeMembers,
   isOwner,
   loading,
+  onlineUsers,
   handleCloseManageMembersDialog,
   handleRemoveMember,
   handleLeaveBoard,
@@ -97,61 +98,76 @@ function ManageMembersDialog({
               },
             }}
           >
-            {activeMembers.map((member) => (
-              <ListItem
-                key={member.user?._id}
-                sx={{
-                  borderRadius: 2,
-                  mb: 0.5,
-                  "&:hover": { bgcolor: theme.palette.action.hover },
-                  transition: "all 0.2s ease",
-                }}
-              >
-                <ListItemAvatar>
-                  <Avatar
-                    src={
-                      member.user?.avatar
-                        ? member.user.avatar.startsWith("http")
-                          ? member.user.avatar
-                          : `http://localhost:5000${member.user.avatar}`
-                        : "/static/images/avatar/1.jpg"
+            {activeMembers.map((member) => {
+              const isOnline =
+                onlineUsers &&
+                (onlineUsers.has(member.user?._id) || member.user?.isOnline);
+              return (
+                <ListItem
+                  key={member.user?._id}
+                  sx={{
+                    borderRadius: 2,
+                    mb: 0.5,
+                    "&:hover": { bgcolor: theme.palette.action.hover },
+                    transition: "all 0.2s ease",
+                  }}
+                >
+                  <ListItemAvatar>
+                    <Avatar
+                      src={
+                        member.user?.avatar
+                          ? member.user.avatar.startsWith("http")
+                            ? member.user.avatar
+                            : `http://localhost:5000${member.user.avatar}`
+                          : "/static/images/avatar/1.jpg"
+                      }
+                      sx={{
+                        width: 40,
+                        height: 40,
+                        border: `2px solid ${
+                          isOnline
+                            ? theme.palette.success.main
+                            : theme.palette.grey[500]
+                        } !important`,
+                      }}
+                    />
+                  </ListItemAvatar>
+                  <ListItemText
+                    primary={`${member.user?.fullName || member.user?.email} ${
+                      isOnline ? "(Online)" : "(Offline)"
+                    }`}
+                    secondary={
+                      member.user?._id === board?.owner?._id
+                        ? "Chủ phòng"
+                        : "Thành viên"
                     }
-                    sx={{ width: 40, height: 40 }}
+                    primaryTypographyProps={{
+                      variant: "body1",
+                      fontWeight: "medium",
+                      color: theme.palette.text.primary,
+                    }}
+                    secondaryTypographyProps={{
+                      variant: "body2",
+                      color: theme.palette.text.secondary,
+                    }}
                   />
-                </ListItemAvatar>
-                <ListItemText
-                  primary={member.user?.fullName || member.user?.email}
-                  secondary={
-                    member.user?._id === board?.owner?._id
-                      ? "Chủ phòng"
-                      : "Thành viên"
-                  }
-                  primaryTypographyProps={{
-                    variant: "body1",
-                    fontWeight: "medium",
-                    color: theme.palette.text.primary,
-                  }}
-                  secondaryTypographyProps={{
-                    variant: "body2",
-                    color: theme.palette.text.secondary,
-                  }}
-                />
-                <ListItemSecondaryAction>
-                  {isOwner && member.user?._id !== board?.owner?._id && (
-                    <Tooltip title="Xóa khỏi bảng">
-                      <IconButton
-                        edge="end"
-                        onClick={() => handleRemoveMember(member.user?._id)}
-                        sx={{ color: theme.palette.error.main }}
-                        disabled={loading}
-                      >
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                  )}
-                </ListItemSecondaryAction>
-              </ListItem>
-            ))}
+                  <ListItemSecondaryAction>
+                    {isOwner && member.user?._id !== board?.owner?._id && (
+                      <Tooltip title="Xóa khỏi bảng">
+                        <IconButton
+                          edge="end"
+                          onClick={() => handleRemoveMember(member.user?._id)}
+                          sx={{ color: theme.palette.error.main }}
+                          disabled={loading}
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    )}
+                  </ListItemSecondaryAction>
+                </ListItem>
+              );
+            })}
           </List>
           {!isOwner && (
             <Button

@@ -47,7 +47,7 @@ const CustomIconButton = forwardRef(({ onClick, children, ...props }, ref) => (
 ));
 
 function AppBar() {
-  const { socket, socketReady } = useContext(SocketContext); // Sử dụng socket và socketReady
+  const { socket, socketReady } = useContext(SocketContext);
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -377,9 +377,7 @@ function AppBar() {
           </CustomIconButton>
         </Tooltip>
         <Tooltip title="Hồ sơ">
-          <CustomIconButton>
-            <Profiles />
-          </CustomIconButton>
+          <Profiles />
         </Tooltip>
       </Box>
       <Menu

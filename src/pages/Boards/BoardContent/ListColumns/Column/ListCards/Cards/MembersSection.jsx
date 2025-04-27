@@ -30,6 +30,14 @@ function MembersSection({
     isMemberInBoard,
   });
 
+  // Loại bỏ trùng lặp trong members
+  const uniqueMembers = Array.isArray(members)
+    ? members.filter(
+        (m, index, self) =>
+          self.findIndex((x) => x._id.toString() === m._id.toString()) === index
+      )
+    : [];
+
   return (
     <Box sx={{ mb: 2 }}>
       <Box
@@ -66,16 +74,16 @@ function MembersSection({
           </Tooltip>
         )}
       </Box>
-      {members?.length > 0 ? (
+      {uniqueMembers.length > 0 ? (
         <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-          {members.map((member) => {
-            // Kiểm tra xem isMemberInBoard có phải là hàm không
+          {uniqueMembers.map((member) => {
+            // Sử dụng isMemberInBoard nếu là hàm, nếu không thì kiểm tra isActive trực tiếp
             const isActive =
               typeof isMemberInBoard === "function"
                 ? isMemberInBoard(member._id)
-                : true;
+                : member.isActive !== false;
             console.log(
-              `Member ${member._id} (${member.fullName}): isMemberInBoard = ${isActive}`
+              `Member ${member._id} (${member.fullName}): isActive = ${isActive}`
             );
             return (
               <Box

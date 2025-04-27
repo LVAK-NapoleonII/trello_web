@@ -33,13 +33,13 @@ function InviteDialog({
   loading,
   selectedUserId,
   setSelectedUserId,
+  onlineUsers,
   handleCloseInviteDialog,
   handleInviteMember,
 }) {
   const theme = useTheme();
   const isDarkMode = theme.palette.mode === "dark";
 
-  // Lọc trùng lặp trong searchResults và pastMembersAndInvited
   const uniqueSearchResults = Array.from(
     new Map(searchResults.map((user) => [user._id, user])).values()
   );
@@ -151,107 +151,121 @@ function InviteDialog({
                   Kết quả tìm kiếm
                 </Typography>
                 <List dense>
-                  {uniqueSearchResults.map((user) => (
-                    <ListItem
-                      key={user._id}
-                      disablePadding
-                      sx={{
-                        borderRadius: 2,
-                        mb: 0.5,
-                        bgcolor:
-                          selectedUserId === user._id
-                            ? theme.palette.action.selected
-                            : "transparent",
-                        "&:hover": {
+                  {uniqueSearchResults.map((user) => {
+                    const isOnline =
+                      onlineUsers &&
+                      (onlineUsers.has(user._id) || user.isOnline);
+                    return (
+                      <ListItem
+                        key={user._id}
+                        disablePadding
+                        sx={{
+                          borderRadius: 2,
+                          mb: 0.5,
                           bgcolor:
                             selectedUserId === user._id
                               ? theme.palette.action.selected
-                              : theme.palette.action.hover,
-                        },
-                        transition: "all 0.2s ease",
-                      }}
-                    >
-                      <ListItemButton
-                        onClick={() => {
-                          setSelectedUserId(user._id);
-                          setSearchQuery(user.email || user.fullName);
+                              : "transparent",
+                          "&:hover": {
+                            bgcolor:
+                              selectedUserId === user._id
+                                ? theme.palette.action.selected
+                                : theme.palette.action.hover,
+                          },
+                          transition: "all 0.2s ease",
                         }}
-                        sx={{ py: 1.5 }}
                       >
-                        <ListItemAvatar>
-                          <Avatar
-                            src={
-                              user.avatar
-                                ? user.avatar.startsWith("http")
-                                  ? user.avatar
-                                  : `http://localhost:5000${user.avatar}`
-                                : "/static/images/avatar/1.jpg"
-                            }
-                            sx={{ width: 40, height: 40 }}
-                          />
-                        </ListItemAvatar>
-                        <Box
-                          sx={{
-                            display: "flex",
-                            flexDirection: "column",
-                            gap: 0.5,
+                        <ListItemButton
+                          onClick={() => {
+                            setSelectedUserId(user._id);
+                            setSearchQuery(user.email || user.fullName);
                           }}
+                          sx={{ py: 1.5 }}
                         >
+                          <ListItemAvatar>
+                            <Avatar
+                              src={
+                                user.avatar
+                                  ? user.avatar.startsWith("http")
+                                    ? user.avatar
+                                    : `http://localhost:5000${user.avatar}`
+                                  : "/static/images/avatar/1.jpg"
+                              }
+                              sx={{
+                                width: 40,
+                                height: 40,
+                                border: `2px solid ${
+                                  isOnline
+                                    ? theme.palette.success.main
+                                    : theme.palette.grey[500]
+                                } !important`,
+                              }}
+                            />
+                          </ListItemAvatar>
                           <Box
                             sx={{
                               display: "flex",
-                              alignItems: "center",
-                              gap: 1,
+                              flexDirection: "column",
+                              gap: 0.5,
                             }}
                           >
-                            <Typography
-                              variant="body1"
-                              fontWeight="medium"
-                              color={theme.palette.text.primary}
+                            <Box
+                              sx={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 1,
+                              }}
                             >
-                              {user.fullName || user.email}
+                              <Typography
+                                variant="body1"
+                                fontWeight="medium"
+                                color={theme.palette.text.primary}
+                              >
+                                {user.fullName || user.email}{" "}
+                                {isOnline ? "(Online)" : "(Offline)"}
+                              </Typography>
+                              {user.isPastMember && (
+                                <Chip
+                                  label="Đã rời"
+                                  size="small"
+                                  color="warning"
+                                  variant="outlined"
+                                  sx={{
+                                    fontSize: 12,
+                                    bgcolor: isDarkMode
+                                      ? theme.palette.warning.dark
+                                      : theme.palette.warning.light,
+                                    color: theme.palette.warning.contrastText,
+                                  }}
+                                />
+                              )}
+                              {user.isInvited && (
+                                <Chip
+                                  label="Đã mời"
+                                  size="small"
+                                  color="info"
+                                  variant="outlined"
+                                  sx={{
+                                    fontSize: 12,
+                                    bgcolor: isDarkMode
+                                      ? theme.palette.info.dark
+                                      : theme.palette.info.light,
+                                    color: theme.palette.info.contrastText,
+                                  }}
+                                />
+                              )}
+                            </Box>
+                            <Typography
+                              variant="body2"
+                              color={theme.palette.text.secondary}
+                            >
+                              {user.email}
                             </Typography>
-                            {user.isPastMember && (
-                              <Chip
-                                label="Đã rời"
-                                size="small"
-                                color="warning"
-                                variant="outlined"
-                                sx={{
-                                  fontSize: 12,
-                                  bgcolor: isDarkMode
-                                    ? theme.palette.warning.dark
-                                    : theme.palette.warning.light,
-                                  color: theme.palette.warning.contrastText,
-                                }}
-                              />
-                            )}
-                            {user.isInvited && (
-                              <Chip
-                                label="Đã mời"
-                                size="small"
-                                color="info"
-                                variant="outlined"
-                                sx={{
-                                  fontSize: 12,
-                                  bgcolor: isDarkMode
-                                    ? theme.palette.info.dark
-                                    : theme.palette.info.light,
-                                  color: theme.palette.info.contrastText,
-                                }}
-                              />
-                            )}
                           </Box>
-                          <Typography
-                            variant="body2"
-                            color={theme.palette.text.secondary}
-                          >
-                            {user.email}
-                          </Typography>
-                        </Box>
-                      </ListItemButton>
-                    </ListItem>
-                  ))}
+                        </ListItemButton>
+                      </ListItem>
+                    );
+                  })}
                 </List>
               </Box>
             )}
@@ -265,109 +279,124 @@ function InviteDialog({
                   Thành viên cũ hoặc đã được mời
                 </Typography>
                 <List dense>
-                  {uniquePastMembersAndInvited.map((entry) => (
-                    <ListItem
-                      key={entry.user?._id}
-                      disablePadding
-                      sx={{
-                        borderRadius: 2,
-                        mb: 0.5,
-                        bgcolor:
-                          selectedUserId === entry.user?._id
-                            ? theme.palette.action.selected
-                            : "transparent",
-                        "&:hover": {
+                  {uniquePastMembersAndInvited.map((entry) => {
+                    const isOnline =
+                      onlineUsers &&
+                      (onlineUsers.has(entry.user?._id) ||
+                        entry.user?.isOnline);
+                    return (
+                      <ListItem
+                        key={entry.user?._id}
+                        disablePadding
+                        sx={{
+                          borderRadius: 2,
+                          mb: 0.5,
                           bgcolor:
                             selectedUserId === entry.user?._id
                               ? theme.palette.action.selected
-                              : theme.palette.action.hover,
-                        },
-                        transition: "all 0.2s ease",
-                      }}
-                    >
-                      <ListItemButton
-                        onClick={() => {
-                          setSelectedUserId(entry.user?._id);
-                          setSearchQuery(
-                            entry.user?.email || entry.user?.fullName
-                          );
+                              : "transparent",
+                          "&:hover": {
+                            bgcolor:
+                              selectedUserId === entry.user?._id
+                                ? theme.palette.action.selected
+                                : theme.palette.action.hover,
+                          },
+                          transition: "all 0.2s ease",
                         }}
-                        sx={{ py: 1.5 }}
                       >
-                        <ListItemAvatar>
-                          <Avatar
-                            src={
-                              entry.user?.avatar
-                                ? entry.user.avatar.startsWith("http")
-                                  ? entry.user.avatar
-                                  : `http://localhost:5000${entry.user.avatar}`
-                                : "/static/images/avatar/1.jpg"
-                            }
-                            sx={{ width: 40, height: 40 }}
-                          />
-                        </ListItemAvatar>
-                        <Box
-                          sx={{
-                            display: "flex",
-                            flexDirection: "column",
-                            gap: 0.5,
+                        <ListItemButton
+                          onClick={() => {
+                            setSelectedUserId(entry.user?._id);
+                            setSearchQuery(
+                              entry.user?.email || entry.user?.fullName
+                            );
                           }}
+                          sx={{ py: 1.5 }}
                         >
+                          <ListItemAvatar>
+                            <Avatar
+                              src={
+                                entry.user?.avatar
+                                  ? entry.user.avatar.startsWith("http")
+                                    ? entry.user.avatar
+                                    : `http://localhost:5000${entry.user.avatar}`
+                                  : "/static/images/avatar/1.jpg"
+                              }
+                              sx={{
+                                width: 40,
+                                height: 40,
+                                border: `2px solid ${
+                                  isOnline
+                                    ? theme.palette.success.main
+                                    : theme.palette.grey[500]
+                                } !important`,
+                              }}
+                            />
+                          </ListItemAvatar>
                           <Box
                             sx={{
                               display: "flex",
-                              alignItems: "center",
-                              gap: 1,
+                              flexDirection: "column",
+                              gap: 0.5,
                             }}
                           >
-                            <Typography
-                              variant="body1"
-                              fontWeight="medium"
-                              color={theme.palette.text.primary}
+                            <Box
+                              sx={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 1,
+                              }}
                             >
-                              {entry.user?.fullName || entry.user?.email}
+                              <Typography
+                                variant="body1"
+                                fontWeight="medium"
+                                color={theme.palette.text.primary}
+                              >
+                                {entry.user?.fullName || entry.user?.email}{" "}
+                                {isOnline ? "(Online)" : "(Offline)"}
+                              </Typography>
+                              {!entry.isActive && (
+                                <Chip
+                                  label="Đã rời"
+                                  size="small"
+                                  color="warning"
+                                  variant="outlined"
+                                  sx={{
+                                    fontSize: 12,
+                                    bgcolor: isDarkMode
+                                      ? theme.palette.warning.dark
+                                      : theme.palette.warning.light,
+                                    color: theme.palette.warning.contrastText,
+                                  }}
+                                />
+                              )}
+                              {entry.isActive && (
+                                <Chip
+                                  label="Đã mời"
+                                  size="small"
+                                  color="info"
+                                  variant="outlined"
+                                  sx={{
+                                    fontSize: 12,
+                                    bgcolor: isDarkMode
+                                      ? theme.palette.info.dark
+                                      : theme.palette.info.light,
+                                    color: theme.palette.info.contrastText,
+                                  }}
+                                />
+                              )}
+                            </Box>
+                            <Typography
+                              variant="body2"
+                              color={theme.palette.text.secondary}
+                            >
+                              {entry.user?.email}
                             </Typography>
-                            {!entry.isActive && (
-                              <Chip
-                                label="Đã rời"
-                                size="small"
-                                color="warning"
-                                variant="outlined"
-                                sx={{
-                                  fontSize: 12,
-                                  bgcolor: isDarkMode
-                                    ? theme.palette.warning.dark
-                                    : theme.palette.warning.light,
-                                  color: theme.palette.warning.contrastText,
-                                }}
-                              />
-                            )}
-                            {entry.isActive && (
-                              <Chip
-                                label="Đã mời"
-                                size="small"
-                                color="info"
-                                variant="outlined"
-                                sx={{
-                                  fontSize: 12,
-                                  bgcolor: isDarkMode
-                                    ? theme.palette.info.dark
-                                    : theme.palette.info.light,
-                                  color: theme.palette.info.contrastText,
-                                }}
-                              />
-                            )}
                           </Box>
-                          <Typography
-                            variant="body2"
-                            color={theme.palette.text.secondary}
-                          >
-                            {entry.user?.email}
-                          </Typography>
-                        </Box>
-                      </ListItemButton>
-                    </ListItem>
-                  ))}
+                        </ListItemButton>
+                      </ListItem>
+                    );
+                  })}
                 </List>
               </Box>
             )}

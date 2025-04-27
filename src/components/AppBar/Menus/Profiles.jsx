@@ -10,7 +10,6 @@ import {
   Box,
   IconButton,
   ListItemIcon,
-  Button,
 } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
 import axios from "axios";
@@ -21,7 +20,7 @@ import { formatDistanceToNow } from "date-fns";
 import vi from "date-fns/locale/vi";
 
 const Profiles = forwardRef((props, ref) => {
-  const { socket, socketReady } = useContext(SocketContext); // Lấy cả socket và socketReady
+  const { socket, socketReady } = useContext(SocketContext);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [anchorEl, setAnchorEl] = useState(null);
@@ -30,6 +29,11 @@ const Profiles = forwardRef((props, ref) => {
 
   useEffect(() => {
     if (!user?._id) return;
+
+    if (!socket || !socketReady) {
+      console.warn("Socket not available or not ready in Profiles");
+      return;
+    }
 
     console.log("Profiles: Fetching activities for user:", user._id);
 
@@ -54,11 +58,6 @@ const Profiles = forwardRef((props, ref) => {
       }
     };
     fetchActivities();
-
-    if (!socket || !socketReady) {
-      console.warn("Socket not available or not ready in Profiles");
-      return;
-    }
 
     const handleNewActivity = (activity) => {
       console.log("Profiles: Received new activity:", activity);
@@ -212,13 +211,13 @@ const Profiles = forwardRef((props, ref) => {
         >
           <Typography variant="subtitle1">Hoạt động</Typography>
           {activities.length > 0 && (
-            <Button
+            <IconButton
               size="small"
               onClick={handleHideAllActivities}
               color="error"
             >
-              Ẩn tất cả
-            </Button>
+              <DeleteIcon />
+            </IconButton>
           )}
         </Box>
         {activities.length === 0 ? (

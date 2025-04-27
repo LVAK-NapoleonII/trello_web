@@ -5,10 +5,15 @@ function MemberMenu({
   selectedMember,
   isOwner,
   board,
+  onlineUsers,
   handleCloseMenu,
   handleRemoveMember,
 }) {
   const theme = useTheme();
+  const isOnline =
+    selectedMember &&
+    (onlineUsers.has(selectedMember.user?._id) ||
+      selectedMember.user?.isOnline);
 
   return (
     <Menu
@@ -29,6 +34,7 @@ function MemberMenu({
       <MenuItem disabled>
         <Typography variant="body2" sx={{ color: theme.palette.text.primary }}>
           {selectedMember?.user?.fullName || selectedMember?.user?.email}
+          {isOnline ? " (Online)" : " (Offline)"}
         </Typography>
       </MenuItem>
       {isOwner && selectedMember?.user?._id !== board?.owner?._id && (

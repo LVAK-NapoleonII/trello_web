@@ -16,7 +16,8 @@ import { SocketContext } from "../../../context/SocketContext";
 function BoardBar({ board, setBoard }) {
   const theme = useTheme();
   const isDarkMode = theme.palette.mode === "dark";
-  const { socket, socketReady } = useContext(SocketContext);
+  const { socket, socketReady, onlineUsers, userId } =
+    useContext(SocketContext);
   const [openInviteDialog, setOpenInviteDialog] = useState(false);
   const [openManageMembersDialog, setOpenManageMembersDialog] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -26,7 +27,6 @@ function BoardBar({ board, setBoard }) {
   const [selectedUserId, setSelectedUserId] = useState(null);
   const [anchorEl, setAnchorEl] = useState(null);
   const [selectedMember, setSelectedMember] = useState(null);
-  const [currentUserId, setCurrentUserId] = useState(null);
   const navigate = useNavigate();
 
   const log = (message, data) => {
@@ -34,6 +34,21 @@ function BoardBar({ board, setBoard }) {
       console.log(message, data);
     }
   };
+
+  // Handle user-status-changed event
+  useEffect(() => {
+    if (!socket || !socketReady) return;
+
+    const handleUserStatusChanged = ({ userId, isOnline }) => {
+      log("BoardBar: Received user-status-changed:", { userId, isOnline });
+    };
+
+    socket.on("user-status-changed", handleUserStatusChanged);
+
+    return () => {
+      socket.off("user-status-changed", handleUserStatusChanged);
+    };
+  }, [socket, socketReady]);
 
   useEffect(() => {
     if (typeof setBoard !== "function") {
@@ -84,9 +99,9 @@ function BoardBar({ board, setBoard }) {
         setBoard(data.board);
         toast.success("Đã xóa thành viên thành công!");
       }
-      if (data.deactivatedUserId === currentUserId) {
+      if (data.deactivatedUserId === userId) {
         navigate("/boards");
-        socket.emit("refresh-sidebar", { userId: currentUserId });
+        socket.emit("refresh-sidebar", { userId });
       }
       socket.emit("board-updated", { board: data.board });
     };
@@ -103,7 +118,7 @@ function BoardBar({ board, setBoard }) {
       if (data.boardId === board?._id) {
         toast.error(`Bảng "${board?.title}" đã bị ẩn!`);
         navigate("/boards");
-        socket.emit("refresh-sidebar", { userId: currentUserId });
+        socket.emit("refresh-sidebar", { userId });
       }
     };
 
@@ -118,7 +133,7 @@ function BoardBar({ board, setBoard }) {
       socket.off("board-updated", handleBoardUpdated);
       socket.off("board-deleted", handleBoardDeleted);
     };
-  }, [socket, socketReady, board?._id, setBoard, currentUserId, navigate]);
+  }, [socket, socketReady, board?._id, setBoard, userId, navigate]);
 
   useEffect(() => {
     const fetchCurrentUser = async () => {
@@ -131,7 +146,6 @@ function BoardBar({ board, setBoard }) {
           { headers: { Authorization: `Bearer ${token}` } }
         );
         log("BoardBar: Fetched user:", response.data.user);
-        setCurrentUserId(response.data.user.id || response.data.user._id);
       } catch (err) {
         log(
           "BoardBar: Error fetching current user:",
@@ -145,9 +159,21 @@ function BoardBar({ board, setBoard }) {
     fetchCurrentUser();
   }, []);
 
+  // All active members for ManageMembersDialog
   const activeMembers = useMemo(
     () => (board?.members || []).filter((member) => member.isActive),
     [board?.members]
+  );
+
+  // Online members only for BoardBarActions
+  const onlineMembers = useMemo(
+    () =>
+      activeMembers.filter(
+        (member) =>
+          onlineUsers &&
+          (onlineUsers.has(member.user?._id) || member.user?.isOnline)
+      ),
+    [activeMembers, onlineUsers]
   );
 
   const pastMembersAndInvited = useMemo(
@@ -183,22 +209,33 @@ function BoardBar({ board, setBoard }) {
   };
 
   const searchUsers = useCallback(
-    debounce(async (query) => {
+    async (query) => {
       if (!query.trim()) {
         setSearchResults([]);
         return;
       }
+
+      if (!board?._id) {
+        console.warn("BoardBar: Missing board._id", { board });
+        toast.error("Không tìm thấy ID bảng!");
+        setSearchResults([]);
+        return;
+      }
+
       try {
         setLoading(true);
         const token = localStorage.getItem("token");
-        log("BoardBar: Searching users:", { query, boardId: board?._id });
+        if (!token) {
+          throw new Error("Không tìm thấy token!");
+        }
+
         const response = await axios.get(
           `http://localhost:5000/api/auth/search?query=${encodeURIComponent(
             query
-          )}&boardId=${board?._id}`,
+          )}&boardId=${board._id}`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
-        log("BoardBar: Search response:", response.data);
+
         const filteredResults = response.data.users
           .filter(
             (user) =>
@@ -215,18 +252,43 @@ function BoardBar({ board, setBoard }) {
               (i) => i.user?._id === user._id && i.isActive
             ),
           }));
+
         setSearchResults(filteredResults);
+        if (filteredResults.length === 0) {
+          toast.info("Không tìm thấy người dùng phù hợp!");
+        }
       } catch (err) {
-        log("BoardBar: Error searching users:", err.response?.data || err);
+        console.error("BoardBar: Error searching users:", {
+          message: err.message,
+          response: err.response?.data,
+        });
         toast.error(
-          err.response?.data?.message || "Không thể tìm kiếm người dùng."
+          err.response?.data?.message ||
+            "Có lỗi khi tìm kiếm người dùng. Vui lòng thử lại!"
         );
+        setSearchResults([]);
       } finally {
         setLoading(false);
       }
-    }, 500),
-    [board?._id, board?.members, board?.invitedUsers]
+    },
+    [board, setSearchResults, setLoading]
   );
+
+  const debouncedSearchUsers = useCallback(
+    debounce((query) => {
+      searchUsers(query);
+    }, 300),
+    [searchUsers]
+  );
+
+  useEffect(() => {
+    if (board?._id) {
+      debouncedSearchUsers(searchQuery);
+    }
+    return () => {
+      debouncedSearchUsers.cancel();
+    };
+  }, [searchQuery, debouncedSearchUsers, board?._id]);
 
   const handleInviteMember = async () => {
     if (!selectedUserId && !searchQuery.trim()) {
@@ -323,7 +385,7 @@ function BoardBar({ board, setBoard }) {
       if (!board?._id) throw new Error("Không tìm thấy board ID!");
       log("BoardBar: Leaving board:", {
         boardId: board._id,
-        userId: currentUserId,
+        userId,
       });
       const response = await axios.delete(
         `http://localhost:5000/api/boards/${board._id}/leave`,
@@ -333,7 +395,7 @@ function BoardBar({ board, setBoard }) {
       if (socket && socketReady) {
         socket.emit("member-deactivated", {
           board: response.data.board,
-          deactivatedUserId: currentUserId,
+          deactivatedUserId: userId,
           workspaceRemoved: response.data.workspaceRemoved,
         });
       }
@@ -408,10 +470,10 @@ function BoardBar({ board, setBoard }) {
   };
 
   const isOwner = useMemo(() => {
-    if (loadingUser || !currentUserId || !board?.owner) {
+    if (loadingUser || !userId || !board?.owner) {
       log("BoardBar: isOwner check skipped:", {
         loadingUser,
-        currentUserId,
+        userId,
         owner: board?.owner,
       });
       return false;
@@ -419,9 +481,9 @@ function BoardBar({ board, setBoard }) {
     const ownerId = board.owner._id
       ? board.owner._id.toString()
       : board.owner.toString();
-    log("BoardBar: isOwner check:", { currentUserId, ownerId });
-    return currentUserId === ownerId;
-  }, [loadingUser, currentUserId, board?.owner]);
+    log("BoardBar: isOwner check:", { userId, ownerId });
+    return userId === ownerId;
+  }, [loadingUser, userId, board?.owner]);
 
   if (!board || !board._id) {
     return (
@@ -468,9 +530,10 @@ function BoardBar({ board, setBoard }) {
           handleFilters={handleFilters}
         />
         <BoardBarActions
-          activeMembers={activeMembers}
+          activeMembers={onlineMembers}
           loading={loading}
           isOwner={isOwner}
+          onlineUsers={onlineUsers}
           handleOpenInviteDialog={handleOpenInviteDialog}
           handleOpenManageMembersDialog={handleOpenManageMembersDialog}
           handleOpenMenu={handleOpenMenu}
@@ -482,6 +545,7 @@ function BoardBar({ board, setBoard }) {
         selectedMember={selectedMember}
         isOwner={isOwner}
         board={board}
+        onlineUsers={onlineUsers}
         handleCloseMenu={handleCloseMenu}
         handleRemoveMember={handleRemoveMember}
       />
@@ -496,6 +560,7 @@ function BoardBar({ board, setBoard }) {
         loading={loading}
         selectedUserId={selectedUserId}
         setSelectedUserId={setSelectedUserId}
+        onlineUsers={onlineUsers}
         handleCloseInviteDialog={handleCloseInviteDialog}
         handleInviteMember={handleInviteMember}
       />
@@ -506,6 +571,7 @@ function BoardBar({ board, setBoard }) {
         activeMembers={activeMembers}
         isOwner={isOwner}
         loading={loading}
+        onlineUsers={onlineUsers}
         handleCloseManageMembersDialog={handleCloseManageMembersDialog}
         handleRemoveMember={handleRemoveMember}
         handleLeaveBoard={handleLeaveBoard}
@@ -524,6 +590,8 @@ BoardBar.propTypes = {
           _id: PropTypes.string,
           fullName: PropTypes.string,
           email: PropTypes.string,
+          avatar: PropTypes.string,
+          isOnline: PropTypes.bool,
         }),
         isActive: PropTypes.bool,
       })
@@ -531,7 +599,7 @@ BoardBar.propTypes = {
     invitedUsers: PropTypes.array,
     owner: PropTypes.oneOfType([
       PropTypes.string,
-      PropTypes.shape({ _id: PropTypes.string }),
+      PropTypes.shape({ _id: PropTypes.string, isOnline: PropTypes.bool }),
     ]),
   }).isRequired,
   setBoard: PropTypes.func.isRequired,
