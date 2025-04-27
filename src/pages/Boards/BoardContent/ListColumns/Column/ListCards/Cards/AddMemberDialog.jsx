@@ -16,7 +16,7 @@ import {
   Box,
 } from "@mui/material";
 import axios from "axios";
-import { toast } from "react-toastify"; // Thêm import
+import { toast } from "react-toastify";
 import { SocketContext } from "../../../../../../../context/SocketContext";
 import { useTheme } from "@mui/material/styles";
 
@@ -27,6 +27,7 @@ function AddMemberDialog({
   setCards,
   setColumns,
   boardMembers,
+  setBoardMembers,
 }) {
   const { socket, socketReady } = useContext(SocketContext);
   const theme = useTheme();
@@ -35,7 +36,6 @@ function AddMemberDialog({
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // Kiểm tra socket sẵn sàng
   useEffect(() => {
     if (!socket || !socketReady) {
       console.warn("AddMemberDialog: Socket không khả dụng hoặc chưa sẵn sàng");
@@ -57,7 +57,52 @@ function AddMemberDialog({
     };
   }, [socket, socketReady]);
 
-  // Hàm tìm kiếm người dùng
+  useEffect(() => {
+    if (!socket || !socketReady || !card?.board) return;
+
+    const handleMemberAddedToBoard = ({ boardId, member }) => {
+      if (boardId === card.board) {
+        console.log("AddMemberDialog: Received member-added-to-board:", {
+          boardId,
+          member,
+        });
+        setBoardMembers((prev) => {
+          const exists = prev.some(
+            (m) => (m.user?._id || m._id) === member._id
+          );
+          if (!exists) {
+            return [...prev, { ...member, isActive: true }];
+          }
+          return prev;
+        });
+        toast.info(`Thành viên ${member.fullName} đã được thêm vào bảng.`);
+      }
+    };
+
+    const handleMemberDeactivated = ({ boardId, memberId }) => {
+      if (boardId === card.board) {
+        console.log("AddMemberDialog: Received member-deactivated:", {
+          boardId,
+          memberId,
+        });
+        setBoardMembers((prev) =>
+          prev.map((m) =>
+            (m.user?._id || m._id) === memberId ? { ...m, isActive: false } : m
+          )
+        );
+        toast.info("Một thành viên đã bị vô hiệu hóa trong bảng.");
+      }
+    };
+
+    socket.on("member-added-to-board", handleMemberAddedToBoard);
+    socket.on("member-deactivated", handleMemberDeactivated);
+
+    return () => {
+      socket.off("member-added-to-board", handleMemberAddedToBoard);
+      socket.off("member-deactivated", handleMemberDeactivated);
+    };
+  }, [socket, socketReady, card?.board, setBoardMembers]);
+
   const handleSearchUsers = useCallback(async () => {
     if (!searchQuery.trim()) {
       setUsers([]);
@@ -87,7 +132,6 @@ function AddMemberDialog({
       console.log("AddMemberDialog: Search response:", response.data);
       console.log("AddMemberDialog: boardMembers:", boardMembers);
 
-      // Lọc người dùng dựa trên boardMembers
       const filteredUsers = response.data.users.filter((user) =>
         boardMembers.some((member) => {
           const memberId = member.user?._id || member._id;
@@ -117,7 +161,6 @@ function AddMemberDialog({
     }
   }, [searchQuery, card, boardMembers]);
 
-  // Hàm thêm thành viên vào thẻ
   const handleAddMember = async (memberId) => {
     if (!card?._id) {
       toast.error("ID thẻ không hợp lệ!");
@@ -154,13 +197,34 @@ function AddMemberDialog({
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      const newMember = response.data.members.find(
-        (m) => m._id.toString() === memberId.toString()
+      const selectedUser = users.find(
+        (u) => u._id.toString() === memberId.toString()
       );
+      const newMember = {
+        _id: memberId,
+        fullName:
+          selectedUser?.fullName ||
+          response.data.members.find(
+            (m) => m._id.toString() === memberId.toString()
+          )?.fullName ||
+          "Unknown",
+        email: selectedUser?.email || "",
+        avatar: selectedUser?.avatar || "",
+      };
 
       setCards((prevCards) =>
         prevCards.map((c) =>
-          c._id === card._id ? { ...c, members: response.data.members } : c
+          c._id === card._id
+            ? {
+                ...c,
+                members: response.data.members.map((m) => ({
+                  _id: m._id,
+                  fullName: m.fullName,
+                  email: m.email,
+                  avatar: m.avatar || "",
+                })),
+              }
+            : c
         )
       );
 
@@ -176,7 +240,7 @@ function AddMemberDialog({
       if (socket && socketReady) {
         socket.emit("member-added", {
           cardId: card._id,
-          member: newMember, // Đồng bộ với handleMemberAdded trong CardDetails.jsx
+          member: newMember,
         });
         console.log("Emitted member-added:", {
           cardId: card._id,
@@ -199,7 +263,6 @@ function AddMemberDialog({
     }
   };
 
-  // Debounce tìm kiếm
   useEffect(() => {
     const debounce = setTimeout(() => {
       handleSearchUsers();

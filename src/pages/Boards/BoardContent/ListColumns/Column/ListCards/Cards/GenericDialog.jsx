@@ -21,6 +21,66 @@ function GenericDialog({ open, onClose, card, setCards, setColumns }) {
   const [checklistTitle, setChecklistTitle] = useState("");
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState(null);
+
+  // Lấy currentUserId
+  useEffect(() => {
+    const fetchCurrentUser = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        if (!token) throw new Error("Không tìm thấy token!");
+        const response = await axios.get(
+          "http://localhost:5000/api/auth/profile",
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        const userId = response.data.user._id || response.data.user.id;
+        setCurrentUserId(userId);
+      } catch (err) {
+        console.error("Lỗi lấy thông tin người dùng:", err);
+        toast.error("Không thể lấy thông tin người dùng hiện tại.");
+      }
+    };
+    fetchCurrentUser();
+  }, []);
+
+  const normalizeChecklists = (checklists) => {
+    if (!Array.isArray(checklists)) {
+      console.warn("Checklists không phải là mảng:", checklists);
+      return [];
+    }
+    return checklists.map((checklist) => ({
+      _id: checklist._id || new Date().toISOString(),
+      title: checklist.title || "Untitled Checklist",
+      items: Array.isArray(checklist.items)
+        ? checklist.items.map((item) => ({
+            _id: item._id || new Date().toISOString(),
+            text: item.text || "",
+            completed: !!item.completed,
+            createdAt: item.createdAt || new Date().toISOString(),
+          }))
+        : [],
+    }));
+  };
+
+  const updateCardState = (cardId, updatedFields) => {
+    setCards((prevCards) => {
+      const newCards = prevCards.map((c) =>
+        c._id === cardId ? { ...c, ...updatedFields } : c
+      );
+      console.log("Updated cards in GenericDialog:", newCards);
+      return newCards;
+    });
+    setColumns((prevColumns) => {
+      const newColumns = prevColumns.map((col) => ({
+        ...col,
+        cards: col.cards.map((c) =>
+          c._id === cardId ? { ...c, ...updatedFields } : c
+        ),
+      }));
+      console.log("Updated columns in GenericDialog:", newColumns);
+      return newColumns;
+    });
+  };
 
   const handleAddChecklist = async () => {
     if (!checklistTitle.trim()) {
@@ -35,64 +95,68 @@ function GenericDialog({ open, onClose, card, setCards, setColumns }) {
         throw new Error("Không tìm thấy token! Vui lòng đăng nhập lại.");
       }
 
+      // Thêm checklist tạm thời vào UI
+      const tempChecklist = {
+        _id: new Date().toISOString(),
+        title: checklistTitle,
+        items: [],
+      };
+      updateCardState(card._id, {
+        checklists: [
+          ...normalizeChecklists(card.checklists || []),
+          tempChecklist,
+        ],
+      });
+
       const response = await axios.post(
         `http://localhost:5000/api/cards/${card._id}/checklists`,
         { title: checklistTitle },
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      // Kiểm tra và chuẩn hóa dữ liệu checklists
-      const validatedChecklists = (response.data || []).map((checklist) => ({
-        ...checklist,
-        items: Array.isArray(checklist.items) ? checklist.items : [],
-      }));
-
+      const validatedChecklists = normalizeChecklists(response.data);
       const newChecklist = validatedChecklists[
         validatedChecklists.length - 1
       ] || {
+        _id: new Date().toISOString(),
         title: checklistTitle,
         items: [],
       };
 
-      setCards((prevCards) =>
-        prevCards.map((c) =>
-          c._id === card._id ? { ...c, checklists: validatedChecklists } : c
-        )
-      );
+      // Cập nhật trạng thái với dữ liệu từ server
+      updateCardState(card._id, {
+        checklists: validatedChecklists,
+      });
 
-      setColumns((prevColumns) =>
-        prevColumns.map((col) => ({
-          ...col,
-          cards: col.cards.map((c) =>
-            c._id === card._id ? { ...c, checklists: validatedChecklists } : c
-          ),
-        }))
-      );
-
+      // Phát sự kiện socket
       if (socket && socketReady) {
         socket.emit("checklist-added", {
           cardId: card._id,
           checklist: newChecklist,
+          actorId: currentUserId,
         });
-        console.log("Emitted checklist-added:", {
+        console.log("Emitted checklist-added from GenericDialog:", {
           cardId: card._id,
           checklist: newChecklist,
+          actorId: currentUserId,
         });
-      } else {
-        console.warn("Socket chưa sẵn sàng, bỏ qua emit");
       }
 
-      toast.success("Thêm checklist thành công!");
       setChecklistTitle("");
       setError(null);
+      toast.success("Thêm checklist thành công!");
       onClose();
     } catch (err) {
-      console.error(
-        "Error adding checklist:",
-        err.response?.data || err.message
-      );
+      console.error("Lỗi thêm checklist:", err);
+      // Khôi phục trạng thái nếu có lỗi
+      updateCardState(card._id, { checklists: card.checklists });
       setError(
-        `Có lỗi xảy ra khi thêm checklist: ${
+        err.response?.data?.message ||
+          err.message ||
+          "Có lỗi khi thêm checklist."
+      );
+      toast.error(
+        `Có lỗi khi thêm checklist: ${
           err.response?.data?.message || err.message
         }`
       );
@@ -104,9 +168,11 @@ function GenericDialog({ open, onClose, card, setCards, setColumns }) {
   return (
     <Dialog
       open={open}
-      onClose={onClose}
-      maxWidth="sm"
-      fullWidth
+      onClose={() => {
+        setChecklistTitle("");
+        setError(null);
+        onClose();
+      }}
       sx={{
         "& .MuiDialog-paper": {
           borderRadius: "12px",
@@ -114,9 +180,6 @@ function GenericDialog({ open, onClose, card, setCards, setColumns }) {
           color: isDarkMode
             ? theme.palette.grey[200]
             : theme.palette.text.primary,
-          boxShadow: isDarkMode
-            ? "0 4px 16px rgba(0,0,0,0.5)"
-            : theme.shadows[5],
         },
       }}
     >
@@ -125,25 +188,26 @@ function GenericDialog({ open, onClose, card, setCards, setColumns }) {
           color: isDarkMode
             ? theme.palette.grey[100]
             : theme.palette.text.primary,
-          fontWeight: 600,
         }}
       >
-        Thêm checklist
+        Thêm Checklist
       </DialogTitle>
       <DialogContent>
         <TextField
           autoFocus
           margin="dense"
           label="Tiêu đề checklist"
+          type="text"
           fullWidth
+          variant="outlined"
           value={checklistTitle}
           onChange={(e) => {
             setChecklistTitle(e.target.value);
             setError(null);
           }}
           error={!!error}
+          helperText={error}
           disabled={loading}
-          variant="outlined"
           sx={{
             "& .MuiOutlinedInput-root": {
               bgcolor: isDarkMode
@@ -168,9 +232,6 @@ function GenericDialog({ open, onClose, card, setCards, setColumns }) {
               color: isDarkMode
                 ? theme.palette.grey[400]
                 : theme.palette.text.secondary,
-              "&.Mui-focused": {
-                color: theme.palette.primary.main,
-              },
             },
             "& .MuiInputBase-input": {
               color: isDarkMode
@@ -179,30 +240,20 @@ function GenericDialog({ open, onClose, card, setCards, setColumns }) {
             },
           }}
         />
-        {error && (
-          <Typography
-            color="error"
-            variant="caption"
-            sx={{ mt: 1, display: "block" }}
-          >
-            {error}
-          </Typography>
-        )}
       </DialogContent>
-      <DialogActions sx={{ p: 2 }}>
+      <DialogActions>
         <Button
-          onClick={onClose}
-          disabled={loading}
+          onClick={() => {
+            setChecklistTitle("");
+            setError(null);
+            onClose();
+          }}
           sx={{
             color: isDarkMode
               ? theme.palette.grey[400]
               : theme.palette.text.secondary,
-            "&:hover": {
-              bgcolor: isDarkMode
-                ? theme.palette.grey[700]
-                : theme.palette.grey[100],
-            },
           }}
+          disabled={loading}
         >
           Hủy
         </Button>
@@ -214,9 +265,6 @@ function GenericDialog({ open, onClose, card, setCards, setColumns }) {
             bgcolor: theme.palette.primary.main,
             "&:hover": {
               bgcolor: theme.palette.primary.dark,
-            },
-            "&:disabled": {
-              bgcolor: theme.palette.grey[400],
             },
           }}
         >

@@ -5,6 +5,7 @@ import debounce from "lodash/debounce";
 import { useNavigate } from "react-router-dom";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+import PropTypes from "prop-types";
 import BoardBarChips from "./BoardBarChips";
 import BoardBarActions from "./BoardBarActions";
 import MemberMenu from "./MemberMenu";
@@ -28,107 +29,97 @@ function BoardBar({ board, setBoard }) {
   const [currentUserId, setCurrentUserId] = useState(null);
   const navigate = useNavigate();
 
-  // Kiểm tra setBoard
+  const log = (message, data) => {
+    if (process.env.NODE_ENV === "development") {
+      console.log(message, data);
+    }
+  };
+
   useEffect(() => {
     if (typeof setBoard !== "function") {
-      console.warn("BoardBar: setBoard is not a function:", setBoard);
+      log("BoardBar: setBoard is not a function:", setBoard);
       toast.error("Lỗi cấu hình component: setBoard không hợp lệ!");
     }
   }, [setBoard]);
 
-  // Log props để debug
   useEffect(() => {
-    console.log("BoardBar props:", { board, setBoard });
+    log("BoardBar props:", { board, setBoard });
     if (!board?._id) {
-      console.warn("BoardBar: board._id không hợp lệ hoặc board là null");
+      log("BoardBar: board._id không hợp lệ hoặc board là null");
       toast.error("Không thể tải dữ liệu bảng!");
     }
   }, [board]);
 
-  // Tham gia phòng socket khi socket sẵn sàng
   useEffect(() => {
     if (!socket || !socketReady || !board?._id) return;
 
-    socket.on("connect", () => {
-      console.log("BoardBar: Socket connected, ID:", socket.id);
+    const handleConnect = () => {
+      log("BoardBar: Socket connected, ID:", socket.id);
       socket.emit("join-board", { boardId: board._id });
-      console.log("BoardBar: Joined board room:", board._id);
-    });
+      log("BoardBar: Joined board room:", board._id);
+    };
+
+    socket.on("connect", handleConnect);
 
     return () => {
-      socket.off("connect");
+      socket.off("connect", handleConnect);
     };
   }, [socket, socketReady, board?._id]);
 
-  // Socket.IO listeners
   useEffect(() => {
     if (!socket || !socketReady) return;
 
-    socket.on("member-invited", (data) => {
-      console.log("BoardBar: Received member-invited:", data);
+    const handleMemberInvited = (data) => {
+      log("BoardBar: Received member-invited:", data);
       if (typeof setBoard === "function") {
         setBoard(data.board);
         toast.success(`Đã mời ${data.invitedUser.fullName} thành công!`);
-      } else {
-        console.warn(
-          "BoardBar: setBoard is not a function, skipping state update"
-        );
+        socket.emit("board-updated", { board: data.board });
       }
-      // Phát sự kiện board-updated để đồng bộ
-      socket.emit("board-updated", { board: data.board });
-    });
+    };
 
-    socket.on("member-deactivated", (data) => {
-      console.log("BoardBar: Received member-deactivated:", data);
+    const handleMemberDeactivated = (data) => {
+      log("BoardBar: Received member-deactivated:", data);
       if (typeof setBoard === "function") {
         setBoard(data.board);
         toast.success("Đã xóa thành viên thành công!");
-      } else {
-        console.warn(
-          "BoardBar: setBoard is not a function, skipping state update"
-        );
       }
       if (data.deactivatedUserId === currentUserId) {
         navigate("/boards");
         socket.emit("refresh-sidebar", { userId: currentUserId });
       }
-      // Phát sự kiện board-updated để đồng bộ
       socket.emit("board-updated", { board: data.board });
-    });
+    };
 
-    socket.on("board-updated", (data) => {
-      console.log("BoardBar: Received board-updated:", data);
+    const handleBoardUpdated = (data) => {
+      log("BoardBar: Received board-updated:", data);
       if (typeof setBoard === "function") {
-        setBoard((prev) => {
-          const updatedBoard = JSON.parse(JSON.stringify(data.board));
-          console.log("Cập nhật board:", updatedBoard);
-          return updatedBoard;
-        });
-      } else {
-        console.warn(
-          "BoardBar: setBoard is not a function, skipping state update"
-        );
+        setBoard((prev) => JSON.parse(JSON.stringify(data.board)));
       }
-    });
+    };
 
-    socket.on("board-deleted", (data) => {
-      console.log("BoardBar: Received board-deleted:", data);
+    const handleBoardDeleted = (data) => {
+      log("BoardBar: Received board-deleted:", data);
       if (data.boardId === board?._id) {
         toast.error(`Bảng "${board?.title}" đã bị ẩn!`);
         navigate("/boards");
         socket.emit("refresh-sidebar", { userId: currentUserId });
       }
-    });
+    };
+
+    socket.on("member-invited", handleMemberInvited);
+    socket.on("member-deactivated", handleMemberDeactivated);
+    socket.on("board-updated", handleBoardUpdated);
+    socket.on("board-deleted", handleBoardDeleted);
 
     return () => {
-      socket.off("member-invited");
-      socket.off("member-deactivated");
-      socket.off("board-updated");
-      socket.off("board-deleted");
+      socket.off("member-invited", handleMemberInvited);
+      socket.off("member-deactivated", handleMemberDeactivated);
+      socket.off("board-updated", handleBoardUpdated);
+      socket.off("board-deleted", handleBoardDeleted);
     };
   }, [socket, socketReady, board?._id, setBoard, currentUserId, navigate]);
 
-  // Lấy thông tin người dùng hiện tại
   useEffect(() => {
     const fetchCurrentUser = async () => {
       try {
@@ -139,10 +130,10 @@ function BoardBar({ board, setBoard }) {
           "http://localhost:5000/api/auth/profile",
           { headers: { Authorization: `Bearer ${token}` } }
         );
-        console.log("BoardBar: Fetched user:", response.data.user);
+        log("BoardBar: Fetched user:", response.data.user);
         setCurrentUserId(response.data.user.id || response.data.user._id);
       } catch (err) {
-        console.error(
+        log(
           "BoardBar: Error fetching current user:",
           err.response?.data || err
         );
@@ -154,7 +145,6 @@ function BoardBar({ board, setBoard }) {
     fetchCurrentUser();
   }, []);
 
-  // Tái tính toán activeMembers và pastMembersAndInvited
   const activeMembers = useMemo(
     () => (board?.members || []).filter((member) => member.isActive),
     [board?.members]
@@ -175,7 +165,6 @@ function BoardBar({ board, setBoard }) {
     [board?.members, board?.invitedUsers]
   );
 
-  // Fetch board dự phòng
   const fetchBoard = async () => {
     try {
       const token = localStorage.getItem("token");
@@ -185,19 +174,14 @@ function BoardBar({ board, setBoard }) {
       );
       if (typeof setBoard === "function") {
         setBoard(response.data);
-        console.log("BoardBar: Fetched updated board:", response.data);
-      } else {
-        console.warn(
-          "BoardBar: setBoard is not a function, skipping state update"
-        );
+        log("BoardBar: Fetched updated board:", response.data);
       }
     } catch (err) {
-      console.error("BoardBar: Error fetching board:", err);
+      log("BoardBar: Error fetching board:", err);
       toast.error("Không thể cập nhật dữ liệu bảng!");
     }
   };
 
-  // Tìm kiếm người dùng
   const searchUsers = useCallback(
     debounce(async (query) => {
       if (!query.trim()) {
@@ -207,17 +191,14 @@ function BoardBar({ board, setBoard }) {
       try {
         setLoading(true);
         const token = localStorage.getItem("token");
-        console.log("BoardBar: Searching users:", {
-          query,
-          boardId: board?._id,
-        });
+        log("BoardBar: Searching users:", { query, boardId: board?._id });
         const response = await axios.get(
           `http://localhost:5000/api/auth/search?query=${encodeURIComponent(
             query
           )}&boardId=${board?._id}`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
-        console.log("BoardBar: Search response:", response.data);
+        log("BoardBar: Search response:", response.data);
         const filteredResults = response.data.users
           .filter(
             (user) =>
@@ -236,10 +217,7 @@ function BoardBar({ board, setBoard }) {
           }));
         setSearchResults(filteredResults);
       } catch (err) {
-        console.error(
-          "BoardBar: Error searching users:",
-          err.response?.data || err
-        );
+        log("BoardBar: Error searching users:", err.response?.data || err);
         toast.error(
           err.response?.data?.message || "Không thể tìm kiếm người dùng."
         );
@@ -250,7 +228,6 @@ function BoardBar({ board, setBoard }) {
     [board?._id, board?.members, board?.invitedUsers]
   );
 
-  // Mời thành viên
   const handleInviteMember = async () => {
     if (!selectedUserId && !searchQuery.trim()) {
       toast.error("Vui lòng chọn một người dùng hoặc nhập email!");
@@ -262,22 +239,15 @@ function BoardBar({ board, setBoard }) {
       const payload = selectedUserId
         ? { userId: selectedUserId }
         : { email: searchQuery.trim() };
-      console.log("BoardBar: Inviting member:", {
-        boardId: board?._id,
-        payload,
-      });
+      log("BoardBar: Inviting member:", { boardId: board?._id, payload });
       const response = await axios.post(
         `http://localhost:5000/api/boards/${board?._id}/invite`,
         payload,
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      console.log("BoardBar: Invite response:", response.data);
+      log("BoardBar: Invite response:", response.data);
       if (typeof setBoard === "function") {
         setBoard(response.data.board);
-      } else {
-        console.warn(
-          "BoardBar: setBoard is not a function, skipping state update"
-        );
       }
       if (selectedUserId && socket && socketReady) {
         socket.emit("member-invited", {
@@ -291,9 +261,9 @@ function BoardBar({ board, setBoard }) {
       setSearchQuery("");
       setSelectedUserId(null);
       setSearchResults([]);
-      fetchBoard(); // Dự phòng
+      fetchBoard();
     } catch (err) {
-      console.error("BoardBar: Error inviting member:", {
+      log("BoardBar: Error inviting member:", {
         message: err.message,
         response: err.response?.data,
         status: err.response?.status,
@@ -306,7 +276,6 @@ function BoardBar({ board, setBoard }) {
     }
   };
 
-  // Xóa thành viên
   const handleRemoveMember = async (userId) => {
     if (
       !window.confirm("Bạn có chắc chắn muốn xóa thành viên này khỏi bảng?")
@@ -316,21 +285,14 @@ function BoardBar({ board, setBoard }) {
     try {
       setLoading(true);
       const token = localStorage.getItem("token");
-      console.log("BoardBar: Removing member:", {
-        boardId: board?._id,
-        userId,
-      });
+      log("BoardBar: Removing member:", { boardId: board?._id, userId });
       const response = await axios.delete(
         `http://localhost:5000/api/boards/${board?._id}/members/${userId}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      console.log("BoardBar: Remove response:", response.data);
+      log("BoardBar: Remove response:", response.data);
       if (typeof setBoard === "function") {
         setBoard(response.data.board);
-      } else {
-        console.warn(
-          "BoardBar: setBoard is not a function, skipping state update"
-        );
       }
       if (socket && socketReady) {
         socket.emit("member-deactivated", {
@@ -341,9 +303,9 @@ function BoardBar({ board, setBoard }) {
       }
       toast.success("Đã xóa thành viên thành công!");
       handleCloseMenu();
-      fetchBoard(); // Dự phòng
+      fetchBoard();
     } catch (err) {
-      console.error("BoardBar: Error removing member:", err);
+      log("BoardBar: Error removing member:", err);
       toast.error(
         err.response?.data?.message || "Có lỗi xảy ra khi xóa thành viên."
       );
@@ -352,7 +314,6 @@ function BoardBar({ board, setBoard }) {
     }
   };
 
-  // Rời bảng
   const handleLeaveBoard = async () => {
     if (!window.confirm("Bạn có chắc muốn rời khỏi bảng này?")) return;
     try {
@@ -360,7 +321,7 @@ function BoardBar({ board, setBoard }) {
       const token = localStorage.getItem("token");
       if (!token) throw new Error("Không tìm thấy token!");
       if (!board?._id) throw new Error("Không tìm thấy board ID!");
-      console.log("BoardBar: Leaving board:", {
+      log("BoardBar: Leaving board:", {
         boardId: board._id,
         userId: currentUserId,
       });
@@ -368,7 +329,7 @@ function BoardBar({ board, setBoard }) {
         `http://localhost:5000/api/boards/${board._id}/leave`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      console.log("BoardBar: Leave response:", response.data);
+      log("BoardBar: Leave response:", response.data);
       if (socket && socketReady) {
         socket.emit("member-deactivated", {
           board: response.data.board,
@@ -380,10 +341,7 @@ function BoardBar({ board, setBoard }) {
       navigate(response.data.redirect || "/boards");
       toast.success("Đã rời khỏi bảng!");
     } catch (err) {
-      console.error(
-        "BoardBar: Error leaving board:",
-        err.response?.data || err
-      );
+      log("BoardBar: Error leaving board:", err.response?.data || err);
       const errorMessage =
         err.response?.data?.message ||
         err.message ||
@@ -394,14 +352,12 @@ function BoardBar({ board, setBoard }) {
     }
   };
 
-  // Tìm kiếm tự động
   useEffect(() => {
     if (board?._id) {
       searchUsers(searchQuery);
     }
   }, [searchQuery, searchUsers, board?._id]);
 
-  // Mở/đóng dialog
   const handleOpenInviteDialog = () => {
     if (!board?._id) {
       toast.error("Không tìm thấy ID của bảng!");
@@ -425,13 +381,12 @@ function BoardBar({ board, setBoard }) {
     setOpenManageMembersDialog(false);
   };
 
-  // Menu
   const handleOpenMenu = (event, member) => {
     if (event.currentTarget) {
       setAnchorEl(event.currentTarget);
       setSelectedMember(member);
     } else {
-      console.warn("BoardBar: Invalid anchorEl in handleOpenMenu");
+      log("BoardBar: Invalid anchorEl in handleOpenMenu");
     }
   };
 
@@ -440,7 +395,6 @@ function BoardBar({ board, setBoard }) {
     setSelectedMember(null);
   };
 
-  // Các tính năng placeholder
   const handleAddToGoogleDrive = () => {
     toast.info("Tính năng Add to Google Drive đang được phát triển!");
   };
@@ -453,10 +407,9 @@ function BoardBar({ board, setBoard }) {
     toast.info("Tính năng Filters đang được phát triển!");
   };
 
-  // Kiểm tra quyền sở hữu
   const isOwner = useMemo(() => {
     if (loadingUser || !currentUserId || !board?.owner) {
-      console.log("BoardBar: isOwner check skipped:", {
+      log("BoardBar: isOwner check skipped:", {
         loadingUser,
         currentUserId,
         owner: board?.owner,
@@ -466,12 +419,11 @@ function BoardBar({ board, setBoard }) {
     const ownerId = board.owner._id
       ? board.owner._id.toString()
       : board.owner.toString();
-    console.log("BoardBar: isOwner check:", { currentUserId, ownerId });
+    log("BoardBar: isOwner check:", { currentUserId, ownerId });
     return currentUserId === ownerId;
   }, [loadingUser, currentUserId, board?.owner]);
 
-  // Xử lý trường hợp board là null hoặc đang tải
-  if (!board) {
+  if (!board || !board._id) {
     return (
       <Box sx={{ display: "flex", justifyContent: "center", my: 3 }}>
         <CircularProgress sx={{ color: theme.palette.primary.main }} />
@@ -561,5 +513,28 @@ function BoardBar({ board, setBoard }) {
     </>
   );
 }
+
+BoardBar.propTypes = {
+  board: PropTypes.shape({
+    _id: PropTypes.string,
+    title: PropTypes.string,
+    members: PropTypes.arrayOf(
+      PropTypes.shape({
+        user: PropTypes.shape({
+          _id: PropTypes.string,
+          fullName: PropTypes.string,
+          email: PropTypes.string,
+        }),
+        isActive: PropTypes.bool,
+      })
+    ),
+    invitedUsers: PropTypes.array,
+    owner: PropTypes.oneOfType([
+      PropTypes.string,
+      PropTypes.shape({ _id: PropTypes.string }),
+    ]),
+  }).isRequired,
+  setBoard: PropTypes.func.isRequired,
+};
 
 export default BoardBar;

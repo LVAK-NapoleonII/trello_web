@@ -29,7 +29,7 @@ import { useParams } from "react-router-dom";
 import { toast } from "react-toastify";
 import { SocketContext } from "../../../../context/SocketContext";
 import { useTheme } from "@mui/material/styles";
-import Cards from "./Column/ListCards/Cards/Cards"; // Thêm import Cards
+import Cards from "./Column/ListCards/Cards/Cards";
 
 function ListColumns({ boardId: propBoardId }) {
   const { boardId: urlBoardId } = useParams();
@@ -43,6 +43,7 @@ function ListColumns({ boardId: propBoardId }) {
   const [newColumnTitle, setNewColumnTitle] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
   const [activeDragItem, setActiveDragItem] = useState(null);
+  const [recentlyCreatedListId, setRecentlyCreatedListId] = useState(null); // Track recently created list
 
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
@@ -139,10 +140,25 @@ function ListColumns({ boardId: propBoardId }) {
 
     const handleListCreated = ({ boardId: updatedBoardId, list }) => {
       if (updatedBoardId === boardId) {
-        setColumns((prev) => [
-          ...prev,
-          { ...list, cards: [], isExpanded: true },
-        ]);
+        // Skip if this list was just created by the current client
+        if (list._id === recentlyCreatedListId) {
+          console.log(
+            "ListColumns: Skipping list-created for recently created list:",
+            list._id
+          );
+          return;
+        }
+        // Check if list already exists to prevent duplicates
+        setColumns((prev) => {
+          if (prev.some((col) => col._id === list._id)) {
+            console.log(
+              "ListColumns: List already exists, skipping:",
+              list._id
+            );
+            return prev;
+          }
+          return [...prev, { ...list, cards: [], isExpanded: true }];
+        });
         toast.info("Một cột mới đã được thêm!");
       }
     };
@@ -287,7 +303,12 @@ function ListColumns({ boardId: propBoardId }) {
       socket.off("member-deactivated", handleMemberDeactivated);
       socket.off("member-invited", handleMemberInvited);
     };
-  }, [boardId, socket, socketReady]);
+  }, [
+    boardId,
+    socket,
+    socketReady,
+    recentlyCreatedListId, // Add dependency
+  ]);
 
   // Tạo cột mới
   const handleCreateColumn = async () => {
@@ -318,20 +339,21 @@ function ListColumns({ boardId: propBoardId }) {
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      setColumns([
-        ...columns,
-        { ...response.data, cards: [], isExpanded: true },
-      ]);
+      const newList = { ...response.data, cards: [], isExpanded: true };
+      setColumns([...columns, newList]);
+      setRecentlyCreatedListId(newList._id); // Mark this list as recently created
       if (socket && socketReady) {
         socket.emit("list-created", {
           boardId,
-          list: response.data,
+          list: newList,
         });
-        console.log("Emitted list-created:", { boardId, list: response.data });
+        console.log("Emitted list-created:", { boardId, list: newList });
       }
       setOpenCreateColumnDialog(false);
       setNewColumnTitle("");
       toast.success("Tạo cột thành công!");
+      // Clear recentlyCreatedListId after a short delay
+      setTimeout(() => setRecentlyCreatedListId(null), 1000);
     } catch (err) {
       console.error("Error creating column:", {
         message: err.message,

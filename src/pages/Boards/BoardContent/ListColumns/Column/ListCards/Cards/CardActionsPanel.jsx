@@ -1,5 +1,5 @@
-import { useState, useEffect, useContext } from "react";
-import { CardActions, Button, Chip, IconButton, Tooltip } from "@mui/material";
+import { useState, useContext } from "react";
+import { CardActions, Chip, IconButton, Tooltip } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
 import Groups3Icon from "@mui/icons-material/Groups3";
@@ -21,82 +21,42 @@ function CardActionsPanel({
 }) {
   const { socket, socketReady } = useContext(SocketContext);
   const [openEditDialog, setOpenEditDialog] = useState(false);
+  const [loading, setLoading] = useState({
+    delete: false,
+    toggleComplete: false,
+  });
 
-  useEffect(() => {
-    if (!socket || !socketReady || !boardId) {
-      console.warn(
-        "CardActionsPanel: Socket not available, not ready, or no boardId"
-      );
-      return;
-    }
-
-    // Xử lý khi thẻ bị xóa
-    const handleCardDeleted = ({ listId, cardId }) => {
-      if (cardId === card._id) {
-        console.log("CardActionsPanel: Received card-deleted:", {
-          listId,
-          cardId,
-        });
-        setCards((prevCards) => prevCards.filter((c) => c._id !== cardId));
-        setColumns((prevColumns) =>
-          prevColumns.map((col) =>
-            col._id === listId
-              ? { ...col, cards: col.cards.filter((c) => c._id !== cardId) }
-              : col
-          )
-        );
-        toast.info("Thẻ đã được xóa.");
-      }
-    };
-
-    // Xử lý khi trạng thái hoàn thành thay đổi
-    const handleCardCompletionToggled = ({ cardId, completed }) => {
-      if (cardId === card._id) {
-        console.log("CardActionsPanel: Received card-completion-toggled:", {
-          cardId,
-          completed,
-        });
-        setCards((prevCards) =>
-          prevCards.map((c) => (c._id === cardId ? { ...c, completed } : c))
-        );
-        setColumns((prevColumns) =>
-          prevColumns.map((col) =>
-            col._id === card.list
-              ? {
-                  ...col,
-                  cards: col.cards.map((c) =>
-                    c._id === cardId ? { ...c, completed } : c
-                  ),
-                }
-              : col
-          )
-        );
-        toast.info(
-          `Thẻ đã được ${completed ? "đánh dấu hoàn thành" : "bỏ hoàn thành"}.`
-        );
-      }
-    };
-
-    socket.on("card-deleted", handleCardDeleted);
-    socket.on("card-completion-toggled", handleCardCompletionToggled);
-
-    return () => {
-      socket.off("card-deleted", handleCardDeleted);
-      socket.off("card-completion-toggled", handleCardCompletionToggled);
-    };
-  }, [socket, socketReady, boardId, card._id, card.list, setCards, setColumns]);
+  const normalizeUser = (user) => ({
+    _id: user?._id || "unknown",
+    fullName: user?.fullName || user?.email || "Unknown User",
+    avatar: user?.avatar || "",
+    email: user?.email || "",
+  });
 
   const isMemberInBoard = (memberId) => {
-    if (!memberId) return false;
-    return (boardMembers || []).some(
+    if (!memberId || !boardMembers?.length) {
+      console.log("isMemberInBoard: Invalid input", { memberId, boardMembers });
+      return false;
+    }
+    const boardMember = boardMembers.find(
       (boardMember) =>
-        boardMember.user?._id?.toString() === memberId.toString() &&
-        boardMember.isActive
+        (boardMember.user?._id || boardMember._id)?.toString() ===
+        memberId.toString()
     );
+    if (!boardMember) {
+      console.log(`isMemberInBoard: No matching member found for ${memberId}`);
+      return false;
+    }
+    const isActive =
+      boardMember.isActive !== undefined ? boardMember.isActive : true;
+    console.log(`isMemberInBoard: Member ${memberId}, isActive: ${isActive}`);
+    return isActive;
   };
 
   const handleDeleteCard = async () => {
     if (!window.confirm("Bạn có chắc chắn muốn xóa thẻ này?")) return;
+
+    setLoading((prev) => ({ ...prev, delete: true }));
 
     try {
       const token = localStorage.getItem("token");
@@ -126,10 +86,14 @@ function CardActionsPanel({
       toast.error(
         `Có lỗi khi xóa thẻ: ${err.response?.data?.message || err.message}`
       );
+    } finally {
+      setLoading((prev) => ({ ...prev, delete: false }));
     }
   };
 
   const handleToggleComplete = async () => {
+    setLoading((prev) => ({ ...prev, toggleComplete: true }));
+
     try {
       const token = localStorage.getItem("token");
       const response = await axios.put(
@@ -172,6 +136,8 @@ function CardActionsPanel({
           err.response?.data?.message || err.message
         }`
       );
+    } finally {
+      setLoading((prev) => ({ ...prev, toggleComplete: false }));
     }
   };
 
@@ -191,9 +157,12 @@ function CardActionsPanel({
   ).length;
 
   const membersTooltip = (card?.members || [])
+    .map((member) => ({
+      ...normalizeUser(member),
+    }))
     .map(
       (member) =>
-        `${member.fullName || member.email || "Không xác định"} (${
+        `${member.fullName} (${
           isMemberInBoard(member._id)
             ? "Còn trong bảng"
             : "Không còn trong bảng"
@@ -294,6 +263,7 @@ function CardActionsPanel({
             <IconButton
               size="small"
               onClick={handleToggleComplete}
+              disabled={loading.toggleComplete}
               sx={{
                 color: card.completed
                   ? (theme) => theme.palette.success.main
@@ -318,6 +288,7 @@ function CardActionsPanel({
             <IconButton
               size="small"
               onClick={handleDeleteCard}
+              disabled={loading.delete}
               sx={{
                 color: (theme) => theme.palette.error.main,
               }}

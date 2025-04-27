@@ -1,4 +1,4 @@
-import { useState, useEffect, useContext } from "react"; // Added useEffect
+import { useState, useEffect, useContext, useCallback } from "react";
 import { Button, Typography } from "@mui/material";
 import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
@@ -48,7 +48,11 @@ function Column({
   const [openCreateCardDialog, setOpenCreateCardDialog] = useState(false);
   const [newCardTitle, setNewCardTitle] = useState("");
   const [newCardDescription, setNewCardDescription] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState({
+    createCard: false,
+    editTitle: false,
+    deleteColumn: false,
+  });
   const [refreshCards, setRefreshCards] = useState(false);
 
   const {
@@ -83,6 +87,7 @@ function Column({
   const COLUMN_FOOTER_HEIGHT = "56px";
   const [anchorEl, setAnchorEl] = useState(null);
   const open = Boolean(anchorEl);
+
   const handleClick = (event) => {
     setAnchorEl(event.currentTarget);
   };
@@ -91,48 +96,149 @@ function Column({
     setAnchorEl(null);
   };
 
-  // Join the board's socket room and handle real-time card creation
+  // Normalize card data to ensure consistency
+  const normalizeCard = useCallback(
+    (card) => ({
+      _id: card._id || new Date().toISOString(),
+      title: card.title || "Untitled Card",
+      description: card.description || "",
+      list: card.list || column._id,
+      board: card.board || boardId,
+      members: Array.isArray(card.members)
+        ? card.members.map((m) => ({
+            _id: m._id || "unknown",
+            fullName: m.fullName || m.email || "Unknown User",
+            avatar: m.avatar || "",
+            email: m.email || "",
+          }))
+        : [],
+      comments: Array.isArray(card.comments)
+        ? card.comments.map((c) => ({
+            ...c,
+            user: {
+              _id: c.user?._id || "unknown",
+              fullName: c.user?.fullName || c.user?.email || "Unknown User",
+              avatar: c.user?.avatar || "",
+              email: c.user?.email || "",
+            },
+          }))
+        : [],
+      notes: Array.isArray(card.notes)
+        ? card.notes.map((n) => ({
+            ...n,
+            createdBy: {
+              _id: n.createdBy?._id || "unknown",
+              fullName:
+                n.createdBy?.fullName || n.createdBy?.email || "Unknown User",
+              avatar: n.createdBy?.avatar || "",
+              email: n.createdBy?.email || "",
+            },
+          }))
+        : [],
+      checklists: Array.isArray(card.checklists)
+        ? card.checklists.map((cl) => ({
+            _id: cl._id || new Date().toISOString(),
+            title: cl.title || "Untitled Checklist",
+            items: Array.isArray(cl.items)
+              ? cl.items.map((item) => ({
+                  _id: item._id || new Date().toISOString(),
+                  text: item.text || "",
+                  completed: !!item.completed,
+                  createdAt: item.createdAt || new Date().toISOString(),
+                }))
+              : [],
+          }))
+        : [],
+      completed: !!card.completed,
+      createdAt: card.createdAt || new Date().toISOString(),
+    }),
+    [boardId, column._id]
+  );
+
+  // Join the board's socket room and handle real-time updates
   useEffect(() => {
     if (!socket || !socketReady || !boardId) {
-      console.warn("Socket not available, not ready, or no boardId in Column");
+      console.warn("Column: Socket not available, not ready, or no boardId", {
+        socket: !!socket,
+        socketReady,
+        boardId,
+      });
+      toast.warn("Không thể kết nối thời gian thực. Kiểm tra kết nối mạng!", {
+        toastId: "socket-error-column",
+      });
       return;
     }
 
     // Join the board's room
-    socket.emit("join", boardId);
-    console.log("Column joined board room:", boardId);
+    socket.emit("join-board", { boardId });
+    console.log("Column: Joined board room:", boardId);
 
-    // Handle incoming card-created events
-    const handleCardCreated = (data) => {
-      console.log("Received card-created:", data);
-      const { listId, card } = data;
-
-      // Update columns state to add the new card to the correct list
-      setColumns((prevColumns) =>
-        prevColumns.map((col) =>
-          col._id === listId
-            ? {
-                ...col,
-                cards: [...(col.cards || []), card],
-              }
-            : col
-        )
-      );
-      // Trigger refresh for ListCards
-      setRefreshCards((prev) => !prev);
+    // Socket event handlers
+    const socketHandlers = {
+      "card-created": ({ listId, card }) => {
+        console.log("Column: Received card-created:", { listId, card });
+        if (listId === column._id) {
+          setColumns((prevColumns) =>
+            prevColumns.map((col) =>
+              col._id === listId
+                ? {
+                    ...col,
+                    cards: [...(col.cards || []), normalizeCard(card)],
+                  }
+                : col
+            )
+          );
+          setRefreshCards((prev) => !prev);
+          toast.info("Thẻ mới đã được thêm vào cột.");
+        }
+      },
+      "list-updated": ({ list }) => {
+        console.log("Column: Received list-updated:", { list });
+        if (list._id === column._id) {
+          setColumns((prevColumns) =>
+            prevColumns.map((col) =>
+              col._id === list._id
+                ? {
+                    ...col,
+                    title: list.title,
+                    cards: Array.isArray(list.cards)
+                      ? list.cards.map(normalizeCard)
+                      : col.cards,
+                  }
+                : col
+            )
+          );
+          setNewTitle(list.title);
+          toast.info("Tiêu đề cột đã được cập nhật.");
+        }
+      },
+      "list-deleted": ({ listId }) => {
+        console.log("Column: Received list-deleted:", { listId });
+        if (listId === column._id) {
+          setColumns((prevColumns) =>
+            prevColumns.filter((col) => col._id !== listId)
+          );
+          toast.info("Cột đã được xóa.");
+        }
+      },
     };
 
-    socket.on("card-created", handleCardCreated);
+    // Register socket event listeners
+    Object.entries(socketHandlers).forEach(([event, handler]) => {
+      socket.on(event, handler);
+    });
 
-    // Cleanup: Leave the room and remove the listener
+    // Cleanup: Leave the room and remove listeners
     return () => {
-      socket.emit("leave", boardId);
-      console.log("Column left board room:", boardId);
-      socket.off("card-created", handleCardCreated);
+      socket.emit("leave-board", { boardId });
+      console.log("Column: Left board room:", boardId);
+      Object.keys(socketHandlers).forEach((event) => {
+        socket.off(event, socketHandlers[event]);
+      });
     };
-  }, [socket, socketReady, boardId, setColumns]);
+  }, [socket, socketReady, boardId, column._id, setColumns, normalizeCard]);
 
-  const handleToggleExpand = () => {
+  const handleToggleExpand = useCallback(() => {
     const newExpanded = !isExpanded;
     setIsExpanded(newExpanded);
     setColumns((prevColumns) =>
@@ -140,10 +246,12 @@ function Column({
         col._id === column._id ? { ...col, isExpanded: newExpanded } : col
       )
     );
-  };
+  }, [isExpanded, setColumns, column._id]);
 
   const handleDeleteColumn = async () => {
     if (!window.confirm("Bạn có chắc chắn muốn xóa cột này?")) return;
+
+    setLoading((prev) => ({ ...prev, deleteColumn: true }));
 
     try {
       const token = localStorage.getItem("token");
@@ -164,11 +272,14 @@ function Column({
           boardId,
           listId: column._id,
         });
-        console.log("Emitted list-deleted:", { boardId, listId: column._id });
+        console.log("Column: Emitted list-deleted:", {
+          boardId,
+          listId: column._id,
+        });
       }
       toast.success("Xóa cột thành công!");
     } catch (err) {
-      console.error("Error deleting column:", {
+      console.error("Column: Error deleting column:", {
         message: err.message,
         response: err.response?.data,
       });
@@ -177,6 +288,8 @@ function Column({
           err.response?.data?.message || err.message
         }`
       );
+    } finally {
+      setLoading((prev) => ({ ...prev, deleteColumn: false }));
     }
   };
 
@@ -185,6 +298,8 @@ function Column({
       toast.error("Tiêu đề cột không được để trống!");
       return;
     }
+
+    setLoading((prev) => ({ ...prev, editTitle: true }));
 
     try {
       const token = localStorage.getItem("token");
@@ -209,12 +324,15 @@ function Column({
           boardId,
           list: response.data,
         });
-        console.log("Emitted list-updated:", { boardId, list: response.data });
+        console.log("Column: Emitted list-updated:", {
+          boardId,
+          list: response.data,
+        });
       }
       toast.success("Cập nhật tiêu đề cột thành công!");
       setOpenEditTitleDialog(false);
     } catch (err) {
-      console.error("Error updating column title:", {
+      console.error("Column: Error updating column title:", {
         message: err.message,
         response: err.response?.data,
       });
@@ -223,6 +341,8 @@ function Column({
           err.response?.data?.message || err.message
         }`
       );
+    } finally {
+      setLoading((prev) => ({ ...prev, editTitle: false }));
     }
   };
 
@@ -242,8 +362,9 @@ function Column({
       return;
     }
 
+    setLoading((prev) => ({ ...prev, createCard: true }));
+
     try {
-      setLoading(true);
       const token = localStorage.getItem("token");
       if (!token) {
         throw new Error("Không tìm thấy token! Vui lòng đăng nhập lại.");
@@ -260,11 +381,13 @@ function Column({
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
+      const newCard = normalizeCard(response.data);
+
       // Update local state for the current client
       setColumns((prevColumns) =>
         prevColumns.map((col) =>
           col._id === column._id
-            ? { ...col, cards: [...(col.cards || []), response.data] }
+            ? { ...col, cards: [...(col.cards || []), newCard] }
             : col
         )
       );
@@ -273,12 +396,12 @@ function Column({
         socket.emit("card-created", {
           boardId,
           listId: column._id,
-          card: response.data,
+          card: newCard,
         });
-        console.log("Emitted card-created:", {
+        console.log("Column: Emitted card-created:", {
           boardId,
           listId: column._id,
-          card: response.data,
+          card: newCard,
         });
       }
 
@@ -288,14 +411,17 @@ function Column({
       setNewCardDescription("");
       setRefreshCards((prev) => !prev);
     } catch (err) {
-      console.error("Error creating card:", err.response?.data || err.message);
+      console.error("Column: Error creating card:", {
+        message: err.message,
+        response: err.response?.data,
+      });
       toast.error(
         `Có lỗi xảy ra khi tạo thẻ: ${
           err.response?.data?.message || err.message
         }`
       );
     } finally {
-      setLoading(false);
+      setLoading((prev) => ({ ...prev, createCard: false }));
     }
   };
 
@@ -591,6 +717,7 @@ function Column({
                   setColumns={setColumns}
                   boardMembers={boardMembers}
                   setBoardMembers={setBoardMembers}
+                  boardId={boardId}
                 />
               </Box>
 
@@ -618,7 +745,7 @@ function Column({
                 <Button
                   startIcon={<AddCardIcon />}
                   onClick={() => setOpenCreateCardDialog(true)}
-                  disabled={loading}
+                  disabled={loading.createCard}
                   sx={{
                     textTransform: "none",
                     fontWeight: 500,
@@ -649,7 +776,7 @@ function Column({
                     },
                   }}
                 >
-                  {loading ? "Đang tạo..." : "Thêm thẻ mới"}
+                  {loading.createCard ? "Đang tạo..." : "Thêm thẻ mới"}
                 </Button>
                 <Tooltip title="Kéo để di chuyển">
                   <DragHandleIcon
@@ -709,7 +836,7 @@ function Column({
             fullWidth
             value={newCardTitle}
             onChange={(e) => setNewCardTitle(e.target.value)}
-            disabled={loading}
+            disabled={loading.createCard}
             sx={{
               mt: 1,
               "& .MuiInputBase-root": {
@@ -756,7 +883,7 @@ function Column({
             rows={3}
             value={newCardDescription}
             onChange={(e) => setNewCardDescription(e.target.value)}
-            disabled={loading}
+            disabled={loading.createCard}
             sx={{
               mt: 2,
               "& .MuiInputBase-root": {
@@ -799,7 +926,7 @@ function Column({
         <DialogActions sx={{ p: 2 }}>
           <Button
             onClick={() => setOpenCreateCardDialog(false)}
-            disabled={loading}
+            disabled={loading.createCard}
             sx={{
               color: isDarkMode
                 ? theme.palette.grey[400]
@@ -824,7 +951,7 @@ function Column({
           <Button
             onClick={handleCreateCard}
             variant="contained"
-            disabled={loading}
+            disabled={loading.createCard}
             sx={{
               fontWeight: 500,
               borderRadius: "8px",
@@ -854,7 +981,7 @@ function Column({
               },
             }}
           >
-            {loading ? "Đang tạo..." : "Tạo"}
+            {loading.createCard ? "Đang tạo..." : "Tạo"}
           </Button>
         </DialogActions>
       </Dialog>
@@ -896,6 +1023,7 @@ function Column({
             fullWidth
             value={newTitle}
             onChange={(e) => setNewTitle(e.target.value)}
+            disabled={loading.editTitle}
             sx={{
               mt: 1,
               "& .MuiInputBase-root": {
@@ -938,6 +1066,7 @@ function Column({
         <DialogActions sx={{ p: 2 }}>
           <Button
             onClick={() => setOpenEditTitleDialog(false)}
+            disabled={loading.editTitle}
             sx={{
               color: isDarkMode
                 ? theme.palette.grey[400]
@@ -952,6 +1081,9 @@ function Column({
                   : theme.palette.grey[100],
                 transform: "scale(1.05)",
               },
+              "&:disabled": {
+                color: theme.palette.grey[600],
+              },
             }}
           >
             Hủy
@@ -959,6 +1091,7 @@ function Column({
           <Button
             onClick={handleEditTitle}
             variant="contained"
+            disabled={loading.editTitle}
             sx={{
               fontWeight: 500,
               borderRadius: "8px",
@@ -981,9 +1114,14 @@ function Column({
                   ? "0 4px 12px rgba(0,0,0,0.4)"
                   : theme.shadows[3],
               },
+              "&:disabled": {
+                background: theme.palette.grey[500],
+                color: theme.palette.grey[300],
+                boxShadow: "none",
+              },
             }}
           >
-            Lưu
+            {loading.editTitle ? "Đang lưu..." : "Lưu"}
           </Button>
         </DialogActions>
       </Dialog>

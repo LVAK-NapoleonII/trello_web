@@ -52,7 +52,6 @@ const ChecklistsSection = ({
     itemIndex: null,
   });
 
-  // Debug dữ liệu checklists
   if (!Array.isArray(checklists)) {
     console.warn("Checklists không phải là mảng:", checklists);
   } else {
@@ -128,7 +127,6 @@ const ChecklistsSection = ({
       {Array.isArray(checklists) && checklists.length > 0 ? (
         <>
           {checklists.map((checklist, checklistIndex) => {
-            // Kiểm tra checklist hợp lệ
             if (!checklist || typeof checklist !== "object") {
               return (
                 <Typography
@@ -142,7 +140,7 @@ const ChecklistsSection = ({
             }
 
             return (
-              <Box key={checklistIndex} sx={{ mb: 3, pl: 2 }}>
+              <Box key={checklist._id || checklistIndex} sx={{ mb: 3, pl: 2 }}>
                 {editChecklistIndex === checklistIndex ? (
                   <Box
                     sx={{
@@ -263,7 +261,7 @@ const ChecklistsSection = ({
                   <List dense>
                     {checklist.items.map((item, itemIndex) => (
                       <ListItem
-                        key={itemIndex}
+                        key={item._id || itemIndex}
                         sx={{ py: 0 }}
                         secondaryAction={
                           <>
@@ -569,7 +567,6 @@ const ChecklistsSection = ({
         </Button>
       </Box>
 
-      {/* Dialog xác nhận xóa */}
       <Dialog
         open={deleteConfirm.open}
         onClose={handleCloseConfirm}

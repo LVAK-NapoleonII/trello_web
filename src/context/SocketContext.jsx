@@ -29,7 +29,7 @@ export const SocketProvider = ({ children }) => {
       setSocketReady(false);
       toast.error(
         "Không thể kết nối đến server thời gian thực. Đang thử kết nối lại...",
-        { toastId: "socket-connect-error" } // Ngăn toast lặp lại
+        { toastId: "socket-connect-error" }
       );
     });
 

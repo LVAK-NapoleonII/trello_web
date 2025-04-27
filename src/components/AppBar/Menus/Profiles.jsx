@@ -8,7 +8,6 @@ import {
   Divider,
   Typography,
   Box,
-  IconButton,
   ListItemIcon,
   Button,
 } from "@mui/material";
@@ -21,7 +20,7 @@ import { formatDistanceToNow } from "date-fns";
 import vi from "date-fns/locale/vi";
 
 const Profiles = forwardRef((props, ref) => {
-  const { socket, socketReady } = useContext(SocketContext); // Lấy cả socket và socketReady
+  const { socket, socketReady } = useContext(SocketContext);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [anchorEl, setAnchorEl] = useState(null);
@@ -158,13 +157,28 @@ const Profiles = forwardRef((props, ref) => {
 
   return (
     <>
-      <IconButton onClick={handleOpen} ref={ref}>
+      <Box
+        onClick={handleOpen}
+        ref={ref}
+        sx={{
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: 40, // Kích thước tương tự IconButton
+          height: 40,
+          borderRadius: "50%",
+          cursor: "pointer",
+          "&:hover": {
+            backgroundColor: "rgba(0, 0, 0, 0.04)", // Hiệu ứng hover giống IconButton
+          },
+        }}
+      >
         <Avatar
           sx={{ width: 32, height: 32 }}
           alt={user?.fullName}
           src={avatarUrl}
         />
-      </IconButton>
+      </Box>
       <Menu
         anchorEl={anchorEl}
         open={open}
