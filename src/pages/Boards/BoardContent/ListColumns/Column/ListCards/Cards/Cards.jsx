@@ -26,13 +26,15 @@ function Cards({
   } = useSortable({
     id: card._id,
     data: { type: "Card", card },
+    animateLayoutChanges: () => false,
   });
 
   const style = {
     transform: CSS.Translate.toString(transform),
-    transition: transition || "transform 0.2s ease",
-    opacity: isDragging ? 0.8 : 1,
+    transition: transition || "transform 0.1s ease",
+    opacity: isDragging ? 0.6 : 1,
     cursor: isDragging ? "grabbing" : "grab",
+    zIndex: isDragging ? 1000 : "auto",
   };
 
   useEffect(() => {

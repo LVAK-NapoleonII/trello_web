@@ -18,6 +18,7 @@ function ListCards({
   boardMembers,
   setBoardMembers,
   boardId,
+  predictedPosition,
 }) {
   const { socket, socketReady } = useContext(SocketContext);
   const theme = useTheme();
@@ -237,7 +238,7 @@ function ListCards({
         prevColumns.map((col) =>
           col._id === listId
             ? {
-                ...col,
+                …col,
                 cards: col.cards.some((c) => c._id === card._id)
                   ? col.cards
                   : [...col.cards, card],
@@ -268,6 +269,65 @@ function ListCards({
     return uniqueCards?.map((c) => c._id) || [];
   }, [cards]);
 
+  const renderCards = () => {
+    const result = [];
+    cards.forEach((card, index) => {
+      if (
+        predictedPosition &&
+        predictedPosition.listId === listId &&
+        predictedPosition.index === index
+      ) {
+        result.push(
+          <Box
+            key="placeholder"
+            sx={{
+              height: "120px",
+              bgcolor: isDarkMode ? "rgba(255,255,255,0.1)" : theme.palette.grey[200],
+              borderRadius: "8px",
+              border: `2px dashed ${isDarkMode ? "#888" : theme.palette.grey[500]}`,
+              opacity: 0.7,
+              transition: "all 0.2s ease",
+            }}
+          />
+        );
+      }
+      result.push(
+        <Cards
+          key={card._id}
+          card={{ ...card, type: "Card" }}
+          setCards={setCards}
+          setColumns={setColumns}
+          boardMembers={boardMembers}
+          setBoardMembers={setBoardMembers}
+          boardId={boardId}
+          columnId={listId}
+        />
+      );
+    });
+
+    if (
+      predictedPosition &&
+      predictedPosition.listId === listId &&
+      predictedPosition.index === cards.length
+    ) {
+      result.push(
+        <Box
+          key="placeholder-end"
+          sx={{
+            height: "120px",
+            bgcolor: isDarkMode ? "rgba(255,255,255,0.1)" : theme.palette.grey[200],
+            borderRadius: "8px",
+            border: `2px dashed ${isDarkMode ? "#888" : theme.palette.grey[500]}`,
+            opacity: 0.7,
+            transition: "all 0.2s ease",
+          }}
+        />
+      );
+    }
+
+    return result;
+  };
+
   return (
     <Box
       ref={setNodeRef}
@@ -275,19 +335,19 @@ function ListCards({
         p: 2,
         display: "flex",
         flexDirection: "column",
-        gap: 2,
+        gap: 1,
         overflowX: "hidden",
         flexGrow: 1,
         bgcolor: isOver
           ? isDarkMode
-            ? "rgba(255,255,255,0.15)"
-            : theme.palette.grey[300]
+            ? "rgba(255,255,255,0.05)"
+            : theme.palette.grey[100]
           : "transparent",
         borderRadius: "8px",
         minHeight: "100px",
         transition: "background-color 0.2s ease",
         border: isOver
-          ? `2px dashed ${isDarkMode ? "#888" : theme.palette.grey[500]}`
+          ? `1px dashed ${isDarkMode ? "#666" : theme.palette.grey[400]}`
           : "none",
       }}
     >
@@ -295,19 +355,8 @@ function ListCards({
         items={sortableItems}
         strategy={verticalListSortingStrategy}
       >
-        {cards?.length > 0 ? (
-          cards.map((card) => (
-            <Cards
-              key={card._id}
-              card={{ ...card, type: "Card" }}
-              setCards={setCards}
-              setColumns={setColumns}
-              boardMembers={boardMembers}
-              setBoardMembers={setBoardMembers}
-              boardId={boardId}
-              columnId={listId}
-            />
-          ))
+        {cards?.length > 0 || predictedPosition?.listId === listId ? (
+          renderCards()
         ) : (
           <Box
             sx={{

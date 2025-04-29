@@ -11,7 +11,7 @@ import NoteAddIcon from "@mui/icons-material/NoteAdd";
 import Button from "@mui/material/Button";
 import {
   DndContext,
-  closestCorners,
+  rectIntersection,
   useSensor,
   useSensors,
   MouseSensor,
@@ -49,6 +49,7 @@ function ListColumns({ boardId: propBoardId }) {
   const [newColumnTitle, setNewColumnTitle] = useState("");
   const [activeDragItem, setActiveDragItem] = useState(null);
   const [recentlyCreatedListId, setRecentlyCreatedListId] = useState(null);
+  const [predictedPosition, setPredictedPosition] = useState(null);
 
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
@@ -446,9 +447,54 @@ function ListColumns({ boardId: propBoardId }) {
     });
   };
 
+  const handleDragOver = (event) => {
+    const { active, over } = event;
+    if (
+      !over ||
+      active.id === over.id ||
+      active.data.current?.type !== "Card"
+    ) {
+      setPredictedPosition(null);
+      return;
+    }
+
+    let overColumnId, overCardId;
+    if (over.data.current?.type === "Card") {
+      overColumnId = over.data.current?.card?.list;
+      overCardId = over.id;
+    } else if (
+      over.data.current?.type === "Column" ||
+      over.data.current?.type === "List"
+    ) {
+      overColumnId = over.data.current?.listId || over.id;
+    } else {
+      setPredictedPosition(null);
+      return;
+    }
+
+    const overColumnIndex = columns.findIndex((c) => c._id === overColumnId);
+    if (overColumnIndex === -1) {
+      setPredictedPosition(null);
+      return;
+    }
+
+    let insertIndex = overCardId
+      ? columns[overColumnIndex].cards.findIndex((c) => c._id === overCardId) +
+        1
+      : columns[overColumnIndex].cards.length;
+
+    if (insertIndex === -1) insertIndex = 0;
+
+    setPredictedPosition({
+      listId: overColumnId,
+      index: insertIndex,
+    });
+  };
+
   const handleDragEnd = useCallback(
     async (event) => {
       setActiveDragItem(null);
+      setPredictedPosition(null);
       const { active, over } = event;
       if (!over || active.id === over.id) return;
 
@@ -537,10 +583,10 @@ function ListColumns({ boardId: propBoardId }) {
           );
           let overCardIndex = overCardId
             ? sourceCards.findIndex((c) => c._id === overCardId)
-            : sourceCards.length - 1;
+            : sourceCards.length;
 
-          if (overCardIndex >= activeCardIndex) {
-            overCardIndex += 1;
+          if (overCardIndex > activeCardIndex) {
+            overCardIndex -= 1;
           }
 
           const reorderedCards = arrayMove(
@@ -564,16 +610,11 @@ function ListColumns({ boardId: propBoardId }) {
             console.log("ListColumns: Sending card order update:", {
               listId: activeColumnId,
               cardOrder,
-              url: `http://localhost:5000/api/lists/card-order/${activeColumnId}`,
             });
-            const response = await axios.put(
+            await axios.put(
               `http://localhost:5000/api/lists/card-order/${activeColumnId}`,
               { cardOrder },
               { headers: { Authorization: `Bearer ${token}` } }
-            );
-            console.log(
-              "ListColumns: Card order update response:",
-              response.data
             );
 
             if (socket && socketReady) {
@@ -591,7 +632,6 @@ function ListColumns({ boardId: propBoardId }) {
             console.error("ListColumns: Error updating card order:", {
               message: err.message,
               response: err.response?.data,
-              status: err.response?.status,
             });
             toast.error(
               `Lỗi khi cập nhật thứ tự thẻ: ${
@@ -606,36 +646,15 @@ function ListColumns({ boardId: propBoardId }) {
           });
 
           const updatedCard = { ...activeCard, list: overColumnId };
-          let insertIndex = 0;
-          if (overCardId) {
-            insertIndex = newColumns[overColumnIndex].cards.findIndex(
-              (c) => c._id === overCardId
-            );
-            if (insertIndex === -1) insertIndex = 0;
-            else insertIndex += 1;
-          } else {
-            insertIndex = newColumns[overColumnIndex].cards.length;
-          }
+          let insertIndex = overCardId
+            ? newColumns[overColumnIndex].cards.findIndex(
+                (c) => c._id === overCardId
+              ) + 1
+            : newColumns[overColumnIndex].cards.length;
 
-          if (
-            newColumns[overColumnIndex].cards.some(
-              (c) => c._id === activeCardId
-            )
-          ) {
-            console.warn(
-              "ListColumns: Card already exists in destination list, skipping insert:",
-              {
-                cardId: activeCardId,
-                overColumnId,
-              }
-            );
-          } else {
-            newColumns[overColumnIndex].cards.splice(
-              insertIndex,
-              0,
-              updatedCard
-            );
-          }
+          if (insertIndex === -1) insertIndex = 0;
+
+          newColumns[overColumnIndex].cards.splice(insertIndex, 0, updatedCard);
 
           newColumns[overColumnIndex].cards = newColumns[
             overColumnIndex
@@ -656,7 +675,7 @@ function ListColumns({ boardId: propBoardId }) {
               newBoardId: boardId,
               newPosition: insertIndex,
             });
-            const moveCardResponse = await axios.put(
+            await axios.put(
               `http://localhost:5000/api/cards/${activeCardId}/move`,
               {
                 newListId: overColumnId,
@@ -668,7 +687,7 @@ function ListColumns({ boardId: propBoardId }) {
 
             if (socket && socketReady) {
               socket.emit("card-moved", {
-                card: moveCardResponse.data.card,
+                card: updatedCard,
                 oldListId: activeColumnId,
                 newListId: overColumnId,
                 newPosition: insertIndex,
@@ -734,8 +753,9 @@ function ListColumns({ boardId: propBoardId }) {
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={closestCorners}
+      collisionDetection={rectIntersection}
       onDragStart={handleDragStart}
+      onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
     >
       <SortableContext
@@ -778,9 +798,12 @@ function ListColumns({ boardId: propBoardId }) {
                 boardId={boardId}
                 boardMembers={boardMembers}
                 setBoardMembers={setBoardMembers}
-                onDragStart={handleDragStart}
-                onDragEnd={handleDragEnd}
                 initialExpanded={column.isExpanded ?? true}
+                predictedPosition={
+                  predictedPosition?.listId === column._id
+                    ? predictedPosition
+                    : null
+                }
               />
             ))
           ) : (
@@ -898,7 +921,7 @@ function ListColumns({ boardId: propBoardId }) {
           </DialogActions>
         </Dialog>
 
-        <DragOverlay>
+        <DragOverlay dropAnimation={null}>
           {activeDragItem?.type === "Column" && (
             <Box
               sx={{
@@ -926,8 +949,6 @@ function ListColumns({ boardId: propBoardId }) {
                 boardId={boardId}
                 boardMembers={boardMembers}
                 setBoardMembers={setBoardMembers}
-                onDragStart={handleDragStart}
-                onDragEnd={handleDragEnd}
                 initialExpanded={activeDragItem.data.isExpanded}
               />
             </Box>
@@ -937,27 +958,12 @@ function ListColumns({ boardId: propBoardId }) {
               sx={{
                 bgcolor: isDarkMode ? "#3a3a50" : "#fff",
                 borderRadius: "12px",
-                boxShadow: (theme) => {
-                  const isDifferentList =
-                    activeDragItem.data.card?.list !==
-                    activeDragItem.data.over?.listId;
-                  return isDifferentList
-                    ? isDarkMode
-                      ? "0 4px 16px rgba(0,0,0,0.7)"
-                      : "0 4px 16px rgba(0,0,0,0.3)"
-                    : isDarkMode
-                    ? "0 2px 12px rgba(0,0,0,0.6)"
-                    : "0 2px 12px rgba(0,0,0,0.2)";
-                },
+                boxShadow: isDarkMode
+                  ? "0 2px 12px rgba(0,0,0,0.6)"
+                  : "0 2px 12px rgba(0,0,0,0.2)",
                 opacity: 0.95,
-                transform: (theme) => {
-                  const isDifferentList =
-                    activeDragItem.data.card?.list !==
-                    activeDragItem.data.over?.listId;
-                  return isDifferentList ? "scale(1.03)" : "scale(1.01)";
-                },
-                transition:
-                  "transform 0.2s ease, opacity 0.2s ease, box-shadow 0.2s ease",
+                transform: "scale(1.01)",
+                transition: "transform 0.2s ease, opacity 0.2s ease",
                 p: 2,
                 cursor: "grabbing",
                 border: activeDragItem.data.card.completed
@@ -975,8 +981,6 @@ function ListColumns({ boardId: propBoardId }) {
                 setColumns={setColumns}
                 boardMembers={boardMembers}
                 setBoardMembers={setBoardMembers}
-                onDragStart={handleDragStart}
-                onDragEnd={handleDragEnd}
               />
             </Box>
           )}
