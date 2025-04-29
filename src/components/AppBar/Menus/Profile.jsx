@@ -22,15 +22,18 @@ import vi from "date-fns/locale/vi";
 
 function Profile() {
   const { user, logout, loading } = useAuth();
+  const { socket, socketReady } = useContext(SocketContext);
   const navigate = useNavigate();
-  const socket = useContext(SocketContext);
   const [activities, setActivities] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [joined, setJoined] = useState(false); // Track socket room joining
 
   useEffect(() => {
-    if (!user) return;
-
-    console.log("Profile: Fetching activities for user:", user._id);
+    if (!user?._id) {
+      console.log("Profile: No user, redirecting to login");
+      navigate("/login");
+      return;
+    }
 
     const fetchActivities = async () => {
       setIsLoading(true);
@@ -38,12 +41,16 @@ function Profile() {
         const token = localStorage.getItem("token");
         if (!token) {
           console.log("Profile: No token found, cannot fetch activities");
+          toast.error("Vui lòng đăng nhập lại!");
+          navigate("/login");
           return;
         }
+        console.log("Profile: Fetching activities for user:", user._id);
         const response = await axios.get(
           "http://localhost:5000/api/activities",
           {
             headers: { Authorization: `Bearer ${token}` },
+            params: { limit: 10, page: 1 }, // Add pagination
           }
         );
         console.log("Profile: Activities response:", response.data);
@@ -51,16 +58,34 @@ function Profile() {
       } catch (err) {
         console.error("Profile: Error fetching activities:", err);
         toast.error("Không thể tải hoạt động!");
+        if (err.response?.status === 401) {
+          console.log("Profile: Unauthorized, logging out");
+          localStorage.removeItem("token");
+          logout();
+          navigate("/login");
+        }
       } finally {
         setIsLoading(false);
       }
     };
     fetchActivities();
 
+    if (!socket || !socketReady || joined) {
+      console.log(
+        "Profile: Socket not ready or already joined, skipping listeners",
+        { socket: !!socket, socketReady, joined }
+      );
+      return;
+    }
+
+    console.log("Profile: Joining user room for:", user._id);
+    socket.emit("join-user", user._id);
+    setJoined(true);
+
     socket.on("new-activity", (activity) => {
       console.log("Profile: Received new activity:", activity);
       if (!activity.isHidden) {
-        setActivities((prev) => [activity, ...prev]);
+        setActivities((prev) => [activity, ...prev].slice(0, 10));
         toast.info(activity.details || "Không có chi tiết", {
           autoClose: 3000,
         });
@@ -68,9 +93,13 @@ function Profile() {
     });
 
     return () => {
-      socket.off("new-activity");
+      if (socket) {
+        console.log("Profile: Cleaning up socket listeners");
+        socket.off("new-activity");
+      }
+      setJoined(false);
     };
-  }, [user, socket]);
+  }, [user, socket, socketReady, navigate, logout, joined]);
 
   const handleActivityClick = (activity) => {
     if (activity.target && activity.targetModel) {
@@ -82,9 +111,17 @@ function Profile() {
           navigate(`/workspaces/${activity.target._id}`);
           break;
         case "Card":
-          navigate(
-            `/boards/${activity.target.board}/cards/${activity.target._id}`
-          );
+          if (activity.target.board) {
+            navigate(
+              `/boards/${activity.target.board}/cards/${activity.target._id}`
+            );
+          } else {
+            console.warn(
+              "Profile: Missing board ID for card activity",
+              activity
+            );
+            toast.error("Không thể điều hướng: Thiếu thông tin bảng!");
+          }
           break;
         default:
           break;
@@ -95,6 +132,11 @@ function Profile() {
   const handleHideActivity = async (activityId) => {
     try {
       const token = localStorage.getItem("token");
+      if (!token) {
+        toast.error("Vui lòng đăng nhập lại!");
+        navigate("/login");
+        return;
+      }
       await axios.put(
         `http://localhost:5000/api/activities/${activityId}/hide`,
         {},
@@ -105,12 +147,23 @@ function Profile() {
     } catch (err) {
       console.error("Profile: Error hiding activity:", err);
       toast.error("Không thể ẩn hoạt động!");
+      if (err.response?.status === 401) {
+        console.log("Profile: Unauthorized, logging out");
+        localStorage.removeItem("token");
+        logout();
+        navigate("/login");
+      }
     }
   };
 
   const handleHideAllActivities = async () => {
     try {
       const token = localStorage.getItem("token");
+      if (!token) {
+        toast.error("Vui lòng đăng nhập lại!");
+        navigate("/login");
+        return;
+      }
       await axios.put(
         "http://localhost:5000/api/activities/hide-all",
         {},
@@ -121,12 +174,13 @@ function Profile() {
     } catch (err) {
       console.error("Profile: Error hiding all activities:", err);
       toast.error("Không thể ẩn tất cả hoạt động!");
+      if (err.response?.status === 401) {
+        console.log("Profile: Unauthorized, logging out");
+        localStorage.removeItem("token");
+        logout();
+        navigate("/login");
+      }
     }
-  };
-
-  const handleLogout = () => {
-    logout();
-    navigate("/login");
   };
 
   if (loading || isLoading) {
@@ -137,8 +191,7 @@ function Profile() {
     );
   }
 
-  if (!user) {
-    navigate("/login");
+  if (!user?._id) {
     return null;
   }
 

@@ -96,7 +96,7 @@ function Column({
     setAnchorEl(null);
   };
 
-  // Normalize card data to ensure consistency
+  // Normalize card data
   const normalizeCard = useCallback(
     (card) => ({
       _id: card._id || new Date().toISOString(),
@@ -155,86 +155,72 @@ function Column({
     [boardId, column._id]
   );
 
-  // Join the board's socket room and handle real-time updates
+  // Socket event handling
   useEffect(() => {
     if (!socket || !socketReady || !boardId) {
-      console.warn("Column: Socket not available, not ready, or no boardId", {
-        socket: !!socket,
-        socketReady,
-        boardId,
-      });
-      toast.warn("Không thể kết nối thời gian thực. Kiểm tra kết nối mạng!", {
-        toastId: "socket-error-column",
-      });
+      console.warn("Column: Socket not available, not ready, or no boardId");
       return;
     }
 
-    // Join the board's room
     socket.emit("join-board", { boardId });
-    console.log("Column: Joined board room:", boardId);
+    console.log("Column: Emitted join-board:", { boardId });
 
-    // Socket event handlers
-    const socketHandlers = {
-      "card-created": ({ listId, card }) => {
-        console.log("Column: Received card-created:", { listId, card });
-        if (listId === column._id) {
-          setColumns((prevColumns) =>
-            prevColumns.map((col) =>
-              col._id === listId
-                ? {
-                    ...col,
-                    cards: [...(col.cards || []), normalizeCard(card)],
-                  }
-                : col
-            )
-          );
-          setRefreshCards((prev) => !prev);
-          toast.info("Thẻ mới đã được thêm vào cột.");
-        }
-      },
-      "list-updated": ({ list }) => {
-        console.log("Column: Received list-updated:", { list });
-        if (list._id === column._id) {
-          setColumns((prevColumns) =>
-            prevColumns.map((col) =>
-              col._id === list._id
-                ? {
-                    ...col,
-                    title: list.title,
-                    cards: Array.isArray(list.cards)
-                      ? list.cards.map(normalizeCard)
-                      : col.cards,
-                  }
-                : col
-            )
-          );
-          setNewTitle(list.title);
-          toast.info("Tiêu đề cột đã được cập nhật.");
-        }
-      },
-      "list-deleted": ({ listId }) => {
-        console.log("Column: Received list-deleted:", { listId });
-        if (listId === column._id) {
-          setColumns((prevColumns) =>
-            prevColumns.filter((col) => col._id !== listId)
-          );
-          toast.info("Cột đã được xóa.");
-        }
-      },
+    const handleCardCreated = ({ listId, card }) => {
+      if (listId !== column._id) return;
+      console.log("Column: Received card-created:", { listId, card });
+      setColumns((prevColumns) =>
+        prevColumns.map((col) =>
+          col._id === listId
+            ? {
+                ...col,
+                cards: [...(col.cards || []), normalizeCard(card)],
+              }
+            : col
+        )
+      );
+      setRefreshCards((prev) => !prev);
+      toast.info("Thẻ mới đã được thêm vào cột.");
     };
 
-    // Register socket event listeners
-    Object.entries(socketHandlers).forEach(([event, handler]) => {
-      socket.on(event, handler);
-    });
+    const handleListUpdated = ({ list }) => {
+      if (list._id !== column._id) return;
+      console.log("Column: Received list-updated:", { list });
+      setColumns((prevColumns) =>
+        prevColumns.map((col) =>
+          col._id === list._id
+            ? {
+                ...col,
+                title: list.title,
+                cards: Array.isArray(list.cards)
+                  ? list.cards.map(normalizeCard)
+                  : col.cards,
+              }
+            : col
+        )
+      );
+      setNewTitle(list.title);
+      toast.info("Tiêu đề cột đã được cập nhật.");
+    };
 
-    // Cleanup: Leave the room and remove listeners
+    const handleListDeleted = ({ listId }) => {
+      if (listId !== column._id) return;
+      console.log("Column: Received list-deleted:", { listId });
+      setColumns((prevColumns) =>
+        prevColumns.filter((col) => col._id !== listId)
+      );
+      toast.info("Cột đã được xóa.");
+    };
+
+    socket.on("card-created", handleCardCreated);
+    socket.on("list-updated", handleListUpdated);
+    socket.on("list-deleted", handleListDeleted);
+
     return () => {
+      socket.off("card-created", handleCardCreated);
+      socket.off("list-updated", handleListUpdated);
+      socket.off("list-deleted", handleListDeleted);
       socket.emit("leave-board", { boardId });
-      console.log("Column: Left board room:", boardId);
-      Object.keys(socketHandlers).forEach((event) => {
-        socket.off(event, socketHandlers[event]);
-      });
+      console.log("Column: Emitted leave-board:", { boardId });
     };
   }, [socket, socketReady, boardId, column._id, setColumns, normalizeCard]);
 
@@ -255,10 +241,7 @@ function Column({
 
     try {
       const token = localStorage.getItem("token");
-      if (!token) {
-        throw new Error("Không tìm thấy token! Vui lòng đăng nhập lại.");
-      }
-
+      if (!token) throw new Error("No token found");
       await axios.delete(`http://localhost:5000/api/lists/${column._id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -283,11 +266,7 @@ function Column({
         message: err.message,
         response: err.response?.data,
       });
-      toast.error(
-        `Có lỗi xảy ra khi xóa cột: ${
-          err.response?.data?.message || err.message
-        }`
-      );
+      toast.error("Lỗi khi xóa cột!");
     } finally {
       setLoading((prev) => ({ ...prev, deleteColumn: false }));
     }
@@ -303,10 +282,7 @@ function Column({
 
     try {
       const token = localStorage.getItem("token");
-      if (!token) {
-        throw new Error("Không tìm thấy token! Vui lòng đăng nhập lại.");
-      }
-
+      if (!token) throw new Error("No token found");
       const response = await axios.put(
         `http://localhost:5000/api/lists/${column._id}`,
         { title: newTitle },
@@ -336,11 +312,7 @@ function Column({
         message: err.message,
         response: err.response?.data,
       });
-      toast.error(
-        `Có lỗi xảy ra khi cập nhật tiêu đề cột: ${
-          err.response?.data?.message || err.message
-        }`
-      );
+      toast.error("Lỗi khi cập nhật tiêu đề cột!");
     } finally {
       setLoading((prev) => ({ ...prev, editTitle: false }));
     }
@@ -351,14 +323,8 @@ function Column({
       toast.error("Tiêu đề thẻ không được để trống!");
       return;
     }
-
-    if (!boardId) {
-      toast.error("Không tìm thấy boardId! Vui lòng kiểm tra lại.");
-      return;
-    }
-
-    if (!column._id) {
-      toast.error("Không tìm thấy listId! Vui lòng kiểm tra lại.");
+    if (!boardId || !column._id) {
+      toast.error("Không tìm thấy boardId hoặc listId!");
       return;
     }
 
@@ -366,10 +332,7 @@ function Column({
 
     try {
       const token = localStorage.getItem("token");
-      if (!token) {
-        throw new Error("Không tìm thấy token! Vui lòng đăng nhập lại.");
-      }
-
+      if (!token) throw new Error("No token found");
       const response = await axios.post(
         "http://localhost:5000/api/cards",
         {
@@ -382,8 +345,6 @@ function Column({
       );
 
       const newCard = normalizeCard(response.data);
-
-      // Update local state for the current client
       setColumns((prevColumns) =>
         prevColumns.map((col) =>
           col._id === column._id
@@ -415,11 +376,7 @@ function Column({
         message: err.message,
         response: err.response?.data,
       });
-      toast.error(
-        `Có lỗi xảy ra khi tạo thẻ: ${
-          err.response?.data?.message || err.message
-        }`
-      );
+      toast.error("Lỗi khi tạo thẻ!");
     } finally {
       setLoading((prev) => ({ ...prev, createCard: false }));
     }

@@ -1,19 +1,10 @@
-import { useEffect, useState, useContext, useCallback, useMemo } from "react";
+import { useState, useEffect, useContext, useCallback, useMemo } from "react";
 import Cards from "./Cards/Cards";
 import Box from "@mui/material/Box";
-import {
-  DndContext,
-  closestCenter,
-  useSensor,
-  useSensors,
-  MouseSensor,
-  TouchSensor,
-  DragOverlay,
-} from "@dnd-kit/core";
+import { useDroppable } from "@dnd-kit/core";
 import {
   SortableContext,
   verticalListSortingStrategy,
-  arrayMove,
 } from "@dnd-kit/sortable";
 import axios from "axios";
 import { toast } from "react-toastify";
@@ -26,19 +17,17 @@ function ListCards({
   setColumns,
   boardMembers,
   setBoardMembers,
+  boardId,
 }) {
   const { socket, socketReady } = useContext(SocketContext);
   const theme = useTheme();
   const isDarkMode = theme.palette.mode === "dark";
   const [cards, setCards] = useState([]);
-  const [activeCard, setActiveCard] = useState(null);
 
-  const sensors = useSensors(
-    useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(TouchSensor, {
-      activationConstraint: { delay: 150, tolerance: 5 },
-    })
-  );
+  const { setNodeRef, isOver } = useDroppable({
+    id: `list-${listId}`,
+    data: { type: "List", listId },
+  });
 
   const fetchCards = useCallback(async () => {
     try {
@@ -51,263 +40,298 @@ function ListCards({
         `http://localhost:5000/api/cards/list/${listId}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      setCards(response.data);
+      const uniqueCards = response.data.filter(
+        (card, index, self) =>
+          self.findIndex((c) => c._id === card._id) === index
+      );
+      setCards(uniqueCards);
+      console.log("ListCards: Fetched cards for list:", {
+        listId,
+        cards: uniqueCards,
+      });
+      setColumns((prevColumns) =>
+        prevColumns.map((col) =>
+          col._id === listId ? { ...col, cards: uniqueCards } : col
+        )
+      );
     } catch (err) {
-      console.error("Error fetching cards:", err.response?.data || err.message);
+      console.error("ListCards: Error fetching cards:", {
+        message: err.message,
+        response: err.response?.data,
+      });
       toast.error(
-        `Có lỗi xảy ra khi lấy danh sách thẻ: ${
+        `Lỗi khi tải danh sách thẻ: ${
           err.response?.data?.message || err.message
         }`
       );
     }
-  }, [listId]);
-
-  useEffect(() => {
-    if (!socket || !socketReady) {
-      console.warn("Socket not available or not ready in ListCards");
-      return;
-    }
-
-    const handleConnect = () => {
-      console.log("ListCards: Socket connected");
-    };
-
-    const handleConnectError = (err) => {
-      console.error("ListCards: Socket error:", err.message);
-      toast.error("Lỗi kết nối server!");
-    };
-
-    const handleCardOrderUpdated = ({ listId: updatedListId, cardOrder }) => {
-      if (updatedListId === listId) {
-        console.log("Received card-order-updated:", { listId, cardOrder });
-        setCards((prevCards) => {
-          const reorderedCards = cardOrder
-            .map((id) => prevCards.find((card) => card._id === id))
-            .filter((card) => card);
-          const remainingCards = prevCards.filter(
-            (card) => !cardOrder.includes(card._id)
-          );
-          return [...reorderedCards, ...remainingCards];
-        });
-      }
-    };
-
-    const handleCardMoved = ({ card, oldListId, newListId }) => {
-      console.log("Received card-moved:", {
-        cardId: card._id,
-        oldListId,
-        newListId,
-      });
-      if (oldListId === listId) {
-        setCards((prevCards) => prevCards.filter((c) => c._id !== card._id));
-      } else if (newListId === listId) {
-        setCards((prevCards) => {
-          if (!prevCards.some((c) => c._id === card._id)) {
-            return [...prevCards, card];
-          }
-          return prevCards;
-        });
-      }
-    };
-
-    const handleCardCreated = ({ listId: updatedListId, card }) => {
-      if (updatedListId === listId) {
-        console.log("Received card-created:", { listId, cardId: card._id });
-        setCards((prevCards) => {
-          if (!prevCards.some((c) => c._id === card._id)) {
-            return [...prevCards, card];
-          }
-          return prevCards;
-        });
-      }
-    };
-
-    socket.on("connect", handleConnect);
-    socket.on("connect_error", handleConnectError);
-    socket.on("card-order-updated", handleCardOrderUpdated);
-    socket.on("card-moved", handleCardMoved);
-    socket.on("card-created", handleCardCreated);
-
-    return () => {
-      socket.off("connect", handleConnect);
-      socket.off("connect_error", handleConnectError);
-      socket.off("card-order-updated", handleCardOrderUpdated);
-      socket.off("card-moved", handleCardMoved);
-      socket.off("card-created", handleCardCreated);
-    };
-  }, [socket, socketReady, listId]);
+  }, [listId, setColumns]);
 
   useEffect(() => {
     if (!listId) {
-      console.error("listId is undefined or null.");
+      console.error("ListCards: listId is undefined or null");
       return;
     }
     fetchCards();
   }, [listId, refresh, fetchCards]);
 
-  const handleDragStart = (event) => {
-    const { active } = event;
-    const draggedCard = cards.find((c) => c._id === active.id);
-    setActiveCard(draggedCard);
-    console.log("Drag started:", {
-      cardId: active.id,
-      cardTitle: draggedCard?.title,
-      timestamp: new Date().toISOString(),
-    });
-  };
-
-  const handleDragEnd = async (event) => {
-    const { active, over } = event;
-    setActiveCard(null);
-
-    if (!over || active.id === over.id) {
-      console.log("No valid drag action performed");
+  useEffect(() => {
+    if (!socket || !socketReady || !boardId) {
+      console.warn(
+        "ListCards: Socket not available, not ready, or no boardId",
+        {
+          socket: !!socket,
+          socketReady,
+          boardId,
+        }
+      );
       return;
     }
 
-    const oldIndex = cards.findIndex((c) => c._id === active.id);
-    const newIndex = cards.findIndex((c) => c._id === over.id);
+    socket.emit("join-board", { boardId });
+    console.log("ListCards: Emitted join-board:", { boardId });
 
-    if (oldIndex === -1 || newIndex === -1) {
-      console.error("Invalid card indices:", { oldIndex, newIndex });
-      return;
-    }
-
-    const newCards = arrayMove(cards, oldIndex, newIndex);
-    setCards(newCards);
-
-    try {
-      const token = localStorage.getItem("token");
-      if (!token) {
-        throw new Error("Không tìm thấy token! Vui lòng đăng nhập lại.");
-      }
-
-      const cardOrder = newCards.map((card) => card._id);
-      console.log("Sending cardOrder to server:", {
+    const handleCardOrderUpdated = ({ listId: updatedListId, cardOrder }) => {
+      if (updatedListId !== listId) return;
+      console.log("ListCards: Received card-order-updated:", {
         listId,
-        cardOrder: JSON.stringify(cardOrder),
-        timestamp: new Date().toISOString(),
+        cardOrder,
       });
 
-      await axios.put(
-        `http://localhost:5000/api/lists/card-order/${listId}`,
-        { cardOrder },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      if (!Array.isArray(cardOrder)) {
+        console.error(
+          "ListCards: Invalid cardOrder, expected array:",
+          cardOrder
+        );
+        toast.error("Lỗi khi cập nhật thứ tự thẻ!");
+        fetchCards();
+        return;
+      }
+
+      setCards((prevCards) => {
+        const missingIds = cardOrder.filter(
+          (id) => !prevCards.some((card) => card._id === id)
+        );
+        if (missingIds.length > 0) {
+          console.warn(
+            "ListCards: Some card IDs in cardOrder not found:",
+            missingIds
+          );
+          fetchCards();
+          return prevCards;
+        }
+
+        const reorderedCards = cardOrder
+          .map((id) => prevCards.find((card) => card._id === id))
+          .filter((card) => card);
+        const uniqueCards = reorderedCards.filter(
+          (card, index, self) =>
+            self.findIndex((c) => c._id === card._id) === index
+        );
+        console.log("ListCards: Reordered cards:", uniqueCards);
+
+        return [...uniqueCards];
+      });
 
       setColumns((prevColumns) =>
         prevColumns.map((col) =>
-          col._id === listId ? { ...col, cards: newCards } : col
+          col._id === listId
+            ? {
+                ...col,
+                cards: cardOrder
+                  .map((id) => col.cards.find((card) => card._id === id))
+                  .filter((card) => card)
+                  .filter(
+                    (card, index, self) =>
+                      self.findIndex((c) => c._id === card._id) === index
+                  ),
+              }
+            : col
         )
       );
+      toast.info("Thứ tự thẻ đã được cập nhật!");
+    };
 
-      if (socket && socketReady) {
-        socket.emit("card-order-updated", {
-          listId,
-          cardOrder,
-        });
-        console.log("Emitted card-order-updated:", { listId, cardOrder });
-      } else {
-        console.warn("Socket not ready, skipping emit");
-      }
-    } catch (err) {
-      console.error("Error updating card order:", {
-        message: err.message,
-        response: err.response?.data,
-        status: err.response?.status,
+    const handleCardMoved = ({ card, oldListId, newListId, newPosition }) => {
+      console.log("ListCards: Received card-moved:", {
+        cardId: card._id,
+        oldListId,
+        newListId,
+        newPosition,
       });
-      toast.error(
-        `Có lỗi xảy ra khi cập nhật thứ tự thẻ: ${
-          err.response?.data?.message || err.message
-        }`
-      );
-      fetchCards(); // Khôi phục trạng thái từ server nếu lỗi
-    }
-  };
+      if (oldListId === listId) {
+        setCards((prevCards) => {
+          const newCards = prevCards.filter((c) => c._id !== card._id);
+          console.log("ListCards: Removed card from source list:", {
+            listId,
+            cardId: card._id,
+            newCards,
+          });
+          return [...newCards];
+        });
+        setColumns((prevColumns) =>
+          prevColumns.map((col) =>
+            col._id === listId
+              ? { ...col, cards: col.cards.filter((c) => c._id !== card._id) }
+              : col
+          )
+        );
+      } else if (newListId === listId) {
+        setCards((prevCards) => {
+          if (prevCards.some((c) => c._id === card._id)) {
+            console.warn(
+              "ListCards: Card already exists in destination list, updating position:",
+              {
+                listId,
+                cardId: card._id,
+              }
+            );
+            const filteredCards = prevCards.filter((c) => c._id !== card._id);
+            const newCards = [...filteredCards];
+            newCards.splice(newPosition, 0, { ...card, list: newListId });
+            return [...newCards];
+          }
+          const newCards = [...prevCards];
+          newCards.splice(newPosition, 0, { ...card, list: newListId });
+          console.log("ListCards: Added card to destination list:", {
+            listId,
+            cardId: card._id,
+            newCards,
+          });
+          return [...newCards];
+        });
+        setColumns((prevColumns) =>
+          prevColumns.map((col) =>
+            col._id === newListId
+              ? {
+                  ...col,
+                  cards: col.cards.some((c) => c._id === card._id)
+                    ? col.cards.filter((c) => c._id !== card._id)
+                    : [
+                        ...col.cards.slice(0, newPosition),
+                        { ...card, list: newListId },
+                        ...col.cards.slice(newPosition),
+                      ],
+                }
+              : col
+          )
+        );
+      }
+      toast.info("Thẻ đã được di chuyển!");
+    };
 
-  const sortableItems = useMemo(() => cards?.map((c) => c._id) || [], [cards]);
+    const handleCardCreated = ({ listId: updatedListId, card }) => {
+      if (updatedListId !== listId) return;
+      console.log("ListCards: Received card-created:", {
+        listId,
+        cardId: card._id,
+      });
+      setCards((prevCards) => {
+        if (prevCards.some((c) => c._id === card._id)) {
+          console.warn("ListCards: Card already exists:", card._id);
+          return prevCards;
+        }
+        return [...prevCards, card];
+      });
+      setColumns((prevColumns) =>
+        prevColumns.map((col) =>
+          col._id === listId
+            ? {
+                ...col,
+                cards: col.cards.some((c) => c._id === card._id)
+                  ? col.cards
+                  : [...col.cards, card],
+              }
+            : col
+        )
+      );
+      toast.info("Thẻ mới đã được thêm!");
+    };
+
+    socket.on("card-order-updated", handleCardOrderUpdated);
+    socket.on("card-moved", handleCardMoved);
+    socket.on("card-created", handleCardCreated);
+
+    return () => {
+      socket.off("card-order-updated", handleCardOrderUpdated);
+      socket.off("card-moved", handleCardMoved);
+      socket.off("card-created", handleCardCreated);
+      socket.emit("leave-board", { boardId });
+      console.log("ListCards: Emitted leave-board:", { boardId });
+    };
+  }, [socket, socketReady, listId, boardId, setColumns, fetchCards]);
+
+  const sortableItems = useMemo(() => {
+    const uniqueCards = cards?.filter(
+      (card, index, self) => self.findIndex((c) => c._id === card._id) === index
+    );
+    return uniqueCards?.map((c) => c._id) || [];
+  }, [cards]);
 
   return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={closestCenter}
-      onDragStart={handleDragStart}
-      onDragEnd={handleDragEnd}
+    <Box
+      ref={setNodeRef}
+      sx={{
+        p: 2,
+        display: "flex",
+        flexDirection: "column",
+        gap: 2,
+        overflowX: "hidden",
+        flexGrow: 1,
+        bgcolor: isOver
+          ? isDarkMode
+            ? "rgba(255,255,255,0.15)"
+            : theme.palette.grey[300]
+          : "transparent",
+        borderRadius: "8px",
+        minHeight: "100px",
+        transition: "background-color 0.2s ease",
+        border: isOver
+          ? `2px dashed ${isDarkMode ? "#888" : theme.palette.grey[500]}`
+          : "none",
+      }}
     >
       <SortableContext
         items={sortableItems}
         strategy={verticalListSortingStrategy}
       >
-        <Box
-          sx={{
-            p: 2,
-            display: "flex",
-            flexDirection: "column",
-            gap: 2,
-            overflowX: "hidden",
-            flexGrow: 1,
-          }}
-        >
-          {cards?.length > 0 ? (
-            cards.map((card) => (
-              <Cards
-                key={card._id}
-                card={{ ...card, type: "Card" }}
-                setCards={setCards}
-                setColumns={setColumns}
-                isDragging={activeCard?._id === card._id}
-                boardMembers={boardMembers}
-                setBoardMembers={setBoardMembers}
-              />
-            ))
-          ) : (
-            <Box
-              sx={{
-                p: 2,
-                color: isDarkMode
-                  ? theme.palette.grey[400]
-                  : theme.palette.text.secondary,
-                bgcolor: isDarkMode
-                  ? "rgba(255,255,255,0.05)"
-                  : theme.palette.grey[100],
-                borderRadius: "8px",
-                textAlign: "center",
-                fontWeight: 500,
-              }}
-            >
-              Không có thẻ nào trong cột này.
-            </Box>
-          )}
-        </Box>
-        <DragOverlay>
-          {activeCard && (
-            <Box
-              sx={{
-                bgcolor: isDarkMode ? "#3a3a50" : "#fff",
-                borderRadius: "12px",
-                boxShadow: isDarkMode
-                  ? "0 6px 16px rgba(0,0,0,0.5)"
-                  : theme.shadows[5],
-                opacity: 0.9,
-                transform: "scale(1.05)",
-                transition: "transform 0.2s ease, opacity 0.2s ease",
-                p: 2,
-                cursor: "grabbing",
-              }}
-            >
-              <Cards
-                card={{ ...activeCard, type: "Card" }}
-                setCards={setCards}
-                setColumns={setColumns}
-                isDragging={true}
-                boardMembers={boardMembers}
-                setBoardMembers={setBoardMembers}
-              />
-            </Box>
-          )}
-        </DragOverlay>
+        {cards?.length > 0 ? (
+          cards.map((card) => (
+            <Cards
+              key={card._id}
+              card={{ ...card, type: "Card" }}
+              setCards={setCards}
+              setColumns={setColumns}
+              boardMembers={boardMembers}
+              setBoardMembers={setBoardMembers}
+              boardId={boardId}
+              columnId={listId}
+            />
+          ))
+        ) : (
+          <Box
+            sx={{
+              p: 2,
+              color: isDarkMode
+                ? theme.palette.grey[400]
+                : theme.palette.text.secondary,
+              bgcolor: isDarkMode
+                ? "rgba(255,255,255,0.05)"
+                : theme.palette.grey[100],
+              borderRadius: "8px",
+              textAlign: "center",
+              fontWeight: 500,
+              minHeight: "80px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            Không có thẻ nào trong cột này.
+          </Box>
+        )}
       </SortableContext>
-    </DndContext>
+    </Box>
   );
 }
 

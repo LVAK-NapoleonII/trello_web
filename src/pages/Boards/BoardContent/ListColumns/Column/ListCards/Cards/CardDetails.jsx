@@ -508,11 +508,11 @@ function CardDetails({
                         ...movedCard,
                         checklists: normalizeChecklists(movedCard.checklists),
                         members: (movedCard.members || []).map(normalizeUser),
-                        comments: (newCard.comments || []).map((c) => ({
+                        comments: (movedCard.comments || []).map((c) => ({
                           ...c,
                           user: normalizeUser(c.user),
                         })),
-                        notes: (newCard.notes || []).map((n) => ({
+                        notes: (movedCard.notes || []).map((n) => ({
                           ...n,
                           createdBy: normalizeUser(n.createdBy),
                         })),

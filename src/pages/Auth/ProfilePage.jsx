@@ -24,7 +24,7 @@ import { motion } from "framer-motion";
 const ProfilePage = () => {
   const theme = useTheme();
   const { user, updateUser, loading, logout } = useAuth();
-  const { socket, socketReady, joinRoom } = useContext(SocketContext);
+  const { socket, socketReady } = useContext(SocketContext);
   const navigate = useNavigate();
   const [isEditing, setIsEditing] = useState(false);
   const [profile, setProfile] = useState({
@@ -35,6 +35,9 @@ const ProfilePage = () => {
   });
   const [activities, setActivities] = useState([]);
   const [isLoadingActivities, setIsLoadingActivities] = useState(false);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const activitiesPerPage = 10;
 
   useEffect(() => {
     if (loading) return;
@@ -79,10 +82,15 @@ const ProfilePage = () => {
           "http://localhost:5000/api/activities",
           {
             headers: { Authorization: `Bearer ${token}` },
+            params: { page, limit: activitiesPerPage },
           }
         );
         console.log("ProfilePage: Activities response:", response.data);
-        setActivities(response.data.activities?.slice(0, 50) || []);
+        const newActivities = response.data.activities || [];
+        setActivities((prev) =>
+          page === 1 ? newActivities : [...prev, ...newActivities]
+        );
+        setHasMore(newActivities.length === activitiesPerPage);
       } catch (err) {
         console.error("ProfilePage: Error fetching activities:", err);
         toast.error("Không thể tải hoạt động!");
@@ -98,21 +106,20 @@ const ProfilePage = () => {
     };
     fetchActivities();
 
-    if (!socketReady || !socket) {
-      console.log("ProfilePage: Socket not ready, skipping listeners");
+    if (!socket || !socketReady) {
+      console.log("ProfilePage: Socket not available or not ready");
       return;
     }
 
-    console.log(
-      "ProfilePage: Joining user room and setting up listeners for:",
-      user._id
-    );
-    joinRoom("user", user._id);
+    console.log("ProfilePage: Setting up socket listeners for user:", user._id);
+    socket.emit("join-user", user._id);
 
     socket.on("new-activity", (activity) => {
       console.log("ProfilePage: Received new activity:", activity);
       if (!activity.isHidden) {
-        setActivities((prev) => [activity, ...prev].slice(0, 50));
+        setActivities((prev) =>
+          [activity, ...prev].slice(0, activitiesPerPage * page)
+        );
         toast.info(activity.details || "Không có chi tiết", {
           autoClose: 3000,
         });
@@ -125,7 +132,7 @@ const ProfilePage = () => {
         socket.off("new-activity");
       }
     };
-  }, [user, socket, socketReady, joinRoom, navigate, logout]);
+  }, [user, socket, socketReady, navigate, logout, page]);
 
   const handleEdit = () => setIsEditing(true);
 
@@ -252,6 +259,7 @@ const ProfilePage = () => {
       );
       setActivities([]);
       toast.success("Đã ẩn tất cả hoạt động!");
+      setPage(1);
     } catch (err) {
       console.error("ProfilePage: Error hiding all activities:", err);
       toast.error("Không thể ẩn tất cả hoạt động!");
@@ -290,6 +298,10 @@ const ProfilePage = () => {
           break;
       }
     }
+  };
+
+  const handleLoadMore = () => {
+    setPage((prev) => prev + 1);
   };
 
   if (loading || isLoadingActivities) {
@@ -344,16 +356,15 @@ const ProfilePage = () => {
                 ? "rgba(30,30,30,0.9)"
                 : "rgba(255,255,255,0.9)",
             backdropFilter: "blur(10px)",
-            boxShadow: "0 10px 30px rgba(0,0,0,0.3)",
+            boxShadow: "0 8px 24px rgba(0,0,0,0.2)",
             border: (theme) =>
               theme.palette.mode === "dark"
                 ? "1px solid rgba(255,255,255,0.1)"
                 : "1px solid rgba(0,0,0,0.05)",
             textAlign: "center",
-            transition: "all 0.3s ease",
+            transition: "box-shadow 0.3s ease, transform 0.3s ease",
             "&:hover": {
-              transform: "scale(1.02)",
-              boxShadow: "0 12px 40px rgba(0,0,0,0.4)",
+              boxShadow: "0 12px 32px rgba(0,0,0,0.3)",
             },
           }}
         >
@@ -364,10 +375,14 @@ const ProfilePage = () => {
               width: 120,
               height: 120,
               margin: "0 auto",
-              mb: 2,
+              mb: 3,
             }}
           >
-            <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.95 }}>
+            <motion.div
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              transition={{ duration: 0.2 }}
+            >
               <Avatar
                 src={profile.avatar}
                 sx={{
@@ -379,6 +394,7 @@ const ProfilePage = () => {
                   borderColor: (theme) =>
                     theme.palette.mode === "dark" ? "#6a11cb" : "#2575fc",
                   boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
+                  transition: "transform 0.2s ease",
                 }}
               >
                 {profile.name.charAt(0)}
@@ -396,7 +412,9 @@ const ProfilePage = () => {
                   theme.palette.mode === "dark" ? "#6a11cb" : "#2575fc",
                 "&:hover": {
                   background: (theme) => theme.palette.action.hover,
+                  transform: "scale(1.1)",
                 },
+                transition: "background 0.2s ease, transform 0.2s ease",
               }}
               component="label"
               disabled={isEditing}
@@ -494,25 +512,50 @@ const ProfilePage = () => {
               background: "linear-gradient(45deg, #6a11cb, #2575fc)",
               "&:hover": {
                 background: "linear-gradient(45deg, #5b0ec9, #1f66e5)",
+                transform: "scale(1.02)",
               },
               boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
+              transition: "background 0.2s ease, transform 0.2s ease",
             }}
             onClick={isEditing ? handleSave : handleEdit}
             component={motion.button}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
+            whileHover={{ scale: 1 }}
+            whileTap={{ scale: 0.98 }}
           >
             {isEditing ? "Lưu Thay Đổi" : "Chỉnh Sửa"}
           </Button>
 
           {/* Recent Activities */}
-          <RecentActivities
-            activities={activities}
-            userName={profile.name}
-            onHideActivity={handleHideActivity}
-            onHideAllActivities={handleHideAllActivities}
-            onActivityClick={handleActivityClick}
-          />
+          <Box sx={{ mt: 3 }}>
+            <RecentActivities
+              activities={activities}
+              userName={profile.name}
+              onHideActivity={handleHideActivity}
+              onHideAllActivities={handleHideAllActivities}
+              onActivityClick={handleActivityClick}
+            />
+            {hasMore && (
+              <Button
+                variant="outlined"
+                sx={{
+                  mt: 2,
+                  width: "100%",
+                  borderRadius: 8,
+                  "&:hover": {
+                    background: (theme) => theme.palette.action.hover,
+                    transform: "scale(1.02)",
+                  },
+                  transition: "background 0.2s ease, transform 0.2s ease",
+                }}
+                onClick={handleLoadMore}
+                component={motion.button}
+                whileHover={{ scale: 1 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                Tải thêm
+              </Button>
+            )}
+          </Box>
         </Box>
       </motion.div>
     </Box>

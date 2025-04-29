@@ -2,6 +2,9 @@ import { useState, useEffect, useContext } from "react";
 import CardContainer from "./CardContainer";
 import { SocketContext } from "../../../../../../../context/SocketContext";
 import { toast } from "react-toastify";
+import { useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import Box from "@mui/material/Box";
 
 function Cards({
   card,
@@ -13,12 +16,24 @@ function Cards({
 }) {
   const { socket, socketReady } = useContext(SocketContext);
 
-  console.log("Cards: Props received:", {
-    boardMembers,
-    isArray: Array.isArray(boardMembers),
-    length: boardMembers?.length,
-    boardId,
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id: card._id,
+    data: { type: "Card", card },
   });
+
+  const style = {
+    transform: CSS.Translate.toString(transform),
+    transition: transition || "transform 0.2s ease",
+    opacity: isDragging ? 0.8 : 1,
+    cursor: isDragging ? "grabbing" : "grab",
+  };
 
   useEffect(() => {
     if (!socket || !socketReady || !boardId) {
@@ -26,12 +41,11 @@ function Cards({
       return;
     }
 
-    // Tham gia phòng boardId
     socket.emit("join-board", { boardId });
-    console.log("Cards: Joined board room:", boardId);
+    console.log("Cards: Emitted join-board:", { boardId });
 
-    // Xử lý khi thẻ bị xóa
     const handleCardDeleted = ({ listId, cardId }) => {
+      if (cardId !== card._id) return;
       console.log("Cards: Received card-deleted:", { listId, cardId });
       setCards((prevCards) => prevCards.filter((c) => c._id !== cardId));
       setColumns((prevColumns) =>
@@ -44,30 +58,36 @@ function Cards({
       toast.info("Thẻ đã được xóa.");
     };
 
-    // Xử lý khi thẻ được di chuyển
-    const handleCardMoved = ({ card, oldListId, newListId, newPosition }) => {
+    const handleCardMoved = ({
+      card: movedCard,
+      oldListId,
+      newListId,
+      newPosition,
+    }) => {
+      if (movedCard._id !== card._id) return;
       console.log("Cards: Received card-moved:", {
-        card,
+        cardId: movedCard._id,
         oldListId,
         newListId,
         newPosition,
       });
       setColumns((prevColumns) => {
         let updatedColumns = [...prevColumns];
-        // Xóa thẻ khỏi danh sách cũ
         updatedColumns = updatedColumns.map((col) =>
           col._id === oldListId
-            ? { ...col, cards: col.cards.filter((c) => c._id !== card._id) }
+            ? {
+                ...col,
+                cards: col.cards.filter((c) => c._id !== movedCard._id),
+              }
             : col
         );
-        // Thêm thẻ vào danh sách mới
         updatedColumns = updatedColumns.map((col) =>
           col._id === newListId
             ? {
                 ...col,
                 cards: [
                   ...col.cards.slice(0, newPosition),
-                  card,
+                  { ...movedCard, list: newListId },
                   ...col.cards.slice(newPosition),
                 ],
               }
@@ -78,25 +98,28 @@ function Cards({
       toast.info("Thẻ đã được di chuyển.");
     };
 
-    // Xử lý khi thẻ được cập nhật
-    const handleCardUpdated = ({ cardId, card }) => {
-      console.log("Cards: Received card-updated:", { cardId, card });
+    const handleCardUpdated = ({ cardId, card: updatedCard }) => {
+      if (cardId !== card._id) return;
+      console.log("Cards: Received card-updated:", {
+        cardId,
+        card: updatedCard,
+      });
       setCards((prevCards) =>
-        prevCards.map((c) => (c._id === cardId ? { ...c, ...card } : c))
+        prevCards.map((c) => (c._id === cardId ? { ...c, ...updatedCard } : c))
       );
       setColumns((prevColumns) =>
         prevColumns.map((col) => ({
           ...col,
           cards: col.cards.map((c) =>
-            c._id === cardId ? { ...c, ...card } : c
+            c._id === cardId ? { ...c, ...updatedCard } : c
           ),
         }))
       );
       toast.info("Thẻ đã được cập nhật.");
     };
 
-    // Xử lý khi trạng thái hoàn thành thay đổi
     const handleCardCompletionToggled = ({ cardId, completed }) => {
+      if (cardId !== card._id) return;
       console.log("Cards: Received card-completion-toggled:", {
         cardId,
         completed,
@@ -122,25 +145,26 @@ function Cards({
     socket.on("card-updated", handleCardUpdated);
     socket.on("card-completion-toggled", handleCardCompletionToggled);
 
-    // Cleanup
     return () => {
-      socket.emit("leave-board", { boardId });
-      console.log("Cards: Left board room:", boardId);
       socket.off("card-deleted", handleCardDeleted);
       socket.off("card-moved", handleCardMoved);
       socket.off("card-updated", handleCardUpdated);
       socket.off("card-completion-toggled", handleCardCompletionToggled);
+      socket.emit("leave-board", { boardId });
+      console.log("Cards: Emitted leave-board:", { boardId });
     };
-  }, [socket, socketReady, boardId, setCards, setColumns]);
+  }, [socket, socketReady, boardId, card._id, setCards, setColumns]);
 
   return (
-    <CardContainer
-      card={card}
-      setCards={setCards}
-      setColumns={setColumns}
-      boardMembers={boardMembers}
-      setBoardMembers={setBoardMembers}
-    />
+    <Box ref={setNodeRef} style={style} {...attributes} {...listeners}>
+      <CardContainer
+        card={card}
+        setCards={setCards}
+        setColumns={setColumns}
+        boardMembers={boardMembers}
+        setBoardMembers={setBoardMembers}
+      />
+    </Box>
   );
 }
 
