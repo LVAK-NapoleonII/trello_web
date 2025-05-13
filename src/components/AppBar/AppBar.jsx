@@ -186,24 +186,32 @@ function AppBar() {
 
   const handleNotificationClick = (notification) => {
     if (!notification.isRead) {
-      handleMarkAsRead(notification._id, new Event("click"));
+      handleMarkAsRead(notification._id, new Event('click'));
     }
     if (notification.target && notification.targetModel) {
       switch (notification.targetModel) {
-        case "Board":
+        case 'Board':
           navigate(`/boards/${notification.target._id}`);
           break;
-        case "Workspace":
-          navigate(`/workspaces/${notification.target._id}`);
+        case 'Workspace':
+          navigate(`/workspace/${notification.target._id}/boards`);
           break;
-        case "Card":
-          navigate(
-            `/boards/${notification.target.board}/cards/${notification.target._id}`
-          );
+        case 'Card':
+          const workspaceId = notification.target.board?.workspace?._id || notification.target.board?.workspace;
+          const boardId = notification.target.board?._id;
+          if (boardId && workspaceId) {
+            navigate(`/workspace/${workspaceId}/board/${boardId}`);
+          } else {
+            console.error('Missing board or workspace ID for notification:', notification);
+            toast.error('Không thể mở bảng: Thiếu thông tin bảng hoặc không gian làm việc!');
+          }
           break;
         default:
           break;
       }
+    } else {
+      console.warn('Invalid notification data:', notification);
+      toast.error('Thông báo không hợp lệ!');
     }
     handleCloseNotifications();
   };

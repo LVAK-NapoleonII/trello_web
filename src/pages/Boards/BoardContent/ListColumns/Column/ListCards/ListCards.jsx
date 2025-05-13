@@ -6,6 +6,7 @@ import {
   SortableContext,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
+import { closestCenter, DndContext } from "@dnd-kit/core";
 import axios from "axios";
 import { toast } from "react-toastify";
 import { SocketContext } from "../../../../../../context/SocketContext";
@@ -28,6 +29,8 @@ function ListCards({
   const { setNodeRef, isOver } = useDroppable({
     id: `list-${listId}`,
     data: { type: "List", listId },
+    // Increase tolerance for droppable area
+    tolerance: 10,
   });
 
   const fetchCards = useCallback(async () => {
@@ -61,8 +64,7 @@ function ListCards({
         response: err.response?.data,
       });
       toast.error(
-        `Lỗi khi tải danh sách thẻ: ${
-          err.response?.data?.message || err.message
+        `Lỗi khi tải danh sách thẻ: ${err.response?.data?.message || err.message
         }`
       );
     }
@@ -138,15 +140,15 @@ function ListCards({
         prevColumns.map((col) =>
           col._id === listId
             ? {
-                ...col,
-                cards: cardOrder
-                  .map((id) => col.cards.find((card) => card._id === id))
-                  .filter((card) => card)
-                  .filter(
-                    (card, index, self) =>
-                      self.findIndex((c) => c._id === card._id) === index
-                  ),
-              }
+              ...col,
+              cards: cardOrder
+                .map((id) => col.cards.find((card) => card._id === id))
+                .filter((card) => card)
+                .filter(
+                  (card, index, self) =>
+                    self.findIndex((c) => c._id === card._id) === index
+                ),
+            }
             : col
         )
       );
@@ -205,15 +207,15 @@ function ListCards({
           prevColumns.map((col) =>
             col._id === newListId
               ? {
-                  ...col,
-                  cards: col.cards.some((c) => c._id === card._id)
-                    ? col.cards.filter((c) => c._id !== card._id)
-                    : [
-                        ...col.cards.slice(0, newPosition),
-                        { ...card, list: newListId },
-                        ...col.cards.slice(newPosition),
-                      ],
-                }
+                ...col,
+                cards: col.cards.some((c) => c._id === card._id)
+                  ? col.cards.filter((c) => c._id !== card._id)
+                  : [
+                    ...col.cards.slice(0, newPosition),
+                    { ...card, list: newListId },
+                    ...col.cards.slice(newPosition),
+                  ],
+              }
               : col
           )
         );
@@ -238,11 +240,11 @@ function ListCards({
         prevColumns.map((col) =>
           col._id === listId
             ? {
-                …col,
-                cards: col.cards.some((c) => c._id === card._id)
-                  ? col.cards
-                  : [...col.cards, card],
-              }
+              ...col,
+              cards: col.cards.some((c) => c._id === card._id)
+                ? col.cards
+                : [...col.cards, card],
+            }
             : col
         )
       );
@@ -269,7 +271,7 @@ function ListCards({
     return uniqueCards?.map((c) => c._id) || [];
   }, [cards]);
 
-  const renderCards = () => {
+  const renderCards = useCallback(() => {
     const result = [];
     cards.forEach((card, index) => {
       if (
@@ -282,11 +284,16 @@ function ListCards({
             key="placeholder"
             sx={{
               height: "120px",
-              bgcolor: isDarkMode ? "rgba(255,255,255,0.1)" : theme.palette.grey[200],
+              bgcolor: isDarkMode
+                ? "rgba(255,255,255,0.15)"
+                : theme.palette.grey[200],
               borderRadius: "8px",
-              border: `2px dashed ${isDarkMode ? "#888" : theme.palette.grey[500]}`,
+              border: `2px dashed ${isDarkMode ? "#888" : theme.palette.grey[500]
+                }`,
               opacity: 0.7,
               transition: "all 0.2s ease",
+              transform: isOver ? "scale(1.02)" : "scale(1)",
+              boxShadow: isOver ? "0 2px 8px rgba(0,0,0,0.1)" : "none",
             }}
           />
         );
@@ -315,18 +322,35 @@ function ListCards({
           key="placeholder-end"
           sx={{
             height: "120px",
-            bgcolor: isDarkMode ? "rgba(255,255,255,0.1)" : theme.palette.grey[200],
+            bgcolor: isDarkMode
+              ? "rgba(255,255,255,0.15)"
+              : theme.palette.grey[200],
             borderRadius: "8px",
-            border: `2px dashed ${isDarkMode ? "#888" : theme.palette.grey[500]}`,
+            border: `2px dashed ${isDarkMode ? "#888" : theme.palette.grey[500]
+              }`,
             opacity: 0.7,
             transition: "all 0.2s ease",
+            transform: isOver ? "scale(1.02)" : "scale(1)",
+            boxShadow: isOver ? "0 2px 8px rgba(0,0,0,0.1)" : "none",
           }}
         />
       );
     }
 
     return result;
-  };
+  }, [
+    cards,
+    predictedPosition,
+    listId,
+    isDarkMode,
+    theme,
+    isOver,
+    boardMembers,
+    setBoardMembers,
+    boardId,
+    setCards,
+    setColumns,
+  ]);
 
   return (
     <Box
@@ -335,20 +359,27 @@ function ListCards({
         p: 2,
         display: "flex",
         flexDirection: "column",
-        gap: 1,
+        gap: 1.5,
         overflowX: "hidden",
         flexGrow: 1,
         bgcolor: isOver
           ? isDarkMode
-            ? "rgba(255,255,255,0.05)"
+            ? "rgba(255,255,255,0.08)"
             : theme.palette.grey[100]
           : "transparent",
-        borderRadius: "8px",
-        minHeight: "100px",
-        transition: "background-color 0.2s ease",
+        borderRadius: "12px",
+        minHeight: "120px",
+        transition:
+          "background-color 0.2s ease, border 0.2s ease, transform 0.2s ease",
         border: isOver
-          ? `1px dashed ${isDarkMode ? "#666" : theme.palette.grey[400]}`
+          ? `2px dashed ${isDarkMode ? "#777" : theme.palette.grey[400]}`
           : "none",
+        transform: isOver ? "scale(1.01)" : "scale(1)",
+        "&:hover": {
+          bgcolor: isDarkMode
+            ? "rgba(255,255,255,0.05)"
+            : theme.palette.grey[50],
+        },
       }}
     >
       <SortableContext
@@ -374,6 +405,7 @@ function ListCards({
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
+              transition: "all 0.2s ease",
             }}
           >
             Không có thẻ nào trong cột này.
