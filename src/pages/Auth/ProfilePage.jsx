@@ -279,19 +279,16 @@ const ProfilePage = () => {
           navigate(`/boards/${activity.target._id}`);
           break;
         case "Workspace":
-          navigate(`/workspaces/${activity.target._id}`);
+          navigate(`/workspace/${activity.target._id}/boards`);
           break;
         case "Card":
-          if (activity.target.board) {
-            navigate(
-              `/boards/${activity.target.board.id}/cards/${activity.target._id}`
-            );
+          const workspaceId = activity.target.board?.workspace?._id || activity.target.board?.workspace;
+          const boardId = activity.target.board?._id;
+          if (boardId && workspaceId) {
+            navigate(`/workspace/${workspaceId}/board/${boardId}`);
           } else {
-            console.warn(
-              "ProfilePage: Missing board ID for card activity",
-              activity
-            );
-            toast.error("Không thể điều hướng: Thiếu thông tin bảng!");
+            console.warn("ProfilePage: Missing board or workspace ID for card activity", activity);
+            toast.error("Không thể điều hướng: Thiếu thông tin bảng hoặc không gian làm việc!");
           }
           break;
         default:

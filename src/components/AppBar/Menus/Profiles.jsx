@@ -29,14 +29,12 @@ const Profiles = forwardRef((props, ref) => {
 
   useEffect(() => {
     if (!user?._id) return;
-
     if (!socket || !socketReady) {
       console.warn("Socket not available or not ready in Profiles");
       return;
     }
 
     console.log("Profiles: Fetching activities for user:", user._id);
-
     const fetchActivities = async () => {
       try {
         const token = localStorage.getItem("token");
@@ -53,7 +51,10 @@ const Profiles = forwardRef((props, ref) => {
         console.log("Profiles: Activities response:", response.data);
         setActivities(response.data.activities?.slice(0, 10) || []);
       } catch (err) {
-        console.error("Profiles: Error fetching activities:", err);
+        console.error("Profiles: Error fetching activities:", {
+          message: err.message,
+          response: err.response?.data,
+        });
         toast.error("Không thể tải hoạt động!");
       }
     };
@@ -70,7 +71,6 @@ const Profiles = forwardRef((props, ref) => {
     };
 
     socket.on("new-activity", handleNewActivity);
-
     return () => {
       socket.off("new-activity", handleNewActivity);
     };
@@ -91,12 +91,17 @@ const Profiles = forwardRef((props, ref) => {
           navigate(`/boards/${activity.target._id}`);
           break;
         case "Workspace":
-          navigate(`/workspaces/${activity.target._id}`);
+          navigate(`/workspace/${activity.target._id}/boards`);
           break;
         case "Card":
-          navigate(
-            `/boards/${activity.target.board}/cards/${activity.target._id}`
-          );
+          const workspaceId = activity.target.board?.workspace?._id || activity.target.board?.workspace;
+          const boardId = activity.target.board?._id;
+          if (boardId && workspaceId) {
+            navigate(`/workspace/${workspaceId}/board/${boardId}`);
+          } else {
+            console.warn("Profiles: Missing board or workspace ID for card activity", activity);
+            toast.error("Không thể điều hướng: Thiếu thông tin bảng hoặc không gian làm việc!");
+          }
           break;
         default:
           break;

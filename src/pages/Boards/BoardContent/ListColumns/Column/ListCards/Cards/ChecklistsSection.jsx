@@ -38,33 +38,40 @@ const ChecklistsSection = ({
 }) => {
   const theme = useTheme();
   const isDarkMode = theme.palette.mode === "dark";
-  const [editChecklistId, setEditChecklistId] = useState(null); // Thay index bằng ID
+  const [editChecklistId, setEditChecklistId] = useState(null);
   const [editChecklistTitle, setEditChecklistTitle] = useState("");
   const [editItem, setEditItem] = useState({
-    checklistId: null, // Thay index bằng ID
-    itemId: null, // Thay index bằng ID
+    checklistId: null,
+    itemId: null,
     text: "",
   });
   const [deleteConfirm, setDeleteConfirm] = useState({
     open: false,
     type: "",
-    checklistId: null, // Thay index bằng ID
-    itemId: null, // Thay index bằng ID
+    checklistId: null,
+    itemId: null,
   });
 
+  // Kiểm tra và lọc checklists
   if (!Array.isArray(checklists)) {
     console.warn("Checklists không phải là mảng:", checklists);
-  } else {
-    checklists.forEach((checklist) => {
-      if (
-        !checklist ||
-        typeof checklist !== "object" ||
-        !Array.isArray(checklist.items)
-      ) {
-        console.warn(`Checklist không hợp lệ:`, checklist);
-      }
-    });
+    checklists = []; // Đặt mặc định là mảng rỗng để tránh lỗi
   }
+
+  // Lọc bỏ các checklist có isDeleted: true
+  const filteredChecklists = checklists.filter(
+    (checklist) => !checklist.isDeleted
+  );
+
+  filteredChecklists.forEach((checklist) => {
+    if (
+      !checklist ||
+      typeof checklist !== "object" ||
+      !Array.isArray(checklist.items)
+    ) {
+      console.warn(`Checklist không hợp lệ:`, checklist);
+    }
+  });
 
   const openEditChecklist = (checklistId, title) => {
     setEditChecklistId(checklistId);
@@ -93,9 +100,14 @@ const ChecklistsSection = ({
       toast.error("Tiêu đề checklist không được để trống!");
       return;
     }
-    await handleEditChecklist(checklistId, editChecklistTitle);
-    setEditChecklistId(null);
-    setEditChecklistTitle("");
+    try {
+      await handleEditChecklist(checklistId, editChecklistTitle);
+      setEditChecklistId(null);
+      setEditChecklistTitle("");
+    } catch (err) {
+      toast.error("Lỗi khi cập nhật checklist!");
+      console.error("Error in handleSubmitEditChecklist:", err);
+    }
   };
 
   const handleSubmitEditItem = async () => {
@@ -103,12 +115,17 @@ const ChecklistsSection = ({
       toast.error("Nội dung item không được để trống!");
       return;
     }
-    await handleEditChecklistItem(
-      editItem.checklistId,
-      editItem.itemId,
-      editItem.text
-    );
-    setEditItem({ checklistId: null, itemId: null, text: "" });
+    try {
+      await handleEditChecklistItem(
+        editItem.checklistId,
+        editItem.itemId,
+        editItem.text
+      );
+      setEditItem({ checklistId: null, itemId: null, text: "" });
+    } catch (err) {
+      toast.error("Lỗi khi cập nhật item!");
+      console.error("Error in handleSubmitEditItem:", err);
+    }
   };
 
   return (
@@ -124,13 +141,13 @@ const ChecklistsSection = ({
       >
         Checklists
       </Typography>
-      {Array.isArray(checklists) && checklists.length > 0 ? (
+      {filteredChecklists.length > 0 ? (
         <>
-          {checklists.map((checklist) => {
+          {filteredChecklists.map((checklist) => {
             if (!checklist || typeof checklist !== "object") {
               return (
                 <Typography
-                  key={checklist._id}
+                  key={checklist?._id || Math.random()}
                   color="error"
                   sx={{ pl: 2, mb: 2 }}
                 >
@@ -138,6 +155,11 @@ const ChecklistsSection = ({
                 </Typography>
               );
             }
+
+            // Lọc bỏ các item có isDeleted: true
+            const filteredItems = Array.isArray(checklist.items)
+              ? checklist.items.filter((item) => !item.isDeleted)
+              : [];
 
             return (
               <Box key={checklist._id} sx={{ mb: 3, pl: 2 }}>
@@ -201,7 +223,10 @@ const ChecklistsSection = ({
                     <Button
                       variant="outlined"
                       size="small"
-                      onClick={() => setEditChecklistId(null)}
+                      onClick={() => {
+                        setEditChecklistId(null);
+                        setEditChecklistTitle("");
+                      }}
                       sx={{
                         color: isDarkMode
                           ? theme.palette.grey[400]
@@ -257,9 +282,9 @@ const ChecklistsSection = ({
                     </IconButton>
                   </Box>
                 )}
-                {Array.isArray(checklist.items) ? (
+                {filteredItems.length > 0 ? (
                   <List dense>
-                    {checklist.items.map((item) => (
+                    {filteredItems.map((item) => (
                       <ListItem
                         key={item._id}
                         sx={{ py: 0 }}
@@ -315,7 +340,7 @@ const ChecklistsSection = ({
                         <ListItemText
                           primary={
                             editItem.checklistId === checklist._id &&
-                            editItem.itemId === item._id ? (
+                              editItem.itemId === item._id ? (
                               <TextField
                                 fullWidth
                                 size="small"
@@ -609,16 +634,21 @@ const ChecklistsSection = ({
             Hủy
           </Button>
           <Button
-            onClick={() => {
-              if (deleteConfirm.type === "checklist") {
-                handleDeleteChecklist(deleteConfirm.checklistId);
-              } else {
-                handleDeleteChecklistItem(
-                  deleteConfirm.checklistId,
-                  deleteConfirm.itemId
-                );
+            onClick={async () => {
+              try {
+                if (deleteConfirm.type === "checklist") {
+                  await handleDeleteChecklist(deleteConfirm.checklistId);
+                } else {
+                  await handleDeleteChecklistItem(
+                    deleteConfirm.checklistId,
+                    deleteConfirm.itemId
+                  );
+                }
+                handleCloseConfirm();
+              } catch (err) {
+                toast.error("Lỗi khi xóa!");
+                console.error("Error in delete action:", err);
               }
-              handleCloseConfirm();
             }}
             sx={{
               color: theme.palette.error.main,

@@ -18,35 +18,33 @@ const normalizeChecklists = (checklists) => {
   let checklistsArray = checklists;
 
   if (checklists && !Array.isArray(checklists) && checklists.checklists) {
-    console.warn(
-      "Checklists là đối tượng, lấy thuộc tính checklists:",
-      checklists
-    );
+    console.warn("Checklists là đối tượng, lấy thuộc tính checklists:", checklists);
     checklistsArray = checklists.checklists;
   }
 
   if (!Array.isArray(checklistsArray)) {
-    console.warn(
-      "Checklists không phải là mảng sau khi xử lý:",
-      checklistsArray
-    );
+    console.warn("Checklists không phải là mảng sau khi xử lý:", checklistsArray);
     return [];
   }
 
-  return checklistsArray.map((checklist) => ({
-    _id: checklist._id || new Date().toISOString(),
-    title: checklist.title || "Untitled Checklist",
-    items: Array.isArray(checklist.items)
-      ? checklist.items.map((item) => ({
-          _id: item._id || new Date().toISOString(),
-          text: item.text || "",
-          completed: !!item.completed,
-          createdAt: item.createdAt || new Date().toISOString(),
-        }))
-      : [],
-  }));
+  // Lọc bỏ các checklist có isDeleted: true
+  return checklistsArray
+    .filter(checklist => !checklist.isDeleted)
+    .map((checklist) => ({
+      _id: checklist._id || new Date().toISOString(),
+      title: checklist.title || "Untitled Checklist",
+      items: Array.isArray(checklist.items)
+        ? checklist.items
+          .filter(item => !item.isDeleted) // Lọc bỏ các item có isDeleted: true
+          .map((item) => ({
+            _id: item._id || new Date().toISOString(),
+            text: item.text || "",
+            completed: !!item.completed,
+            createdAt: item.createdAt || new Date().toISOString(),
+          }))
+        : [],
+    }));
 };
-
 // Hàm chuẩn hóa user
 const normalizeUser = (user) => {
   console.log("Normalizing user:", user);
@@ -64,8 +62,7 @@ const normalizeUser = (user) => {
     fullName: user.fullName || user.email || "Unknown User",
     avatar:
       user.avatar ||
-      `https://api.dicebear.com/9.x/initials/svg?seed=${
-        user.fullName || user.email || "Unknown"
+      `https://api.dicebear.com/9.x/initials/svg?seed=${user.fullName || user.email || "Unknown"
       }`,
     email: user.email || "",
   };
@@ -227,29 +224,29 @@ function CardDetails({
         const newCards = prevCards.map((c) =>
           c._id === cardId
             ? {
-                ...c,
-                ...updatedFields,
-                members: updatedFields.members
-                  ? updatedFields.members.map(normalizeUser)
-                  : c.members,
-                comments: updatedFields.comments
-                  ? updatedFields.comments.map((comment) => ({
-                      ...comment,
-                      user: normalizeUser(comment.user),
-                    }))
-                  : c.comments,
-                notes: updatedFields.notes
-                  ? updatedFields.notes.map((note) => ({
-                      ...note,
-                      createdBy: normalizeUser(note.createdBy),
-                    }))
-                  : c.notes,
-                checklists: normalizeChecklists(
-                  updatedFields.checklists !== undefined
-                    ? updatedFields.checklists
-                    : c.checklists
-                ),
-              }
+              ...c,
+              ...updatedFields,
+              members: updatedFields.members
+                ? updatedFields.members.map(normalizeUser)
+                : c.members,
+              comments: updatedFields.comments
+                ? updatedFields.comments.map((comment) => ({
+                  ...comment,
+                  user: normalizeUser(comment.user),
+                }))
+                : c.comments,
+              notes: updatedFields.notes
+                ? updatedFields.notes.map((note) => ({
+                  ...note,
+                  createdBy: normalizeUser(note.createdBy),
+                }))
+                : c.notes,
+              checklists: normalizeChecklists(
+                updatedFields.checklists !== undefined
+                  ? updatedFields.checklists
+                  : c.checklists
+              ),
+            }
             : c
         );
         console.log("Updated cards:", newCards);
@@ -261,29 +258,29 @@ function CardDetails({
           cards: col.cards.map((c) =>
             c._id === cardId
               ? {
-                  ...c,
-                  ...updatedFields,
-                  members: updatedFields.members
-                    ? updatedFields.members.map(normalizeUser)
-                    : c.members,
-                  comments: updatedFields.comments
-                    ? updatedFields.comments.map((comment) => ({
-                        ...comment,
-                        user: normalizeUser(comment.user),
-                      }))
-                    : c.comments,
-                  notes: updatedFields.notes
-                    ? updatedFields.notes.map((note) => ({
-                        ...note,
-                        createdBy: normalizeUser(note.createdBy),
-                      }))
-                    : c.notes,
-                  checklists: normalizeChecklists(
-                    updatedFields.checklists !== undefined
-                      ? updatedFields.checklists
-                      : c.checklists
-                  ),
-                }
+                ...c,
+                ...updatedFields,
+                members: updatedFields.members
+                  ? updatedFields.members.map(normalizeUser)
+                  : c.members,
+                comments: updatedFields.comments
+                  ? updatedFields.comments.map((comment) => ({
+                    ...comment,
+                    user: normalizeUser(comment.user),
+                  }))
+                  : c.comments,
+                notes: updatedFields.notes
+                  ? updatedFields.notes.map((note) => ({
+                    ...note,
+                    createdBy: normalizeUser(note.createdBy),
+                  }))
+                  : c.notes,
+                checklists: normalizeChecklists(
+                  updatedFields.checklists !== undefined
+                    ? updatedFields.checklists
+                    : c.checklists
+                ),
+              }
               : c
           ),
         }));
@@ -430,24 +427,24 @@ function CardDetails({
             prev.map((col) =>
               col._id === listId
                 ? {
-                    ...col,
-                    cards: [
-                      ...col.cards,
-                      {
-                        ...newCard,
-                        checklists: normalizeChecklists(newCard.checklists),
-                        members: (newCard.members || []).map(normalizeUser),
-                        comments: (newCard.comments || []).map((c) => ({
-                          ...c,
-                          user: normalizeUser(c.user),
-                        })),
-                        notes: (newCard.notes || []).map((n) => ({
-                          ...n,
-                          createdBy: normalizeUser(n.createdBy),
-                        })),
-                      },
-                    ],
-                  }
+                  ...col,
+                  cards: [
+                    ...col.cards,
+                    {
+                      ...newCard,
+                      checklists: normalizeChecklists(newCard.checklists),
+                      members: (newCard.members || []).map(normalizeUser),
+                      comments: (newCard.comments || []).map((c) => ({
+                        ...c,
+                        user: normalizeUser(c.user),
+                      })),
+                      notes: (newCard.notes || []).map((n) => ({
+                        ...n,
+                        createdBy: normalizeUser(n.createdBy),
+                      })),
+                    },
+                  ],
+                }
                 : col
             )
           );
@@ -493,33 +490,33 @@ function CardDetails({
             updatedColumns = updatedColumns.map((col) =>
               col._id === oldListId
                 ? {
-                    ...col,
-                    cards: col.cards.filter((c) => c._id !== movedCard._id),
-                  }
+                  ...col,
+                  cards: col.cards.filter((c) => c._id !== movedCard._id),
+                }
                 : col
             );
             updatedColumns = updatedColumns.map((col) =>
               col._id === newListId
                 ? {
-                    ...col,
-                    cards: [
-                      ...col.cards.slice(0, newPosition),
-                      {
-                        ...movedCard,
-                        checklists: normalizeChecklists(movedCard.checklists),
-                        members: (movedCard.members || []).map(normalizeUser),
-                        comments: (movedCard.comments || []).map((c) => ({
-                          ...c,
-                          user: normalizeUser(c.user),
-                        })),
-                        notes: (movedCard.notes || []).map((n) => ({
-                          ...n,
-                          createdBy: normalizeUser(n.createdBy),
-                        })),
-                      },
-                      ...col.cards.slice(newPosition),
-                    ],
-                  }
+                  ...col,
+                  cards: [
+                    ...col.cards.slice(0, newPosition),
+                    {
+                      ...movedCard,
+                      checklists: normalizeChecklists(movedCard.checklists),
+                      members: (movedCard.members || []).map(normalizeUser),
+                      comments: (movedCard.comments || []).map((c) => ({
+                        ...c,
+                        user: normalizeUser(c.user),
+                      })),
+                      notes: (movedCard.notes || []).map((n) => ({
+                        ...n,
+                        createdBy: normalizeUser(n.createdBy),
+                      })),
+                    },
+                    ...col.cards.slice(newPosition),
+                  ],
+                }
                 : col
             );
             return updatedColumns;
@@ -565,8 +562,7 @@ function CardDetails({
           updateCardState(cardId, { completed });
           setPendingNotifications((prev) => [
             ...prev,
-            `Thẻ đã được ${
-              completed ? "đánh dấu hoàn thành" : "bỏ hoàn thành"
+            `Thẻ đã được ${completed ? "đánh dấu hoàn thành" : "bỏ hoàn thành"
             }.`,
           ]);
         }
@@ -632,7 +628,7 @@ function CardDetails({
             if (memberExists) {
               const updatedMembers = prev.map((m) =>
                 (m.user?._id || m._id)?.toString() ===
-                deactivatedUserId.toString()
+                  deactivatedUserId.toString()
                   ? { ...m, isActive: false }
                   : m
               );
@@ -650,7 +646,7 @@ function CardDetails({
             if (memberExists) {
               const updatedMembers = prev.map((m) =>
                 (m.user?._id || m._id)?.toString() ===
-                deactivatedUserId.toString()
+                  deactivatedUserId.toString()
                   ? { ...m, isActive: false }
                   : m
               );
@@ -842,18 +838,17 @@ function CardDetails({
             checklists: normalizeChecklists(card.checklists || []).map((cl) =>
               cl._id === checklistId
                 ? {
-                    ...cl,
-                    items: cl.items.map((item) =>
-                      item._id === itemId ? { ...item, completed } : item
-                    ),
-                  }
+                  ...cl,
+                  items: cl.items.map((item) =>
+                    item._id === itemId ? { ...item, completed } : item
+                  ),
+                }
                 : cl
             ),
           });
           setPendingNotifications((prev) => [
             ...prev,
-            `Item checklist đã được ${
-              completed ? "đánh dấu hoàn thành" : "bỏ hoàn thành"
+            `Item checklist đã được ${completed ? "đánh dấu hoàn thành" : "bỏ hoàn thành"
             }.`,
           ]);
         }
@@ -946,9 +941,9 @@ function CardDetails({
             checklists: normalizeChecklists(card.checklists || []).map((cl) =>
               cl._id === checklistId
                 ? {
-                    ...cl,
-                    items: cl.items.filter((item) => item._id !== itemId),
-                  }
+                  ...cl,
+                  items: cl.items.filter((item) => item._id !== itemId),
+                }
                 : cl
             ),
           });
@@ -1316,11 +1311,11 @@ function CardDetails({
       checklists: currentChecklists.map((cl) =>
         cl._id === checklistId
           ? {
-              ...cl,
-              items: cl.items.map((it) =>
-                it._id === itemId ? { ...it, completed: newCompleted } : it
-              ),
-            }
+            ...cl,
+            items: cl.items.map((it) =>
+              it._id === itemId ? { ...it, completed: newCompleted } : it
+            ),
+          }
           : cl
       ),
     });
@@ -1541,11 +1536,11 @@ function CardDetails({
       checklists: currentChecklists.map((cl) =>
         cl._id === checklistId
           ? {
-              ...cl,
-              items: cl.items.map((it) =>
-                it._id === itemId ? { ...it, text } : it
-              ),
-            }
+            ...cl,
+            items: cl.items.map((it) =>
+              it._id === itemId ? { ...it, text } : it
+            ),
+          }
           : cl
       ),
     });
@@ -1629,9 +1624,9 @@ function CardDetails({
       checklists: currentChecklists.map((cl) =>
         cl._id === checklistId
           ? {
-              ...cl,
-              items: cl.items.filter((it) => it._id !== itemId),
-            }
+            ...cl,
+            items: cl.items.filter((it) => it._id !== itemId),
+          }
           : cl
       ),
     });
