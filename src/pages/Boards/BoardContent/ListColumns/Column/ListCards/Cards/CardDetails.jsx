@@ -27,24 +27,27 @@ const normalizeChecklists = (checklists) => {
     return [];
   }
 
-  // Lọc bỏ các checklist có isDeleted: true
-  return checklistsArray
-    .filter(checklist => !checklist.isDeleted)
+  const normalized = checklistsArray
+    .filter((checklist) => !checklist.isDeleted)
     .map((checklist) => ({
       _id: checklist._id || new Date().toISOString(),
       title: checklist.title || "Untitled Checklist",
       items: Array.isArray(checklist.items)
         ? checklist.items
-          .filter(item => !item.isDeleted) // Lọc bỏ các item có isDeleted: true
+          .filter((item) => !item.isDeleted)
           .map((item) => ({
             _id: item._id || new Date().toISOString(),
-            text: item.text || "",
+            title: item.title || "",
+            content: item.content || "",
             completed: !!item.completed,
             createdAt: item.createdAt || new Date().toISOString(),
           }))
         : [],
     }));
+  console.log("normalizeChecklists output:", normalized);
+  return normalized;
 };
+
 // Hàm chuẩn hóa user
 const normalizeUser = (user) => {
   console.log("Normalizing user:", user);
@@ -62,8 +65,7 @@ const normalizeUser = (user) => {
     fullName: user.fullName || user.email || "Unknown User",
     avatar:
       user.avatar ||
-      `https://api.dicebear.com/9.x/initials/svg?seed=${user.fullName || user.email || "Unknown"
-      }`,
+      `https://api.dicebear.com/9.x/initials/svg?seed=${user.fullName || user.email || "Unknown"}`,
     email: user.email || "",
   };
   console.log("Normalized user:", normalized);
@@ -98,6 +100,22 @@ function CardDetails({
   });
   const [localBoardMembers, setLocalBoardMembers] = useState([]);
   const [pendingNotifications, setPendingNotifications] = useState([]);
+
+  // Hàm lấy dữ liệu thẻ mới nhất từ server
+  const fetchLatestCard = async (cardId) => {
+    try {
+      const token = localStorage.getItem("token");
+      const response = await axios.get(
+        `http://localhost:5000/api/cards/${cardId}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      console.log("fetchLatestCard response:", response.data);
+      return response.data;
+    } catch (err) {
+      console.error("Lỗi khi làm mới dữ liệu thẻ:", err);
+      throw err;
+    }
+  };
 
   // Hiển thị thông báo hợp nhất với debounce
   const showConsolidatedNotification = useCallback(() => {
@@ -176,8 +194,6 @@ function CardDetails({
       } catch (err) {
         console.error("Lỗi lấy thông tin người dùng:", err);
         toast.error("Không thể lấy thông tin người dùng hiện tại!");
-        // Có thể chuyển hướng đến trang đăng nhập
-        // window.location.href = "/login";
       } finally {
         setLoading((prev) => ({ ...prev, user: false }));
       }
@@ -250,6 +266,7 @@ function CardDetails({
             : c
         );
         console.log("Updated cards:", newCards);
+        console.log("Updated checklists in cards:", newCards.find(c => c._id === cardId)?.checklists);
         return newCards;
       });
       setColumns((prevColumns) => {
@@ -285,11 +302,36 @@ function CardDetails({
           ),
         }));
         console.log("Updated columns:", newColumns);
+        console.log("Updated checklists in columns:", newColumns.flatMap(col => col.cards).find(c => c._id === cardId)?.checklists);
         return newColumns;
       });
     },
     [setCards, setColumns]
   );
+
+  // Fallback làm mới dữ liệu thẻ
+  const refreshCard = async () => {
+    try {
+      const latestCard = await fetchLatestCard(card._id);
+      updateCardState(card._id, {
+        ...latestCard,
+        checklists: normalizeChecklists(latestCard.checklists),
+        members: (latestCard.members || []).map(normalizeUser),
+        comments: (latestCard.comments || []).map((c) => ({
+          ...c,
+          user: normalizeUser(c.user),
+        })),
+        notes: (latestCard.notes || []).map((n) => ({
+          ...n,
+          createdBy: normalizeUser(n.createdBy),
+        })),
+      });
+      console.log("Refreshed card state:", latestCard);
+    } catch (err) {
+      console.error("Error refreshing card:", err);
+      toast.error("Không thể làm mới dữ liệu thẻ!");
+    }
+  };
 
   // Kiểm tra thành viên trong bảng
   const isMemberInBoard = useCallback(
@@ -307,9 +349,7 @@ function CardDetails({
         return memberIdFromBoard?.toString() === memberId.toString();
       });
       if (!boardMember) {
-        console.log(
-          `isMemberInBoard: No matching member found for ${memberId}`
-        );
+        console.log(`isMemberInBoard: No matching member found for ${memberId}`);
         return false;
       }
       const isActive =
@@ -319,88 +359,6 @@ function CardDetails({
     },
     [localBoardMembers]
   );
-
-  // Thu hồi bình luận
-  const handleHideComment = async (commentId) => {
-    if (!window.confirm("Bạn có chắc muốn thu hồi bình luận này?")) return;
-
-    setLoading((prev) => ({ ...prev, comment: true }));
-
-    try {
-      const token = localStorage.getItem("token");
-      await axios.delete(
-        `http://localhost:5000/api/cards/${card._id}/comments/${commentId}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-
-      updateCardState(card._id, {
-        comments: card.comments.map((c) =>
-          c._id === commentId ? { ...c, isDeleted: true } : c
-        ),
-      });
-
-      if (socket && socketReady) {
-        socket.emit("comment-hidden", {
-          cardId: card._id,
-          commentId,
-          boardId: card.board,
-          actorId: currentUserId,
-        });
-      }
-
-      toast.success("Thu hồi bình luận thành công!");
-    } catch (err) {
-      console.error("Lỗi thu hồi bình luận:", err);
-      toast.error(
-        err.response?.status === 403
-          ? "Bạn không có quyền thu hồi bình luận!"
-          : err.response?.data?.message || "Không thể thu hồi bình luận!"
-      );
-    } finally {
-      setLoading((prev) => ({ ...prev, comment: false }));
-    }
-  };
-
-  // Thu hồi ghi chú
-  const handleHideNote = async (noteId) => {
-    if (!window.confirm("Bạn có chắc muốn thu hồi ghi chú này?")) return;
-
-    setLoading((prev) => ({ ...prev, note: true }));
-
-    try {
-      const token = localStorage.getItem("token");
-      await axios.delete(
-        `http://localhost:5000/api/cards/${card._id}/notes/${noteId}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-
-      updateCardState(card._id, {
-        notes: card.notes.map((n) =>
-          n._id === noteId ? { ...n, isDeleted: true } : n
-        ),
-      });
-
-      if (socket && socketReady) {
-        socket.emit("note-hidden", {
-          cardId: card._id,
-          noteId,
-          boardId: card.board,
-          actorId: currentUserId,
-        });
-      }
-
-      toast.success("Thu hồi ghi chú thành công!");
-    } catch (err) {
-      console.error("Lỗi thu hồi ghi chú:", err);
-      toast.error(
-        err.response?.status === 403
-          ? "Bạn không có quyền thu hồi ghi chú!"
-          : err.response?.data?.message || "Không thể thu hồi ghi chú!"
-      );
-    } finally {
-      setLoading((prev) => ({ ...prev, note: false }));
-    }
-  };
 
   // Xử lý sự kiện Socket.IO
   useEffect(() => {
@@ -562,8 +520,7 @@ function CardDetails({
           updateCardState(cardId, { completed });
           setPendingNotifications((prev) => [
             ...prev,
-            `Thẻ đã được ${completed ? "đánh dấu hoàn thành" : "bỏ hoàn thành"
-            }.`,
+            `Thẻ đã được ${completed ? "đánh dấu hoàn thành" : "bỏ hoàn thành"}.`,
           ]);
         }
       },
@@ -814,7 +771,7 @@ function CardDetails({
           });
           setPendingNotifications((prev) => [
             ...prev,
-            "Item checklist mới đã được thêm.",
+            `Item "${item.title}" đã được thêm vào checklist.`,
           ]);
         }
       },
@@ -824,6 +781,7 @@ function CardDetails({
         checklistId,
         itemId,
         completed,
+        checklist,
         actorId,
       }) => {
         if (cardId === card._id && actorId !== currentUserId) {
@@ -832,24 +790,17 @@ function CardDetails({
             checklistId,
             itemId,
             completed,
+            checklist,
             actorId,
           });
           updateCardState(cardId, {
             checklists: normalizeChecklists(card.checklists || []).map((cl) =>
-              cl._id === checklistId
-                ? {
-                  ...cl,
-                  items: cl.items.map((item) =>
-                    item._id === itemId ? { ...item, completed } : item
-                  ),
-                }
-                : cl
+              cl._id === checklistId ? normalizeChecklists([checklist])[0] : cl
             ),
           });
           setPendingNotifications((prev) => [
             ...prev,
-            `Item checklist đã được ${completed ? "đánh dấu hoàn thành" : "bỏ hoàn thành"
-            }.`,
+            `Item checklist đã được ${completed ? "đánh dấu hoàn thành" : "bỏ hoàn thành"}.`,
           ]);
         }
       },
@@ -924,7 +875,7 @@ function CardDetails({
           });
           setPendingNotifications((prev) => [
             ...prev,
-            "Item checklist đã được cập nhật.",
+            `Item "${item.title}" trong checklist đã được cập nhật.`,
           ]);
         }
       },
@@ -1049,6 +1000,7 @@ function CardDetails({
       );
     } finally {
       setLoading((prev) => ({ ...prev, comment: false }));
+      await refreshCard();
     }
   };
 
@@ -1119,6 +1071,7 @@ function CardDetails({
       );
     } finally {
       setLoading((prev) => ({ ...prev, note: false }));
+      await refreshCard();
     }
   };
 
@@ -1145,42 +1098,67 @@ function CardDetails({
       items: [],
     };
     updateCardState(card._id, {
-      checklists: [
-        ...normalizeChecklists(card.checklists || []),
-        tempChecklist,
-      ],
+      checklists: [...normalizeChecklists(card.checklists || []), tempChecklist],
     });
 
-    try {
-      const token = localStorage.getItem("token");
-      const response = await axios.post(
-        `http://localhost:5000/api/cards/${card._id}/checklists`,
-        { title: checklistTitle },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+    let retryCount = 0;
+    const maxRetries = 3;
 
-      updateCardState(card._id, {
-        checklists: normalizeChecklists(response.data),
-      });
+    const tryAddChecklist = async (version) => {
+      try {
+        const token = localStorage.getItem("token");
+        const response = await axios.post(
+          `http://localhost:5000/api/cards/${card._id}/checklists`,
+          { title: checklistTitle, version },
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
 
-      if (socket && socketReady) {
-        const newChecklist = normalizeChecklists(response.data).slice(-1)[0];
-        socket.emit("checklist-added", {
-          cardId: card._id,
-          checklist: newChecklist,
-          boardId: card.board,
-          actorId: currentUserId,
+        console.log("API addChecklist response:", response.data);
+        updateCardState(card._id, {
+          checklists: normalizeChecklists(response.data.checklists),
+          version: response.data.version,
         });
-        console.log("Emitted checklist-added:", {
-          cardId: card._id,
-          checklist: newChecklist,
-          boardId: card.board,
-          actorId: currentUserId,
-        });
+
+        if (socket && socketReady) {
+          const newChecklist = normalizeChecklists(response.data.checklists).slice(-1)[0];
+          socket.emit("checklist-added", {
+            cardId: card._id,
+            checklist: newChecklist,
+            boardId: card.board,
+            actorId: currentUserId,
+          });
+          console.log("Emitted checklist-added:", {
+            cardId: card._id,
+            checklist: newChecklist,
+            boardId: card.board,
+            actorId: currentUserId,
+          });
+        }
+
+        setChecklistTitle("");
+        toast.success("Thêm checklist thành công!");
+      } catch (err) {
+        if (err.response?.status === 409 && retryCount < maxRetries) {
+          retryCount++;
+          toast.info("Dữ liệu đã thay đổi, đang làm mới...");
+          try {
+            const latestCard = await fetchLatestCard(card._id);
+            updateCardState(card._id, {
+              ...latestCard,
+              checklists: normalizeChecklists(latestCard.checklists),
+              version: latestCard.version,
+            });
+            return tryAddChecklist(latestCard.version);
+          } catch (fetchErr) {
+            throw fetchErr;
+          }
+        }
+        throw err;
       }
+    };
 
-      setChecklistTitle("");
-      toast.success("Thêm checklist thành công!");
+    try {
+      await tryAddChecklist(card.version);
     } catch (err) {
       console.error("Lỗi thêm checklist:", err);
       updateCardState(card._id, { checklists: card.checklists });
@@ -1191,13 +1169,14 @@ function CardDetails({
       );
     } finally {
       setLoading((prev) => ({ ...prev, checklist: false }));
+      await refreshCard();
     }
   };
 
   // Thêm item checklist
-  const handleAddChecklistItem = async (checklistId) => {
-    if (!checklistItem.trim()) {
-      toast.error("Item checklist không được để trống!");
+  const handleAddChecklistItem = async (checklistId, { title, content }) => {
+    if (!title.trim() || !content.trim()) {
+      toast.error("Tiêu đề và nội dung item không được để trống!");
       return;
     }
     if (!currentUserId) {
@@ -1220,7 +1199,8 @@ function CardDetails({
 
     const newItem = {
       _id: new Date().toISOString(),
-      text: checklistItem,
+      title,
+      content,
       completed: false,
       createdAt: new Date().toISOString(),
     };
@@ -1230,44 +1210,70 @@ function CardDetails({
       ),
     });
 
-    try {
-      const token = localStorage.getItem("token");
-      const response = await axios.post(
-        `http://localhost:5000/api/cards/${card._id}/checklists/${checklistId}/items`,
-        { text: checklistItem },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+    let retryCount = 0;
+    const maxRetries = 3;
 
-      updateCardState(card._id, {
-        checklists: normalizeChecklists(response.data),
-      });
-
-      if (socket && socketReady) {
-        const updatedChecklist = normalizeChecklists(response.data).find(
-          (cl) => cl._id === checklistId
+    const tryAddChecklistItem = async (version) => {
+      try {
+        const token = localStorage.getItem("token");
+        const response = await axios.post(
+          `http://localhost:5000/api/cards/${card._id}/checklists/${checklistId}/items`,
+          { title, content, version },
+          { headers: { Authorization: `Bearer ${token}` } }
         );
-        const newItem =
-          updatedChecklist.items[updatedChecklist.items.length - 1];
-        socket.emit("checklist-item-added", {
-          cardId: card._id,
-          checklistId,
-          item: newItem,
-          checklist: updatedChecklist,
-          boardId: card.board,
-          actorId: currentUserId,
-        });
-        console.log("Emitted checklist-item-added:", {
-          cardId: card._id,
-          checklistId,
-          item: newItem,
-          checklist: updatedChecklist,
-          boardId: card.board,
-          actorId: currentUserId,
-        });
-      }
 
-      setChecklistItem("");
-      toast.success("Thêm item checklist thành công!");
+        console.log("API addChecklistItem response:", response.data);
+        updateCardState(card._id, {
+          checklists: normalizeChecklists(response.data.checklists),
+          version: response.data.version,
+        });
+
+        if (socket && socketReady) {
+          const updatedChecklist = normalizeChecklists(response.data.checklists).find(
+            (cl) => cl._id === checklistId
+          );
+          const newItem = updatedChecklist.items[updatedChecklist.items.length - 1];
+          socket.emit("checklist-item-added", {
+            cardId: card._id,
+            checklistId,
+            item: newItem,
+            checklist: updatedChecklist,
+            boardId: card.board,
+            actorId: currentUserId,
+          });
+          console.log("Emitted checklist-item-added:", {
+            cardId: card._id,
+            checklistId,
+            item: newItem,
+            checklist: updatedChecklist,
+            boardId: card.board,
+            actorId: currentUserId,
+          });
+        }
+
+        toast.success("Thêm item checklist thành công!");
+      } catch (err) {
+        if (err.response?.status === 409 && retryCount < maxRetries) {
+          retryCount++;
+          toast.info("Dữ liệu đã thay đổi, đang làm mới...");
+          try {
+            const latestCard = await fetchLatestCard(card._id);
+            updateCardState(card._id, {
+              ...latestCard,
+              checklists: normalizeChecklists(latestCard.checklists),
+              version: latestCard.version,
+            });
+            return tryAddChecklistItem(latestCard.version);
+          } catch (fetchErr) {
+            throw fetchErr;
+          }
+        }
+        throw err;
+      }
+    };
+
+    try {
+      await tryAddChecklistItem(card.version);
     } catch (err) {
       console.error("Lỗi thêm item checklist:", err);
       updateCardState(card._id, { checklists: card.checklists });
@@ -1278,6 +1284,7 @@ function CardDetails({
       );
     } finally {
       setLoading((prev) => ({ ...prev, checklistItem: false }));
+      await refreshCard();
     }
   };
 
@@ -1320,38 +1327,72 @@ function CardDetails({
       ),
     });
 
-    try {
-      const token = localStorage.getItem("token");
-      const response = await axios.put(
-        `http://localhost:5000/api/cards/${card._id}/checklists/${checklistId}/items/${itemId}/toggle`,
-        { completed: newCompleted },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+    let retryCount = 0;
+    const maxRetries = 3;
 
-      updateCardState(card._id, {
-        checklists: normalizeChecklists(response.data),
-      });
+    const tryToggleChecklistItem = async (version) => {
+      try {
+        const token = localStorage.getItem("token");
+        const response = await axios.put(
+          `http://localhost:5000/api/cards/${card._id}/checklists/${checklistId}/items/${itemId}/toggle`,
+          { version },
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
 
-      if (socket && socketReady) {
-        socket.emit("checklist-item-toggled", {
-          cardId: card._id,
-          checklistId,
-          itemId,
-          completed: newCompleted,
-          boardId: card.board,
-          actorId: currentUserId,
+        console.log("API toggleChecklistItem response:", response.data);
+        updateCardState(card._id, {
+          checklists: normalizeChecklists(response.data.checklists),
+          version: response.data.version,
         });
-        console.log("Emitted checklist-item-toggled:", {
-          cardId: card._id,
-          checklistId,
-          itemId,
-          completed: newCompleted,
-          boardId: card.board,
-          actorId: currentUserId,
-        });
+
+        if (socket && socketReady) {
+          const updatedChecklist = normalizeChecklists(response.data.checklists).find(
+            (cl) => cl._id === checklistId
+          );
+          const toggledItem = updatedChecklist.items.find((it) => it._id === itemId);
+          socket.emit("checklist-item-toggled", {
+            cardId: card._id,
+            checklistId,
+            itemId,
+            completed: toggledItem.completed,
+            checklist: updatedChecklist,
+            boardId: card.board,
+            actorId: currentUserId,
+          });
+          console.log("Emitted checklist-item-toggled:", {
+            cardId: card._id,
+            checklistId,
+            itemId,
+            completed: toggledItem.completed,
+            checklist: updatedChecklist,
+            boardId: card.board,
+            actorId: currentUserId,
+          });
+        }
+
+        toast.success("Cập nhật trạng thái item checklist thành công!");
+      } catch (err) {
+        if (err.response?.status === 409 && retryCount < maxRetries) {
+          retryCount++;
+          toast.info("Dữ liệu đã thay đổi, đang làm mới...");
+          try {
+            const latestCard = await fetchLatestCard(card._id);
+            updateCardState(card._id, {
+              ...latestCard,
+              checklists: normalizeChecklists(latestCard.checklists),
+              version: latestCard.version,
+            });
+            return tryToggleChecklistItem(latestCard.version);
+          } catch (fetchErr) {
+            throw fetchErr;
+          }
+        }
+        throw err;
       }
+    };
 
-      toast.success("Cập nhật trạng thái item checklist thành công!");
+    try {
+      await tryToggleChecklistItem(card.version);
     } catch (err) {
       console.error("Lỗi toggle item checklist:", err);
       updateCardState(card._id, { checklists: card.checklists });
@@ -1362,6 +1403,7 @@ function CardDetails({
       );
     } finally {
       setLoading((prev) => ({ ...prev, checklistToggle: false }));
+      await refreshCard();
     }
   };
 
@@ -1395,41 +1437,69 @@ function CardDetails({
       ),
     });
 
-    try {
-      const token = localStorage.getItem("token");
-      const response = await axios.put(
-        `http://localhost:5000/api/cards/${card._id}/checklists/${checklistId}`,
-        { title },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+    let retryCount = 0;
+    const maxRetries = 3;
 
-      updateCardState(card._id, {
-        checklists: normalizeChecklists(response.data),
-      });
-
-      if (socket && socketReady) {
-        const updatedChecklist = normalizeChecklists(response.data).find(
-          (cl) => cl._id === checklistId
+    const tryUpdateChecklist = async (version) => {
+      try {
+        const token = localStorage.getItem("token");
+        const response = await axios.put(
+          `http://localhost:5000/api/cards/${card._id}/checklists/${checklistId}`,
+          { title, version },
+          { headers: { Authorization: `Bearer ${token}` } }
         );
-        socket.emit("checklist-updated", {
-          cardId: card._id,
-          checklistId,
-          title,
-          checklist: updatedChecklist,
-          boardId: card.board,
-          actorId: currentUserId,
-        });
-        console.log("Emitted checklist-updated:", {
-          cardId: card._id,
-          checklistId,
-          title,
-          checklist: updatedChecklist,
-          boardId: card.board,
-          actorId: currentUserId,
-        });
-      }
 
-      toast.success("Cập nhật checklist thành công!");
+        console.log("API updateChecklist response:", response.data);
+        updateCardState(card._id, {
+          checklists: normalizeChecklists(response.data.checklists),
+          version: response.data.version,
+        });
+
+        if (socket && socketReady) {
+          const updatedChecklist = normalizeChecklists(response.data.checklists).find(
+            (cl) => cl._id === checklistId
+          );
+          socket.emit("checklist-updated", {
+            cardId: card._id,
+            checklistId,
+            title,
+            checklist: updatedChecklist,
+            boardId: card.board,
+            actorId: currentUserId,
+          });
+          console.log("Emitted checklist-updated:", {
+            cardId: card._id,
+            checklistId,
+            title,
+            checklist: updatedChecklist,
+            boardId: card.board,
+            actorId: currentUserId,
+          });
+        }
+
+        toast.success("Cập nhật checklist thành công!");
+      } catch (err) {
+        if (err.response?.status === 409 && retryCount < maxRetries) {
+          retryCount++;
+          toast.info("Dữ liệu đã thay đổi, đang làm mới...");
+          try {
+            const latestCard = await fetchLatestCard(card._id);
+            updateCardState(card._id, {
+              ...latestCard,
+              checklists: normalizeChecklists(latestCard.checklists),
+              version: latestCard.version,
+            });
+            return tryUpdateChecklist(latestCard.version);
+          } catch (fetchErr) {
+            throw fetchErr;
+          }
+        }
+        throw err;
+      }
+    };
+
+    try {
+      await tryUpdateChecklist(card.version);
     } catch (err) {
       console.error("Lỗi cập nhật checklist:", err);
       updateCardState(card._id, { checklists: card.checklists });
@@ -1440,6 +1510,7 @@ function CardDetails({
       );
     } finally {
       setLoading((prev) => ({ ...prev, checklist: false }));
+      await refreshCard();
     }
   };
 
@@ -1467,29 +1538,61 @@ function CardDetails({
       checklists: currentChecklists.filter((cl) => cl._id !== checklistId),
     });
 
-    try {
-      const token = localStorage.getItem("token");
-      await axios.delete(
-        `http://localhost:5000/api/cards/${card._id}/checklists/${checklistId}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+    let retryCount = 0;
+    const maxRetries = 3;
 
-      if (socket && socketReady) {
-        socket.emit("checklist-deleted", {
-          cardId: card._id,
-          checklistId,
-          boardId: card.board,
-          actorId: currentUserId,
+    const tryDeleteChecklist = async (version) => {
+      try {
+        const token = localStorage.getItem("token");
+        const response = await axios.delete(
+          `http://localhost:5000/api/cards/${card._id}/checklists/${checklistId}`,
+          { headers: { Authorization: `Bearer ${token}` }, data: { version } }
+        );
+
+        console.log("API deleteChecklist response:", response.data);
+        updateCardState(card._id, {
+          checklists: normalizeChecklists(response.data.checklists),
+          version: response.data.version,
         });
-        console.log("Emitted checklist-deleted:", {
-          cardId: card._id,
-          checklistId,
-          boardId: card.board,
-          actorId: currentUserId,
-        });
+
+        if (socket && socketReady) {
+          socket.emit("checklist-deleted", {
+            cardId: card._id,
+            checklistId,
+            boardId: card.board,
+            actorId: currentUserId,
+          });
+          console.log("Emitted checklist-deleted:", {
+            cardId: card._id,
+            checklistId,
+            boardId: card.board,
+            actorId: currentUserId,
+          });
+        }
+
+        toast.success("Xóa checklist thành công!");
+      } catch (err) {
+        if (err.response?.status === 409 && retryCount < maxRetries) {
+          retryCount++;
+          toast.info("Dữ liệu đã thay đổi, đang làm mới...");
+          try {
+            const latestCard = await fetchLatestCard(card._id);
+            updateCardState(card._id, {
+              ...latestCard,
+              checklists: normalizeChecklists(latestCard.checklists),
+              version: latestCard.version,
+            });
+            return tryDeleteChecklist(latestCard.version);
+          } catch (fetchErr) {
+            throw fetchErr;
+          }
+        }
+        throw err;
       }
+    };
 
-      toast.success("Xóa checklist thành công!");
+    try {
+      await tryDeleteChecklist(card.version);
     } catch (err) {
       console.error("Lỗi xóa checklist:", err);
       updateCardState(card._id, { checklists: card.checklists });
@@ -1500,13 +1603,14 @@ function CardDetails({
       );
     } finally {
       setLoading((prev) => ({ ...prev, checklist: false }));
+      await refreshCard();
     }
   };
 
   // Cập nhật item checklist
-  const handleUpdateChecklistItem = async (checklistId, itemId, text) => {
-    if (!text.trim()) {
-      toast.error("Item checklist không được để trống!");
+  const handleUpdateChecklistItem = async (checklistId, itemId, title, content) => {
+    if (!title.trim() || !content.trim()) {
+      toast.error("Tiêu đề và nội dung item không được để trống!");
       return;
     }
     if (!currentUserId) {
@@ -1538,50 +1642,79 @@ function CardDetails({
           ? {
             ...cl,
             items: cl.items.map((it) =>
-              it._id === itemId ? { ...it, text } : it
+              it._id === itemId ? { ...it, title, content } : it
             ),
           }
           : cl
       ),
     });
 
-    try {
-      const token = localStorage.getItem("token");
-      const response = await axios.put(
-        `http://localhost:5000/api/cards/${card._id}/checklists/${checklistId}/items/${itemId}`,
-        { text },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+    let retryCount = 0;
+    const maxRetries = 3;
 
-      updateCardState(card._id, {
-        checklists: normalizeChecklists(response.data),
-      });
-
-      if (socket && socketReady) {
-        const updatedChecklist = normalizeChecklists(response.data).find(
-          (cl) => cl._id === checklistId
+    const tryUpdateChecklistItem = async (version) => {
+      try {
+        const token = localStorage.getItem("token");
+        const response = await axios.put(
+          `http://localhost:5000/api/cards/${card._id}/checklists/${checklistId}/items/${itemId}`,
+          { title, content, version },
+          { headers: { Authorization: `Bearer ${token}` } }
         );
-        socket.emit("checklist-item-updated", {
-          cardId: card._id,
-          checklistId,
-          itemId,
-          item: { text },
-          checklist: updatedChecklist,
-          boardId: card.board,
-          actorId: currentUserId,
-        });
-        console.log("Emitted checklist-item-updated:", {
-          cardId: card._id,
-          checklistId,
-          itemId,
-          item: { text },
-          checklist: updatedChecklist,
-          boardId: card.board,
-          actorId: currentUserId,
-        });
-      }
 
-      toast.success("Cập nhật item checklist thành công!");
+        console.log("API updateChecklistItem response:", response.data);
+        updateCardState(card._id, {
+          checklists: normalizeChecklists(response.data.checklists),
+          version: response.data.version,
+        });
+
+        if (socket && socketReady) {
+          const updatedChecklist = normalizeChecklists(response.data.checklists).find(
+            (cl) => cl._id === checklistId
+          );
+          const updatedItem = updatedChecklist.items.find((it) => it._id === itemId);
+          socket.emit("checklist-item-updated", {
+            cardId: card._id,
+            checklistId,
+            itemId,
+            item: updatedItem,
+            checklist: updatedChecklist,
+            boardId: card.board,
+            actorId: currentUserId,
+          });
+          console.log("Emitted checklist-item-updated:", {
+            cardId: card._id,
+            checklistId,
+            itemId,
+            item: updatedItem,
+            checklist: updatedChecklist,
+            boardId: card.board,
+            actorId: currentUserId,
+          });
+        }
+
+        toast.success("Cập nhật item checklist thành công!");
+      } catch (err) {
+        if (err.response?.status === 409 && retryCount < maxRetries) {
+          retryCount++;
+          toast.info("Dữ liệu đã thay đổi, đang làm mới...");
+          try {
+            const latestCard = await fetchLatestCard(card._id);
+            updateCardState(card._id, {
+              ...latestCard,
+              checklists: normalizeChecklists(latestCard.checklists),
+              version: latestCard.version,
+            });
+            return tryUpdateChecklistItem(latestCard.version);
+          } catch (fetchErr) {
+            throw fetchErr;
+          }
+        }
+        throw err;
+      }
+    };
+
+    try {
+      await tryUpdateChecklistItem(card.version);
     } catch (err) {
       console.error("Lỗi cập nhật item checklist:", err);
       updateCardState(card._id, { checklists: card.checklists });
@@ -1592,6 +1725,7 @@ function CardDetails({
       );
     } finally {
       setLoading((prev) => ({ ...prev, checklistItem: false }));
+      await refreshCard();
     }
   };
 
@@ -1631,31 +1765,63 @@ function CardDetails({
       ),
     });
 
-    try {
-      const token = localStorage.getItem("token");
-      await axios.delete(
-        `http://localhost:5000/api/cards/${card._id}/checklists/${checklistId}/items/${itemId}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+    let retryCount = 0;
+    const maxRetries = 3;
 
-      if (socket && socketReady) {
-        socket.emit("checklist-item-deleted", {
-          cardId: card._id,
-          checklistId,
-          itemId,
-          boardId: card.board,
-          actorId: currentUserId,
+    const tryDeleteChecklistItem = async (version) => {
+      try {
+        const token = localStorage.getItem("token");
+        const response = await axios.delete(
+          `http://localhost:5000/api/cards/${card._id}/checklists/${checklistId}/items/${itemId}`,
+          { headers: { Authorization: `Bearer ${token}` }, data: { version } }
+        );
+
+        console.log("API deleteChecklistItem response:", response.data);
+        updateCardState(card._id, {
+          checklists: normalizeChecklists(response.data.checklists),
+          version: response.data.version,
         });
-        console.log("Emitted checklist-item-deleted:", {
-          cardId: card._id,
-          checklistId,
-          itemId,
-          boardId: card.board,
-          actorId: currentUserId,
-        });
+
+        if (socket && socketReady) {
+          socket.emit("checklist-item-deleted", {
+            cardId: card._id,
+            checklistId,
+            itemId,
+            boardId: card.board,
+            actorId: currentUserId,
+          });
+          console.log("Emitted checklist-item-deleted:", {
+            cardId: card._id,
+            checklistId,
+            itemId,
+            boardId: card.board,
+            actorId: currentUserId,
+          });
+        }
+
+        toast.success("Xóa item checklist thành công!");
+      } catch (err) {
+        if (err.response?.status === 409 && retryCount < maxRetries) {
+          retryCount++;
+          toast.info("Dữ liệu đã thay đổi, đang làm mới...");
+          try {
+            const latestCard = await fetchLatestCard(card._id);
+            updateCardState(card._id, {
+              ...latestCard,
+              checklists: normalizeChecklists(latestCard.checklists),
+              version: latestCard.version,
+            });
+            return tryDeleteChecklistItem(latestCard.version);
+          } catch (fetchErr) {
+            throw fetchErr;
+          }
+        }
+        throw err;
       }
+    };
 
-      toast.success("Xóa item checklist thành công!");
+    try {
+      await tryDeleteChecklistItem(card.version);
     } catch (err) {
       console.error("Lỗi xóa item checklist:", err);
       updateCardState(card._id, { checklists: card.checklists });
@@ -1666,6 +1832,91 @@ function CardDetails({
       );
     } finally {
       setLoading((prev) => ({ ...prev, checklistItem: false }));
+      await refreshCard();
+    }
+  };
+
+  // Thu hồi bình luận
+  const handleHideComment = async (commentId) => {
+    if (!window.confirm("Bạn có chắc muốn thu hồi bình luận này?")) return;
+
+    setLoading((prev) => ({ ...prev, comment: true }));
+
+    try {
+      const token = localStorage.getItem("token");
+      await axios.delete(
+        `http://localhost:5000/api/cards/${card._id}/comments/${commentId}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      updateCardState(card._id, {
+        comments: card.comments.map((c) =>
+          c._id === commentId ? { ...c, isDeleted: true } : c
+        ),
+      });
+
+      if (socket && socketReady) {
+        socket.emit("comment-hidden", {
+          cardId: card._id,
+          commentId,
+          boardId: card.board,
+          actorId: currentUserId,
+        });
+      }
+
+      toast.success("Thu hồi bình luận thành công!");
+    } catch (err) {
+      console.error("Lỗi thu hồi bình luận:", err);
+      toast.error(
+        err.response?.status === 403
+          ? "Bạn không có quyền thu hồi bình luận!"
+          : err.response?.data?.message || "Không thể thu hồi bình luận!"
+      );
+    } finally {
+      setLoading((prev) => ({ ...prev, comment: false }));
+      await refreshCard();
+    }
+  };
+
+  // Thu hồi ghi chú
+  const handleHideNote = async (noteId) => {
+    if (!window.confirm("Bạn có chắc muốn thu hồi ghi chú này?")) return;
+
+    setLoading((prev) => ({ ...prev, note: true }));
+
+    try {
+      const token = localStorage.getItem("token");
+      await axios.delete(
+        `http://localhost:5000/api/cards/${card._id}/notes/${noteId}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      updateCardState(card._id, {
+        notes: card.notes.map((n) =>
+          n._id === noteId ? { ...n, isDeleted: true } : n
+        ),
+      });
+
+      if (socket && socketReady) {
+        socket.emit("note-hidden", {
+          cardId: card._id,
+          noteId,
+          boardId: card.board,
+          actorId: currentUserId,
+        });
+      }
+
+      toast.success("Thu hồi ghi chú thành công!");
+    } catch (err) {
+      console.error("Lỗi thu hồi ghi chú:", err);
+      toast.error(
+        err.response?.status === 403
+          ? "Bạn không có quyền thu hồi ghi chú!"
+          : err.response?.data?.message || "Không thể thu hồi ghi chú!"
+      );
+    } finally {
+      setLoading((prev) => ({ ...prev, note: false }));
+      await refreshCard();
     }
   };
 
@@ -1714,6 +1965,7 @@ function CardDetails({
       );
     } finally {
       setLoading((prev) => ({ ...prev, removeMember: false }));
+      await refreshCard();
     }
   };
 
