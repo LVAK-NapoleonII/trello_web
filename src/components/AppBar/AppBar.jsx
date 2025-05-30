@@ -191,22 +191,48 @@ function AppBar() {
     if (notification.target && notification.targetModel) {
       switch (notification.targetModel) {
         case 'Board':
-          navigate(`/boards/${notification.target._id}`);
-          break;
-        case 'Workspace':
-          navigate(`/workspace/${notification.target._id}/boards`);
-          break;
-        case 'Card':
-          const workspaceId = notification.target.board?.workspace?._id || notification.target.board?.workspace;
-          const boardId = notification.target.board?._id;
+          const boardId = notification.target?._id;
+          const workspaceId = notification.target?.workspace?._id;
           if (boardId && workspaceId) {
             navigate(`/workspace/${workspaceId}/board/${boardId}`);
           } else {
-            console.error('Missing board or workspace ID for notification:', notification);
+            console.error('Missing board or workspace ID for Board notification:', notification);
             toast.error('Không thể mở bảng: Thiếu thông tin bảng hoặc không gian làm việc!');
           }
           break;
+        case 'Workspace':
+          if (notification.target._id) {
+            navigate(`/workspace/${notification.target._id}/boards`);
+          } else {
+            toast.error('Thông báo không hợp lệ: Thiếu ID không gian làm việc!');
+          }
+          break;
+        case 'Card':
+          const cardBoardId = notification.target?.board?._id;
+          const cardWorkspaceId = notification.target?.board?.workspace?._id;
+          if (cardBoardId && cardWorkspaceId) {
+            navigate(`/workspace/${cardWorkspaceId}/board/${cardBoardId}`);
+          } else {
+            console.error('Missing board or workspace ID for Card notification:', notification);
+            toast.error('Không thể mở bảng: Thiếu thông tin bảng hoặc không gian làm việc!');
+          }
+          break;
+        case 'List':
+          const listBoardId = notification.target?.board?._id;
+          const listWorkspaceId = notification.target?.board?.workspace?._id;
+          if (listBoardId && listWorkspaceId) {
+            navigate(`/workspace/${listWorkspaceId}/board/${listBoardId}`);
+          } else {
+            console.error('Missing board or workspace ID for List notification:', notification);
+            toast.error('Không thể mở danh sách: Thiếu thông tin bảng hoặc không gian làm việc!');
+          }
+          break;
+        case 'Activity':
+        case 'User':
+          // Không điều hướng
+          break;
         default:
+          toast.error('Loại thông báo không được hỗ trợ!');
           break;
       }
     } else {
