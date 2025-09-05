@@ -9,13 +9,15 @@ import {
   Divider,
   CircularProgress,
   IconButton,
-} from "@mui/material";
-import CommentIcon from "@mui/icons-material/Comment";
-import DeleteIcon from "@mui/icons-material/Delete";
-import { useTheme } from "@mui/material/styles";
+} from '@mui/material';
+import CommentIcon from '@mui/icons-material/Comment';
+import DeleteIcon from '@mui/icons-material/Delete';
+import { useTheme } from '@mui/material/styles';
+import { useMemo } from 'react';
+import { normalizeComments } from '../../../../../../../components/utils/normalize'; // Sửa import
 
 const CommentsSection = ({
-  comments,
+  comments = [],
   comment,
   setComment,
   loading,
@@ -26,36 +28,41 @@ const CommentsSection = ({
   isBoardOwner,
 }) => {
   const theme = useTheme();
-  const isDarkMode = theme.palette.mode === "dark";
+  const isDarkMode = theme.palette.mode === 'dark';
 
-  // Filter out deleted comments
-  const visibleComments = comments.filter((c) => !c.isDeleted);
+  // Sử dụng normalizeComments trực tiếp để xử lý tất cả bình luận, bao gồm unknown user
+  const visibleComments = useMemo(() => normalizeComments(comments), [comments]);
+
+  const canDeleteComment = (commentUserId) => {
+    // Nếu commentUserId null hoặc không hợp lệ, chỉ owner mới xóa được
+    if (!currentUserId) return false;
+    return currentUserId === commentUserId || isBoardOwner;
+  };
 
   return (
     <Box sx={{ mb: 3 }}>
       <Typography
         variant="h6"
         sx={{
-          color: isDarkMode
-            ? theme.palette.grey[200]
-            : theme.palette.text.primary,
+          color: isDarkMode ? theme.palette.grey[200] : theme.palette.text.primary,
           mb: 1,
         }}
       >
         Bình luận
       </Typography>
-      {visibleComments?.length > 0 ? (
+
+      {visibleComments.length > 0 ? (
         <List dense>
-          {visibleComments.map((comment, index) => (
+          {visibleComments.map((commentItem, index) => (
             <ListItem
-              key={comment._id || index}
+              key={commentItem._id || `comment-${index}`}
               sx={{ py: 0.5 }}
               secondaryAction={
-                (currentUserId === comment.user?._id || isBoardOwner) && (
+                canDeleteComment(commentItem.user?._id) && (
                   <IconButton
                     edge="end"
                     aria-label="hide"
-                    onClick={() => handleHideComment(comment._id)}
+                    onClick={() => handleHideComment(commentItem._id)}
                     disabled={loading.comment}
                     sx={{
                       color: isDarkMode
@@ -69,7 +76,7 @@ const CommentsSection = ({
               }
             >
               <ListItemText
-                primary={comment.text}
+                primary={commentItem.text || 'Bình luận không có nội dung'}
                 primaryTypographyProps={{
                   color: isDarkMode
                     ? theme.palette.grey[200]
@@ -77,15 +84,18 @@ const CommentsSection = ({
                 }}
                 secondary={
                   <>
-                    {new Date(comment.createdAt).toLocaleString()} -{" "}
+                    {commentItem.createdAt && commentItem.createdAt !== 'Unknown time'
+                      ? new Date(commentItem.createdAt).toLocaleString()
+                      : 'Thời gian không xác định'}
+                    {' - '}
                     <span
                       style={{
-                        textDecoration: !isMemberInBoard(comment.user?._id)
-                          ? "line-through"
-                          : "none",
+                        textDecoration: isMemberInBoard(commentItem.user?._id)
+                          ? 'none'
+                          : 'line-through',
                       }}
                     >
-                      {comment.user?.fullName || "Không xác định"}
+                      {commentItem.user?.fullName || 'Người dùng không xác định'}
                     </span>
                   </>
                 }
@@ -110,8 +120,10 @@ const CommentsSection = ({
           Chưa có bình luận nào.
         </Typography>
       )}
+
       <Divider sx={{ my: 2 }} />
-      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
         <CommentIcon
           fontSize="small"
           sx={{
@@ -129,26 +141,26 @@ const CommentsSection = ({
           variant="outlined"
           disabled={loading.comment}
           sx={{
-            "& .MuiOutlinedInput-root": {
+            '& .MuiOutlinedInput-root': {
               bgcolor: isDarkMode
-                ? "rgba(255, 255, 255, 0.05)"
+                ? 'rgba(255, 255, 255, 0.05)'
                 : theme.palette.background.default,
               borderRadius: 2,
-              "& fieldset": {
+              '& fieldset': {
                 borderColor: isDarkMode
                   ? theme.palette.grey[600]
                   : theme.palette.divider,
               },
-              "&:hover fieldset": {
+              '&:hover fieldset': {
                 borderColor: isDarkMode
                   ? theme.palette.grey[500]
                   : theme.palette.text.secondary,
               },
-              "&.Mui-focused fieldset": {
+              '&.Mui-focused fieldset': {
                 borderColor: theme.palette.primary.main,
               },
             },
-            "& .MuiInputBase-input": {
+            '& .MuiInputBase-input': {
               color: isDarkMode
                 ? theme.palette.grey[200]
                 : theme.palette.text.primary,
@@ -159,18 +171,18 @@ const CommentsSection = ({
           variant="contained"
           size="small"
           onClick={handleAddComment}
-          disabled={loading.comment || !comment.trim()}
+          disabled={loading.comment || !comment?.trim()}
           sx={{
             bgcolor: theme.palette.primary.main,
-            "&:hover": {
+            '&:hover': {
               bgcolor: theme.palette.primary.dark,
             },
-            "&:disabled": {
+            '&:disabled': {
               bgcolor: theme.palette.grey[400],
             },
           }}
         >
-          {loading.comment ? <CircularProgress size={20} /> : "Gửi"}
+          {loading.comment ? <CircularProgress size={20} /> : 'Gửi'}
         </Button>
       </Box>
     </Box>

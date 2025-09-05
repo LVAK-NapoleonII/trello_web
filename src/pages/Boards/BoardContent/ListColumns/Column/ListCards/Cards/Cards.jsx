@@ -78,21 +78,21 @@ function Cards({
         updatedColumns = updatedColumns.map((col) =>
           col._id === oldListId
             ? {
-                ...col,
-                cards: col.cards.filter((c) => c._id !== movedCard._id),
-              }
+              ...col,
+              cards: col.cards.filter((c) => c._id !== movedCard._id),
+            }
             : col
         );
         updatedColumns = updatedColumns.map((col) =>
           col._id === newListId
             ? {
-                ...col,
-                cards: [
-                  ...col.cards.slice(0, newPosition),
-                  { ...movedCard, list: newListId },
-                  ...col.cards.slice(newPosition),
-                ],
-              }
+              ...col,
+              cards: [
+                ...col.cards.slice(0, newPosition),
+                { ...movedCard, list: newListId },
+                ...col.cards.slice(newPosition),
+              ],
+            }
             : col
         );
         return updatedColumns;

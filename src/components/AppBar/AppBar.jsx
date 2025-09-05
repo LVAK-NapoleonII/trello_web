@@ -1,10 +1,9 @@
 import { useState, useEffect, useContext, forwardRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import ModeSelect from "../ModeSelect/ModeSelect";
-import Box from "@mui/material/Box";
-import AppsIcon from "@mui/icons-material/Apps";
-import BackupTableIcon from "@mui/icons-material/BackupTable";
 import {
+  AppBar as MuiAppBar,
+  Toolbar,
+  Box,
   Tooltip,
   Typography,
   IconButton,
@@ -20,37 +19,68 @@ import {
   ListItemIcon,
   ListItemText,
   Divider,
+  useTheme,
 } from "@mui/material";
+import {
+  Apps as AppsIcon,
+  BackupTable as BackupTableIcon,
+  AddToPhotos as AddToPhotosIcon,
+  Search as SearchIcon,
+  Clear as ClearIcon,
+  CheckCircle as CheckCircleIcon,
+  Delete as DeleteIcon,
+  Notifications as NotificationsIcon,
+  Help as HelpIcon,
+} from "@mui/icons-material";
+import axios from "axios";
+import { toast } from "react-toastify";
+import { formatDistanceToNow } from "date-fns";
+import { vi } from "date-fns/locale";
+import { useAuth } from "../../context/AuthContext";
+import { SocketContext } from "../../context/SocketContext";
+import ModeSelect from "../AppBar/Menus/ModeSelect/ModeSelect";
 import WorkSpace from "./Menus/WorkSpace";
-import Recents from "./Menus/Recents";
+import WorkspaceHistory from "./Menus/WorkspaceHistory";
 import Starred from "./Menus/Starred";
 import Templates from "./Menus/Templates";
-import NotificationsIcon from "@mui/icons-material/Notifications";
-import HelpIcon from "@mui/icons-material/Help";
 import Profiles from "./Menus/Profiles";
-import AddToPhotosIcon from "@mui/icons-material/AddToPhotos";
-import SearchIcon from "@mui/icons-material/Search";
-import ClearIcon from "@mui/icons-material/Clear";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import DeleteIcon from "@mui/icons-material/Delete";
-import axios from "axios";
-import { useAuth } from "../../context/AuthContext";
-import { toast } from "react-toastify";
-import { SocketContext } from "../../context/SocketContext";
-import { formatDistanceToNow } from "date-fns";
-import vi from "date-fns/locale/vi";
 
 const CustomIconButton = forwardRef(({ onClick, children, ...props }, ref) => (
-  <IconButton ref={ref} onClick={onClick} {...props}>
+  <IconButton
+    ref={ref}
+    onClick={onClick}
+    sx={{
+      color: "white",
+      transition: "all 0.3s ease",
+      "&:hover": {
+        bgcolor: "rgba(255, 255, 255, 0.1)",
+        transform: "translateY(-2px)",
+        boxShadow: "0 4px 12px rgba(0, 0, 0, 0.2)",
+      },
+    }}
+    {...props}
+  >
     {children}
   </IconButton>
 ));
 
-function AppBar() {
+const handleApiError = (error, navigate, defaultMessage) => {
+  const message = error.response?.data?.message || defaultMessage;
+  toast.error(message);
+  if (error.response?.status === 401 || error.message.includes("token")) {
+    navigate("/login");
+  }
+  return message;
+};
+
+const AppBar = () => {
+  const theme = useTheme();
+  const isDarkMode = theme.palette.mode === "dark";
   const { socket, socketReady } = useContext(SocketContext);
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+
   const [searchValue, setSearchValue] = useState("");
   const [openModal, setOpenModal] = useState(false);
   const [workspaceData, setWorkspaceData] = useState({
@@ -59,64 +89,173 @@ function AppBar() {
     background: "",
     isPublic: false,
   });
-  const [loadingModal, setLoading] = useState(false);
+  const [loadingModal, setLoadingModal] = useState(false);
   const [error, setError] = useState(null);
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [anchorEl, setAnchorEl] = useState(null);
   const openNotifications = Boolean(anchorEl);
 
-  useEffect(() => {
-    if (loading || !user) {
+  const fetchNotifications = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) throw new Error("Vui lòng đăng nhập!");
+
+      const response = await axios.get("http://localhost:5000/api/notifications", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      setNotifications(response.data.notifications.slice(0, 10));
+      setUnreadCount(response.data.unreadCount || 0);
+    } catch (error) {
+      console.error("[fetchNotifications] Lỗi:", error.message);
+      handleApiError(error, navigate, "Không thể tải thông báo!");
+    }
+  };
+
+  const handleMarkAsRead = async (notificationId, event) => {
+    event.stopPropagation();
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) throw new Error("Vui lòng đăng nhập!");
+
+      await axios.put(
+        `http://localhost:5000/api/notifications/${notificationId}/read`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      setNotifications((prev) =>
+        prev.map((n) => (n._id === notificationId ? { ...n, isRead: true } : n))
+      );
+      setUnreadCount((prev) => Math.max(0, prev - 1));
+      toast.success("Đã đánh dấu thông báo là đã đọc!");
+    } catch (error) {
+      console.error("[handleMarkAsRead] Lỗi:", error.message);
+      handleApiError(error, navigate, "Không thể đánh dấu thông báo!");
+    }
+  };
+
+  const handleHideNotification = async (notificationId, event) => {
+    event.stopPropagation();
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) throw new Error("Vui lòng đăng nhập!");
+
+      await axios.delete(`http://localhost:5000/api/notifications/${notificationId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      setNotifications((prev) => prev.filter((n) => n._id !== notificationId));
+      setUnreadCount((prev) =>
+        Math.max(0, prev - (notifications.find((n) => n._id === notificationId)?.isRead ? 0 : 1))
+      );
+      toast.success("Đã ẩn thông báo!");
+    } catch (error) {
+      console.error("[handleHideNotification] Lỗi:", error.message);
+      handleApiError(error, navigate, "Không thể ẩn thông báo!");
+    }
+  };
+
+  const handleHideAllNotifications = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) throw new Error("Vui lòng đăng nhập!");
+
+      await axios.delete("http://localhost:5000/api/notifications", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      setNotifications([]);
+      setUnreadCount(0);
+      toast.success("Đã ẩn tất cả thông báo!");
+    } catch (error) {
+      console.error("[handleHideAllNotifications] Lỗi:", error.message);
+      handleApiError(error, navigate, "Không thể ẩn tất cả thông báo!");
+    }
+  };
+
+  const handleNotificationClick = (notification) => {
+    if (!notification.isRead) {
+      handleMarkAsRead(notification._id, new Event("click"));
+    }
+
+    if (!notification.target || !notification.targetModel) {
+      toast.error("Thông báo không hợp lệ!");
+      handleCloseNotifications();
       return;
     }
 
-    if (!socket || !socketReady) {
-      console.warn("Socket not available or not ready in AppBar");
+    const { target, targetModel } = notification;
+    let path = "";
+    switch (targetModel) {
+      case "Board":
+        if (target?._id && target?.workspace?._id) {
+          path = `/workspace/${target.workspace._id}/board/${target._id}`;
+        }
+        break;
+      case "Workspace":
+        if (target?._id) {
+          path = `/workspace/${target._id}/boards`;
+        }
+        break;
+      case "Card":
+      case "List":
+        if (target?.board?._id && target?.board?.workspace?._id) {
+          path = `/workspace/${target.board.workspace._id}/board/${target.board._id}`;
+        }
+        break;
+      case "Activity":
+      case "User":
+        break;
+      default:
+        toast.error("Loại thông báo không được hỗ trợ!");
+        break;
+    }
+
+    if (path) {
+      navigate(path);
+    } else if (targetModel !== "Activity" && targetModel !== "User") {
+      toast.error("Không thể mở: Thiếu thông tin bảng hoặc không gian làm việc!");
+    }
+    handleCloseNotifications();
+  };
+
+  const handleCreateWorkspace = async () => {
+    if (!workspaceData.name.trim()) {
+      setError("Tên không gian làm việc không được để trống!");
       return;
     }
 
-    socket.emit("join-user", user._id);
-    console.log("AppBar: Đã tham gia phòng socket:", user._id);
+    try {
+      setLoadingModal(true);
+      setError(null);
+      const token = localStorage.getItem("token");
+      if (!token) throw new Error("Vui lòng đăng nhập!");
 
-    const fetchNotifications = async () => {
-      try {
-        const token = localStorage.getItem("token");
-        const response = await axios.get(
-          "http://localhost:5000/api/notifications",
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          }
-        );
-        setNotifications(response.data.notifications.slice(0, 10));
-        setUnreadCount(response.data.unreadCount || 0);
-      } catch (err) {
-        console.error("AppBar: Lỗi khi lấy thông báo:", err.message);
-        toast.error("Không thể tải thông báo!");
+      const response = await axios.post(
+        "http://localhost:5000/api/workspaces",
+        workspaceData,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      if (socket && socketReady) {
+        socket.emit("workspace-created", {
+          workspace: response.data,
+          message: `Không gian làm việc "${response.data.name}" đã được tạo bởi ${user?.fullName || "Người dùng"}`,
+        });
       }
-    };
-    fetchNotifications();
 
-    const handleNewNotification = (notification) => {
-      if (!notification.isHidden) {
-        setNotifications((prev) => [notification, ...prev].slice(0, 10));
-        setUnreadCount((prev) => prev + (notification.isRead ? 0 : 1));
-        toast.info(notification.message, { autoClose: 3000 });
-      }
-    };
-
-    const handleWorkspaceCreated = (data) => {
-      toast.success(data.message);
-    };
-
-    socket.on("new-notification", handleNewNotification);
-    socket.on("workspace-created", handleWorkspaceCreated);
-
-    return () => {
-      socket.off("new-notification", handleNewNotification);
-      socket.off("workspace-created", handleWorkspaceCreated);
-    };
-  }, [user, loading, socket, socketReady]);
+      toast.success("Tạo không gian làm việc thành công!");
+      handleCloseModal();
+    } catch (error) {
+      console.error("[handleCreateWorkspace] Lỗi:", error.message);
+      const message = handleApiError(error, navigate, "Không thể tạo không gian làm việc!");
+      setError(message);
+    } finally {
+      setLoadingModal(false);
+    }
+  };
 
   const handleOpenNotifications = (event) => {
     setAnchorEl(event.currentTarget);
@@ -126,126 +265,6 @@ function AppBar() {
     setAnchorEl(null);
   };
 
-  const handleMarkAsRead = async (notificationId, event) => {
-    event.stopPropagation();
-    try {
-      const token = localStorage.getItem("token");
-      await axios.put(
-        `http://localhost:5000/api/notifications/${notificationId}/read`,
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      setNotifications((prev) =>
-        prev.map((n) => (n._id === notificationId ? { ...n, isRead: true } : n))
-      );
-      setUnreadCount((prev) => prev - 1);
-      toast.success("Đã đánh dấu là đã đọc!");
-    } catch (err) {
-      console.error("AppBar: Lỗi khi đánh dấu thông báo:", err.message);
-      toast.error("Không thể đánh dấu thông báo!");
-    }
-  };
-
-  const handleHideNotification = async (notificationId, event) => {
-    event.stopPropagation();
-    try {
-      const token = localStorage.getItem("token");
-      await axios.delete(
-        `http://localhost:5000/api/notifications/${notificationId}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-      setNotifications((prev) => prev.filter((n) => n._id !== notificationId));
-      setUnreadCount(
-        (prev) =>
-          prev -
-          (notifications.find((n) => n._id === notificationId)?.isRead ? 0 : 1)
-      );
-      toast.success("Đã ẩn thông báo!");
-    } catch (err) {
-      console.error("AppBar: Lỗi khi ẩn thông báo:", err.message);
-      toast.error("Không thể ẩn thông báo!");
-    }
-  };
-
-  const handleHideAllNotifications = async () => {
-    try {
-      const token = localStorage.getItem("token");
-      await axios.delete("http://localhost:5000/api/notifications", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setNotifications([]);
-      setUnreadCount(0);
-      toast.success("Đã ẩn tất cả thông báo!");
-    } catch (err) {
-      console.error("AppBar: Lỗi khi ẩn tất cả thông báo:", err.message);
-      toast.error("Không thể ẩn tất cả thông báo!");
-    }
-  };
-
-  const handleNotificationClick = (notification) => {
-    if (!notification.isRead) {
-      handleMarkAsRead(notification._id, new Event('click'));
-    }
-    if (notification.target && notification.targetModel) {
-      switch (notification.targetModel) {
-        case 'Board':
-          const boardId = notification.target?._id;
-          const workspaceId = notification.target?.workspace?._id;
-          if (boardId && workspaceId) {
-            navigate(`/workspace/${workspaceId}/board/${boardId}`);
-          } else {
-            console.error('Missing board or workspace ID for Board notification:', notification);
-            toast.error('Không thể mở bảng: Thiếu thông tin bảng hoặc không gian làm việc!');
-          }
-          break;
-        case 'Workspace':
-          if (notification.target._id) {
-            navigate(`/workspace/${notification.target._id}/boards`);
-          } else {
-            toast.error('Thông báo không hợp lệ: Thiếu ID không gian làm việc!');
-          }
-          break;
-        case 'Card':
-          const cardBoardId = notification.target?.board?._id;
-          const cardWorkspaceId = notification.target?.board?.workspace?._id;
-          if (cardBoardId && cardWorkspaceId) {
-            navigate(`/workspace/${cardWorkspaceId}/board/${cardBoardId}`);
-          } else {
-            console.error('Missing board or workspace ID for Card notification:', notification);
-            toast.error('Không thể mở bảng: Thiếu thông tin bảng hoặc không gian làm việc!');
-          }
-          break;
-        case 'List':
-          const listBoardId = notification.target?.board?._id;
-          const listWorkspaceId = notification.target?.board?.workspace?._id;
-          if (listBoardId && listWorkspaceId) {
-            navigate(`/workspace/${listWorkspaceId}/board/${listBoardId}`);
-          } else {
-            console.error('Missing board or workspace ID for List notification:', notification);
-            toast.error('Không thể mở danh sách: Thiếu thông tin bảng hoặc không gian làm việc!');
-          }
-          break;
-        case 'Activity':
-        case 'User':
-          // Không điều hướng
-          break;
-        default:
-          toast.error('Loại thông báo không được hỗ trợ!');
-          break;
-      }
-    } else {
-      console.warn('Invalid notification data:', notification);
-      toast.error('Thông báo không hợp lệ!');
-    }
-    handleCloseNotifications();
-  };
-
-  const handleNavigateHome = () => {
-    navigate("/boards");
-  };
-
   const handleOpenModal = () => {
     setOpenModal(true);
     setError(null);
@@ -253,12 +272,7 @@ function AppBar() {
 
   const handleCloseModal = () => {
     setOpenModal(false);
-    setWorkspaceData({
-      name: "",
-      description: "",
-      background: "",
-      isPublic: false,
-    });
+    setWorkspaceData({ name: "", description: "", background: "", isPublic: false });
     setError(null);
   };
 
@@ -270,192 +284,220 @@ function AppBar() {
     }));
   };
 
-  const handleCreateWorkspace = async () => {
-    if (!workspaceData.name.trim()) {
-      setError("Tên không gian làm việc không được để trống!");
+  const handleNavigateHome = () => {
+    navigate("/boards");
+  };
+
+  useEffect(() => {
+    if (loading || !user) return;
+
+    if (!socket || !socketReady) {
+      fetchNotifications();
       return;
     }
 
-    try {
-      setLoading(true);
-      setError(null);
-      const token = localStorage.getItem("token");
-      const response = await axios.post(
-        "http://localhost:5000/api/workspaces",
-        workspaceData,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      if (socket && socketReady) {
-        socket.emit("workspace-created", {
-          workspace: response.data,
-          message: `Không gian làm việc "${response.data.name}" đã được tạo bởi ${user.fullName}`,
-        });
-      } else {
-        console.warn("Socket not available or not ready for workspace-created");
-      }
-      toast.success("Tạo không gian làm việc thành công!");
-      handleCloseModal();
-    } catch (error) {
-      const message =
-        error.response?.data?.message || "Lỗi khi tạo không gian làm việc!";
-      setError(message);
-      toast.error(message);
-    } finally {
-      setLoading(false);
-    }
+    socket.emit("join-user", user._id);
+    fetchNotifications();
+
+    const socketHandlers = {
+      "new-notification": (notification) => {
+        if (!notification.isHidden) {
+          setNotifications((prev) => [notification, ...prev].slice(0, 10));
+          setUnreadCount((prev) => prev + (notification.isRead ? 0 : 1));
+          toast.info(notification.message, { autoClose: 3000 });
+        }
+      },
+      "workspace-created": (data) => {
+        toast.success(data.message);
+      },
+    };
+
+    Object.entries(socketHandlers).forEach(([event, handler]) => socket.on(event, handler));
+    return () => Object.entries(socketHandlers).forEach(([event, handler]) => socket.off(event, handler));
+  }, [user, loading, socket, socketReady]);
+
+  const scrollbarStyles = {
+    "&::-webkit-scrollbar": { width: 6 },
+    "&::-webkit-scrollbar-track": {
+      bgcolor: isDarkMode ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.05)",
+      borderRadius: 3,
+    },
+    "&::-webkit-scrollbar-thumb": {
+      bgcolor: theme.palette.primary.main,
+      borderRadius: 3,
+    },
   };
 
   return (
-    <Box
-      px={2}
+    <MuiAppBar
+      position="fixed"
       sx={{
-        backgroundColor: "primary.contrastText",
-        width: "100%",
-        height: (theme) => theme.trelloCustom.appBarHeight,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        gap: 2,
-        overflowX: "auto",
-        bgcolor: (theme) =>
-          theme.palette.mode === "dark" ? "#2c3e50" : "#1565c0",
+        zIndex: (theme) => theme.zIndex.drawer + 1,
+        bgcolor: isDarkMode
+          ? "linear-gradient(135deg, #2c3e50 0%, #1a2634 100%)"
+          : "linear-gradient(135deg, #1565c0 0%, #0d47a1 100%)",
+        boxShadow: `0 4px 20px ${isDarkMode ? "rgba(0, 0, 0, 0.3)" : "rgba(0, 0, 0, 0.15)"}`,
       }}
     >
-      <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-        <CustomIconButton onClick={handleNavigateHome}>
-          <AppsIcon sx={{ color: "white" }} />
-        </CustomIconButton>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-          <BackupTableIcon sx={{ color: "white" }} />
-          <Typography
-            component="span"
-            onClick={handleNavigateHome}
+      <Toolbar
+        sx={{
+          height: (theme) => theme.trelloCustom?.appBarHeight || 64,
+          px: { xs: 1.5, sm: 2 },
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: { xs: 1, sm: 2 },
+          backdropFilter: "blur(10px)",
+          bgcolor: "rgba(255, 255, 255, 0.05)",
+        }}
+      >
+        <Box sx={{ display: "flex", alignItems: "center", gap: { xs: 1, sm: 2 } }}>
+          <CustomIconButton onClick={handleNavigateHome}>
+            <AppsIcon />
+          </CustomIconButton>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, cursor: "pointer" }} onClick={handleNavigateHome}>
+            <BackupTableIcon />
+            <Typography
+              component="span"
+              sx={{
+                fontSize: { xs: "1.1rem", sm: "1.2rem" },
+                fontWeight: 600,
+                color: "white",
+              }}
+            >
+              LVAK
+            </Typography>
+          </Box>
+          <WorkSpace onCreateWorkspace={handleOpenModal} />
+          <WorkspaceHistory />
+          <Starred />
+          <Templates />
+          <Button
+            variant="outlined"
+            startIcon={<AddToPhotosIcon />}
+            onClick={handleOpenModal}
             sx={{
-              fontSize: "1.2rem",
-              fontWeight: "bold",
               color: "white",
-              cursor: "pointer",
+              borderColor: "rgba(255, 255, 255, 0.3)",
+              bgcolor: "rgba(255, 255, 255, 0.1)",
+              textTransform: "none",
+              fontWeight: 500,
+              borderRadius: 8,
+              padding: { xs: "4px 8px", sm: "6px 16px" },
+              transition: "all 0.3s ease",
+              "&:hover": {
+                borderColor: "white",
+                bgcolor: "rgba(255, 255, 255, 0.2)",
+                transform: "translateY(-2px)",
+                boxShadow: "0 4px 12px rgba(0, 0, 0, 0.2)",
+              },
             }}
           >
-            LVAK
-          </Typography>
+            Tạo mới
+          </Button>
         </Box>
-        <WorkSpace onCreateWorkspace={handleOpenModal} />
-        <Recents />
-        <Starred />
-        <Templates />
-        <Button
-          sx={{ color: "white", borderColor: "white" }}
-          variant="outlined"
-          startIcon={<AddToPhotosIcon />}
-          onClick={handleOpenModal}
-        >
-          Tạo
-        </Button>
-      </Box>
-      <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-        <TextField
-          id="outlined-search"
-          label="Tìm kiếm ..."
-          type="text"
-          size="small"
-          value={searchValue}
-          onChange={(e) => setSearchValue(e.target.value)}
-          InputProps={{
-            startAdornment: (
-              <Tooltip title="Tìm kiếm trong Trello">
-                <SearchIcon sx={{ fontSize: "1.2rem", color: "white" }} />
-              </Tooltip>
-            ),
-            endAdornment: (
-              <Tooltip title="Xóa tìm kiếm">
-                <CustomIconButton onClick={() => setSearchValue("")}>
-                  <ClearIcon
-                    sx={{
-                      fontSize: "1.2rem",
-                      color: searchValue ? "white" : "transparent",
-                    }}
-                  />
-                </CustomIconButton>
-              </Tooltip>
-            ),
-          }}
-          sx={{
-            minWidth: "120px",
-            maxWidth: "180px",
-            "& label": { color: "white" },
-            "& input": { color: "white" },
-            "& label.Mui-focused": { color: "white" },
-            "& .MuiPortalInput-root": {
-              "& fieldset": { borderColor: "white" },
-              "&:hover fieldset": { borderColor: "white" },
-              "&.Mui-focused fieldset": { borderColor: "white" },
-            },
-          }}
-        />
-        <ModeSelect />
-        <Tooltip title="Thông báo">
-          <CustomIconButton onClick={handleOpenNotifications}>
-            <Badge
-              badgeContent={unreadCount}
-              color="warning"
-              sx={{ color: "white" }}
-            >
-              <NotificationsIcon />
-            </Badge>
-          </CustomIconButton>
-        </Tooltip>
-        <Tooltip title="Trợ giúp">
-          <CustomIconButton>
-            <HelpIcon sx={{ color: "white" }} />
-          </CustomIconButton>
-        </Tooltip>
-        <Tooltip title="Hồ sơ">
-          <Profiles />
-        </Tooltip>
-      </Box>
+        <Box sx={{ display: "flex", alignItems: "center", gap: { xs: 1, sm: 2 } }}>
+          <TextField
+            id="outlined-search"
+            label="Tìm kiếm..."
+            type="text"
+            size="small"
+            value={searchValue}
+            onChange={(e) => setSearchValue(e.target.value)}
+            InputProps={{
+              startAdornment: (
+                <Tooltip title="Tìm kiếm">
+                  <SearchIcon sx={{ fontSize: "1.2rem", color: "white" }} />
+                </Tooltip>
+              ),
+              endAdornment: searchValue && (
+                <Tooltip title="Xóa tìm kiếm">
+                  <CustomIconButton onClick={() => setSearchValue("")}>
+                    <ClearIcon sx={{ fontSize: "1.2rem", color: "white" }} />
+                  </CustomIconButton>
+                </Tooltip>
+              ),
+            }}
+            sx={{
+              minWidth: { xs: "100px", sm: "140px" },
+              maxWidth: "180px",
+              "& label": { color: "white" },
+              "& input": { color: "white" },
+              "& label.Mui-focused": { color: "white" },
+              "& .MuiOutlinedInput-root": {
+                borderRadius: 8,
+                bgcolor: "rgba(255, 255, 255, 0.1)",
+                "& fieldset": { borderColor: "rgba(255, 255, 255, 0.3)" },
+                "&:hover fieldset": { borderColor: "white" },
+                "&.Mui-focused fieldset": { borderColor: "white" },
+              },
+            }}
+          />
+          <ModeSelect />
+          <Tooltip title="Thông báo">
+            <CustomIconButton onClick={handleOpenNotifications}>
+              <Badge badgeContent={unreadCount} color="warning" sx={{ color: "white" }}>
+                <NotificationsIcon />
+              </Badge>
+            </CustomIconButton>
+          </Tooltip>
+          <Tooltip title="Hỗ trợ">
+            <CustomIconButton>
+              <HelpIcon />
+            </CustomIconButton>
+          </Tooltip>
+          <Tooltip title="Hồ sơ">
+            <Profiles />
+          </Tooltip>
+        </Box>
+      </Toolbar>
       <Menu
         anchorEl={anchorEl}
         open={openNotifications}
         onClose={handleCloseNotifications}
         PaperProps={{
           sx: {
+            minWidth: 320,
             maxWidth: 400,
-            minWidth: 300,
             maxHeight: 400,
             overflowY: "auto",
-            borderRadius: 2,
-            boxShadow: 3,
+            borderRadius: 12,
+            bgcolor: isDarkMode ? "rgba(255, 255, 255, 0.08)" : "rgba(255, 255, 255, 0.6)",
+            backdropFilter: "blur(12px)",
+            border: `1px solid ${isDarkMode ? "rgba(255, 255, 255, 0.15)" : "rgba(0, 0, 0, 0.1)"}`,
+            boxShadow: `0 8px 32px ${isDarkMode ? "rgba(0, 0, 0, 0.3)" : "rgba(0, 0, 0, 0.15)"}`,
+            ...scrollbarStyles,
           },
         }}
       >
-        <Box
-          sx={{
-            px: 2,
-            py: 1,
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
-          <Typography variant="subtitle1">Thông báo</Typography>
+        <Box sx={{ px: 2, py: 1.5, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <Typography variant="subtitle1" fontWeight={600} sx={{ color: theme.palette.text.primary }}>
+            Thông báo
+          </Typography>
           {notifications.length > 0 && (
-            <Box sx={{ display: "flex", gap: 1 }}>
-              <Button
-                size="small"
-                onClick={handleHideAllNotifications}
-                color="error"
-              >
-                Ẩn tất cả
-              </Button>
-            </Box>
+            <Button
+              size="small"
+              onClick={handleHideAllNotifications}
+              color="error"
+              sx={{
+                textTransform: "none",
+                fontWeight: 500,
+                borderRadius: 8,
+                "&:hover": {
+                  bgcolor: `${theme.palette.error.light}20`,
+                  transform: "translateY(-1px)",
+                },
+              }}
+            >
+              Xóa tất cả
+            </Button>
           )}
         </Box>
-        <Divider />
+        <Divider sx={{ mx: 2, my: 1, opacity: 0.5, bgcolor: isDarkMode ? "#4A5568" : "#E2E8F0" }} />
         {notifications.length === 0 ? (
-          <MenuItem>
+          <MenuItem sx={{ justifyContent: "center" }}>
             <Typography variant="body2" color="text.secondary">
-              Không có thông báo nào
+              Không có thông báo
             </Typography>
           </MenuItem>
         ) : (
@@ -465,28 +507,29 @@ function AppBar() {
               onClick={() => handleNotificationClick(notification)}
               sx={{
                 whiteSpace: "normal",
-                py: 0.5,
+                py: 1,
                 px: 2,
-                bgcolor: !notification.isRead ? "action.hover" : "inherit",
-                "&:hover": { bgcolor: "action.selected" },
+                bgcolor: !notification.isRead ? theme.palette.action.hover : "transparent",
+                "&:hover": {
+                  bgcolor: theme.palette.action.selected,
+                  transform: "translateY(-1px)",
+                },
+                transition: "all 0.3s ease",
+                borderRadius: 8,
+                mx: 1,
+                my: 0.5,
               }}
             >
-              <Box
-                sx={{ display: "flex", alignItems: "center", width: "100%" }}
-              >
+              <Box sx={{ display: "flex", alignItems: "center", width: "100%", gap: 2 }}>
                 <ListItemText
                   primary={notification.message || "Không có nội dung"}
-                  secondary={formatDistanceToNow(
-                    new Date(notification.createdAt),
-                    {
-                      addSuffix: true,
-                      locale: vi,
-                    }
-                  )}
+                  secondary={formatDistanceToNow(new Date(notification.createdAt), {
+                    addSuffix: true,
+                    locale: vi,
+                  })}
                   primaryTypographyProps={{
                     variant: "body2",
-                    fontWeight: !notification.isRead ? "bold" : "normal",
-                    noWrap: true,
+                    fontWeight: !notification.isRead ? 600 : 400,
                     sx: { maxWidth: 220 },
                   }}
                   secondaryTypographyProps={{
@@ -515,26 +558,30 @@ function AppBar() {
           ))
         )}
       </Menu>
-      <Modal
-        open={openModal}
-        onClose={handleCloseModal}
-        aria-labelledby="create-workspace-modal"
-      >
+      <Modal open={openModal} onClose={handleCloseModal} aria-labelledby="create-workspace-modal">
         <Box
           sx={{
             position: "absolute",
             top: "50%",
             left: "50%",
             transform: "translate(-50%, -50%)",
-            width: 400,
-            bgcolor: "background.paper",
-            boxShadow: 24,
-            p: 4,
-            borderRadius: 2,
+            width: { xs: 320, sm: 400 },
+            bgcolor: isDarkMode ? "rgba(255, 255, 255, 0.08)" : "rgba(255, 255, 255, 0.95)",
+            backdropFilter: "blur(12px)",
+            border: `1px solid ${isDarkMode ? "rgba(255, 255, 255, 0.15)" : "rgba(0, 0, 0, 0.1)"}`,
+            boxShadow: `0 8px 32px ${isDarkMode ? "rgba(0, 0, 0, 0.3)" : "rgba(0, 0, 0, 0.15)"}`,
+            p: 3,
+            borderRadius: 12,
           }}
         >
-          <Typography id="create-workspace-modal" variant="h6" mb={2}>
-            Tạo Không Gian Làm Việc Mới
+          <Typography
+            id="create-workspace-modal"
+            variant="h6"
+            fontWeight={600}
+            mb={2}
+            sx={{ color: theme.palette.text.primary }}
+          >
+            Tạo không gian làm việc mới
           </Typography>
           <TextField
             fullWidth
@@ -546,6 +593,14 @@ function AppBar() {
             required
             error={!!error && error.includes("Tên")}
             helperText={error && error.includes("Tên") ? error : ""}
+            sx={{
+              "& .MuiOutlinedInput-root": {
+                borderRadius: 8,
+                bgcolor: isDarkMode ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.02)",
+                "&:hover fieldset": { borderColor: theme.palette.primary.light },
+                "&.Mui-focused fieldset": { borderColor: theme.palette.primary.main },
+              },
+            }}
           />
           <TextField
             fullWidth
@@ -556,14 +611,30 @@ function AppBar() {
             margin="normal"
             multiline
             rows={3}
+            sx={{
+              "& .MuiOutlinedInput-root": {
+                borderRadius: 8,
+                bgcolor: isDarkMode ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.02)",
+                "&:hover fieldset": { borderColor: theme.palette.primary.light },
+                "&.Mui-focused fieldset": { borderColor: theme.palette.primary.main },
+              },
+            }}
           />
           <TextField
             fullWidth
-            label="Background (URL)"
+            label="Nền (URL hoặc mã màu)"
             name="background"
             value={workspaceData.background}
             onChange={handleInputChange}
             margin="normal"
+            sx={{
+              "& .MuiOutlinedInput-root": {
+                borderRadius: 8,
+                bgcolor: isDarkMode ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.02)",
+                "&:hover fieldset": { borderColor: theme.palette.primary.light },
+                "&.Mui-focused fieldset": { borderColor: theme.palette.primary.main },
+              },
+            }}
           />
           <FormControlLabel
             control={
@@ -571,22 +642,35 @@ function AppBar() {
                 name="isPublic"
                 checked={workspaceData.isPublic}
                 onChange={handleInputChange}
+                sx={{
+                  color: theme.palette.text.secondary,
+                  "&.Mui-checked": { color: theme.palette.primary.main },
+                }}
               />
             }
             label="Công khai"
+            sx={{ mt: 1 }}
           />
           {error && !error.includes("Tên") && (
             <Typography color="error" variant="body2" sx={{ mt: 1 }}>
               {error}
             </Typography>
           )}
-          <Box
-            sx={{ display: "flex", justifyContent: "flex-end", gap: 1, mt: 2 }}
-          >
+          <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 1, mt: 2 }}>
             <Button
               onClick={handleCloseModal}
               color="inherit"
               disabled={loadingModal}
+              sx={{
+                textTransform: "none",
+                borderRadius: 8,
+                padding: "6px 16px",
+                "&:hover": {
+                  bgcolor: theme.palette.action.hover,
+                  transform: "translateY(-2px)",
+                },
+                transition: "all 0.3s ease",
+              }}
             >
               Hủy
             </Button>
@@ -596,14 +680,25 @@ function AppBar() {
               color="primary"
               disabled={loadingModal || !workspaceData.name.trim()}
               startIcon={loadingModal ? <CircularProgress size={16} /> : null}
+              sx={{
+                textTransform: "none",
+                borderRadius: 8,
+                padding: "6px 16px",
+                "&:hover": {
+                  bgcolor: theme.palette.primary.dark,
+                  transform: "translateY(-2px)",
+                  boxShadow: `0 4px 12px ${theme.palette.primary.main}40`,
+                },
+                transition: "all 0.3s ease",
+              }}
             >
               {loadingModal ? "Đang tạo..." : "Tạo"}
             </Button>
           </Box>
         </Box>
       </Modal>
-    </Box>
+    </MuiAppBar>
   );
-}
+};
 
 export default AppBar;

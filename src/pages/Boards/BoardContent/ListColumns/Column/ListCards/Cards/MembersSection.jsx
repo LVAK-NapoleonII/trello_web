@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState } from 'react';
 import {
   Box,
   Typography,
@@ -6,10 +6,10 @@ import {
   Avatar,
   Tooltip,
   CircularProgress,
-} from "@mui/material";
-import PersonAddIcon from "@mui/icons-material/PersonAdd";
-import DeleteIcon from "@mui/icons-material/Delete";
-import { useTheme } from "@mui/material/styles";
+} from '@mui/material';
+import PersonAddIcon from '@mui/icons-material/PersonAdd';
+import DeleteIcon from '@mui/icons-material/Delete';
+import { useTheme } from '@mui/material/styles';
 
 function MembersSection({
   members,
@@ -21,18 +21,20 @@ function MembersSection({
   isMemberInBoard,
 }) {
   const theme = useTheme();
-  const isDarkMode = theme.palette.mode === "dark";
+  const isDarkMode = theme.palette.mode === 'dark';
 
-  console.log("MembersSection props:", {
+  console.log('MembersSection props:', {
     members,
     boardMembers,
     isBoardOwner,
     isMemberInBoard,
   });
 
-  // Loại bỏ trùng lặp trong members
+  // Loại bỏ trùng lặp trong members và kiểm tra dữ liệu hợp lệ
   const uniqueMembers = Array.isArray(members)
-    ? members.filter(
+    ? members
+      .filter((m) => m && m._id && typeof m._id === 'string') // Chỉ giữ member có _id hợp lệ
+      .filter(
         (m, index, self) =>
           self.findIndex((x) => x._id.toString() === m._id.toString()) === index
       )
@@ -42,14 +44,14 @@ function MembersSection({
     <Box sx={{ mb: 2 }}>
       <Box
         sx={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
           mb: 1,
         }}
       >
         <Typography
-          variant="h6"
+          variant='h6'
           sx={{
             color: isDarkMode
               ? theme.palette.grey[200]
@@ -59,12 +61,12 @@ function MembersSection({
           Thành viên
         </Typography>
         {isBoardOwner && (
-          <Tooltip title="Thêm thành viên">
+          <Tooltip title='Thêm thành viên'>
             <IconButton
               onClick={() => setOpenAddMemberDialog(true)}
               sx={{
                 color: theme.palette.primary.main,
-                "&:hover": {
+                '&:hover': {
                   bgcolor: theme.palette.action.hover,
                 },
               }}
@@ -75,11 +77,11 @@ function MembersSection({
         )}
       </Box>
       {uniqueMembers.length > 0 ? (
-        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
           {uniqueMembers.map((member) => {
-            // Sử dụng isMemberInBoard nếu là hàm, nếu không thì kiểm tra isActive trực tiếp
+            // Kiểm tra isMemberInBoard chỉ khi member._id hợp lệ
             const isActive =
-              typeof isMemberInBoard === "function"
+              typeof isMemberInBoard === 'function' && member._id
                 ? isMemberInBoard(member._id)
                 : member.isActive !== false;
             console.log(
@@ -89,16 +91,16 @@ function MembersSection({
               <Box
                 key={member._id}
                 sx={{
-                  display: "flex",
-                  alignItems: "center",
+                  display: 'flex',
+                  alignItems: 'center',
                   gap: 1,
                   bgcolor: isDarkMode
                     ? theme.palette.grey[800]
                     : theme.palette.grey[100],
                   p: 1,
                   borderRadius: 1,
-                  transition: "background-color 0.2s",
-                  "&:hover": {
+                  transition: 'background-color 0.2s',
+                  '&:hover': {
                     bgcolor: isDarkMode
                       ? theme.palette.grey[700]
                       : theme.palette.grey[200],
@@ -113,36 +115,35 @@ function MembersSection({
                     height: 24,
                     bgcolor: theme.palette.background.paper,
                     border: (theme) =>
-                      `1px solid ${
-                        isDarkMode
-                          ? theme.palette.grey[700]
-                          : theme.palette.grey[300]
+                      `1px solid ${isDarkMode
+                        ? theme.palette.grey[700]
+                        : theme.palette.grey[300]
                       }`,
                   }}
                 />
                 <Typography
                   sx={{
-                    textDecoration: isActive ? "none" : "line-through",
+                    textDecoration: isActive ? 'none' : 'line-through',
                     color: isActive
                       ? isDarkMode
                         ? theme.palette.grey[200]
                         : theme.palette.text.primary
                       : isDarkMode
-                      ? theme.palette.grey[400]
-                      : theme.palette.text.secondary,
+                        ? theme.palette.grey[400]
+                        : theme.palette.text.secondary,
                   }}
                 >
-                  {member.fullName}
+                  {member.fullName || 'Không xác định'}
                 </Typography>
                 {isBoardOwner && (
-                  <Tooltip title="Xóa thành viên">
+                  <Tooltip title='Xóa thành viên'>
                     <IconButton
                       onClick={() => handleRemoveMember(member._id)}
                       disabled={loading.removeMember}
-                      size="small"
+                      size='small'
                       sx={{
                         color: theme.palette.error.main,
-                        "&:hover": {
+                        '&:hover': {
                           bgcolor: theme.palette.action.hover,
                         },
                       }}
@@ -158,7 +159,7 @@ function MembersSection({
                         />
                       ) : (
                         <DeleteIcon
-                          fontSize="small"
+                          fontSize='small'
                           sx={{
                             color: theme.palette.error.main,
                           }}

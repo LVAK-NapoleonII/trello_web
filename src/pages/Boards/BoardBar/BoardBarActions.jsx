@@ -10,7 +10,7 @@ import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import GroupIcon from "@mui/icons-material/Group";
 
 function BoardBarActions({
-  activeMembers, // Now receives onlineMembers from BoardBar.jsx
+  activeMembers,
   onlineUsers,
   buttonStyle,
   loading,
@@ -24,20 +24,24 @@ function BoardBarActions({
 
   const buttonStyleDefault = {
     color: theme.palette.text.primary,
-    borderColor: isDarkMode
-      ? theme.palette.divider
-      : "rgba(255, 255, 255, 0.8)",
-    bgcolor: isDarkMode
-      ? theme.palette.action.selected
-      : "rgba(255, 255, 255, 0.1)",
+    borderColor: isDarkMode ? "rgba(255, 255, 255, 0.2)" : "rgba(0, 0, 0, 0.1)",
+    bgcolor: isDarkMode ? "rgba(255, 255, 255, 0.08)" : "rgba(255, 255, 255, 0.6)",
     textTransform: "none",
-    fontWeight: "medium",
-    transition: "all 0.2s ease",
+    fontWeight: 500,
+    fontSize: "0.9rem",
+    padding: "6px 16px",
+    borderRadius: 8,
+    transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
     "&:hover": {
-      borderColor: theme.palette.primary.light,
-      bgcolor: theme.palette.primary.light,
+      borderColor: theme.palette.primary.main,
+      bgcolor: theme.palette.primary.main,
       color: theme.palette.primary.contrastText,
-      transform: "scale(1.05)",
+      transform: "translateY(-2px)",
+      boxShadow: `0 4px 12px ${theme.palette.primary.main}40`,
+    },
+    "&:disabled": {
+      bgcolor: isDarkMode ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.05)",
+      color: theme.palette.text.disabled,
     },
   };
 
@@ -47,6 +51,10 @@ function BoardBarActions({
         display: "flex",
         alignItems: "center",
         gap: { xs: 1, sm: 1.5 },
+        padding: 1,
+        borderRadius: 12,
+        bgcolor: isDarkMode ? "rgba(255, 255, 255, 0.05)" : "rgba(255, 255, 255, 0.4)",
+        backdropFilter: "blur(10px)",
       }}
     >
       <Button
@@ -57,7 +65,7 @@ function BoardBarActions({
         size="small"
         disabled={loading || !isOwner}
       >
-        Mời
+        Invite
       </Button>
       <Button
         variant="outlined"
@@ -66,20 +74,23 @@ function BoardBarActions({
         onClick={handleOpenManageMembersDialog}
         size="small"
       >
-        Thành viên
+        Members
       </Button>
       <AvatarGroup
         max={5}
         total={activeMembers.length}
         sx={{
           "& .MuiAvatar-root": {
-            width: { xs: 28, sm: 32 },
-            height: { xs: 28, sm: 32 },
-            fontSize: { xs: 12, sm: 14 },
-            bgcolor: isDarkMode ? theme.palette.primary.dark : "#90CAF9",
+            width: { xs: 32, sm: 36 },
+            height: { xs: 32, sm: 36 },
+            fontSize: { xs: 14, sm: 16 },
+            bgcolor: isDarkMode ? theme.palette.primary.dark : theme.palette.primary.light,
             border: `2px solid ${theme.palette.background.paper}`,
-            transition: "transform 0.2s ease",
-            "&:hover": { transform: "scale(1.1)" },
+            transition: "all 0.3s ease",
+            "&:hover": {
+              transform: "translateY(-2px)",
+              boxShadow: `0 4px 12px ${theme.palette.primary.main}40`,
+            },
           },
         }}
       >
@@ -90,9 +101,8 @@ function BoardBarActions({
           return (
             <Tooltip
               key={member.user?._id}
-              title={`${member.user?.fullName || member.user?.email} (${
-                isOnline ? "Online" : "Offline"
-              })`}
+              title={`${member.user?.fullName || member.user?.email} (${isOnline ? "Online" : "Offline"})`}
+              arrow
             >
               <Avatar
                 alt={member.user?.fullName || member.user?.email}
@@ -106,11 +116,7 @@ function BoardBarActions({
                 onClick={(event) => handleOpenMenu(event, member)}
                 sx={{
                   cursor: "pointer",
-                  border: `2px solid ${
-                    isOnline
-                      ? theme.palette.success.main
-                      : theme.palette.grey[500]
-                  } !important`,
+                  border: `2px solid ${isOnline ? theme.palette.success.main : theme.palette.grey[500]} !important`,
                 }}
               />
             </Tooltip>

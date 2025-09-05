@@ -132,8 +132,7 @@ function CardActionsPanel({
     } catch (err) {
       console.error("Error toggling card completion:", err);
       toast.error(
-        `Có lỗi khi cập nhật trạng thái hoàn thành: ${
-          err.response?.data?.message || err.message
+        `Có lỗi khi cập nhật trạng thái hoàn thành: ${err.response?.data?.message || err.message
         }`
       );
     } finally {
@@ -162,10 +161,9 @@ function CardActionsPanel({
     }))
     .map(
       (member) =>
-        `${member.fullName} (${
-          isMemberInBoard(member._id)
-            ? "Còn trong bảng"
-            : "Không còn trong bảng"
+        `${member.fullName} (${isMemberInBoard(member._id)
+          ? "Còn trong bảng"
+          : "Không còn trong bảng"
         })`
     )
     .join(", ");

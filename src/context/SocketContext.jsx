@@ -10,7 +10,7 @@ export const SocketProvider = ({ children }) => {
   const [socketReady, setSocketReady] = useState(false);
   const [userId, setUserId] = useState(null);
   const [token, setToken] = useState(null);
-  const [onlineUsers, setOnlineUsers] = useState(new Set()); // Added onlineUsers
+  const [onlineUsers, setOnlineUsers] = useState(new Set());
 
   const log = (message, data = {}) => {
     console.log(`[SocketProvider] ${message}`, data);
@@ -60,6 +60,15 @@ export const SocketProvider = ({ children }) => {
     }
   };
 
+  const joinWorkspaceRoom = (workspaceId) => {
+    if (socket && socketReady) {
+      socket.emit("join", workspaceId);
+      log("Joined workspace room:", { workspaceId });
+    } else {
+      log("Cannot join workspace room, socket not ready:", { workspaceId });
+    }
+  };
+
   useEffect(() => {
     initializeAuth();
   }, []);
@@ -77,7 +86,7 @@ export const SocketProvider = ({ children }) => {
       socket.off("reconnect");
       socket.off("error");
       socket.off("disconnect");
-      socket.off("user-status-changed"); // Added cleanup
+      socket.off("user-status-changed");
     }
 
     const newSocket = io("http://localhost:5000", {
@@ -135,7 +144,6 @@ export const SocketProvider = ({ children }) => {
       });
     });
 
-    // Handle user-status-changed event
     newSocket.on("user-status-changed", ({ userId, isOnline }) => {
       log("Received user-status-changed:", { userId, isOnline });
       setOnlineUsers((prev) => {
@@ -186,7 +194,7 @@ export const SocketProvider = ({ children }) => {
 
   return (
     <SocketContext.Provider
-      value={{ socket, socketReady, userId, onlineUsers, setOnlineUsers }}
+      value={{ socket, socketReady, userId, onlineUsers, setOnlineUsers, joinWorkspaceRoom }}
     >
       {children}
     </SocketContext.Provider>

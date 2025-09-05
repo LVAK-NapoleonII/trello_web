@@ -1,40 +1,46 @@
 import { useState, useEffect, useContext, useCallback } from "react";
-import { Button, Typography } from "@mui/material";
-import Menu from "@mui/material/Menu";
-import MenuItem from "@mui/material/MenuItem";
-import ListItemText from "@mui/material/ListItemText";
-import ListItemIcon from "@mui/material/ListItemIcon";
-import Divider from "@mui/material/Divider";
-import AddCardIcon from "@mui/icons-material/AddCard";
-import DeleteForeverIcon from "@mui/icons-material/DeleteForever";
-import DragHandleIcon from "@mui/icons-material/DragHandle";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import ExpandLessIcon from "@mui/icons-material/ExpandLess";
-import PixIcon from "@mui/icons-material/Pix";
-import Tooltip from "@mui/material/Tooltip";
-import Box from "@mui/material/Box";
-import ListCards from "./ListCards/ListCards";
-import { CSS } from "@dnd-kit/utilities";
-import { useSortable } from "@dnd-kit/sortable";
-import { useDroppable } from "@dnd-kit/core";
-import axios from "axios";
 import {
+  Button,
+  Typography,
+  Menu,
+  MenuItem,
+  ListItemText,
+  ListItemIcon,
+  Divider,
+  Tooltip,
+  Box,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
-  TextField,
+  TextField
 } from "@mui/material";
+import {
+  AddCard as AddCardIcon,
+  DeleteForever as DeleteForeverIcon,
+  DragHandle as DragHandleIcon,
+  ExpandMore as ExpandMoreIcon,
+  ExpandLess as ExpandLessIcon,
+  Pix as PixIcon
+} from "@mui/icons-material";
+import { CSS } from "@dnd-kit/utilities";
+import { useSortable } from "@dnd-kit/sortable";
+import { useDroppable } from "@dnd-kit/core";
+import { useTheme } from "@mui/material/styles";
+import axios from "axios";
 import { toast } from "react-toastify";
 import { SocketContext } from "../../../../../context/SocketContext";
-import { useTheme } from "@mui/material/styles";
+import ListCards from "./ListCards/ListCards";
+
+// Constants
+const COLUMN_HEADER_HEIGHT = "56px";
+const COLUMN_FOOTER_HEIGHT = "56px";
+const API_BASE_URL = "http://localhost:5000/api";
 
 function Column({
   column,
   setColumns,
   boardId,
-  onDragStart,
-  onDragEnd,
   initialExpanded = true,
   boardMembers,
   setBoardMembers,
@@ -42,19 +48,23 @@ function Column({
   const { socket, socketReady } = useContext(SocketContext);
   const theme = useTheme();
   const isDarkMode = theme.palette.mode === "dark";
+
+  // State management
   const [isExpanded, setIsExpanded] = useState(initialExpanded);
+  const [anchorEl, setAnchorEl] = useState(null);
   const [openEditTitleDialog, setOpenEditTitleDialog] = useState(false);
-  const [newTitle, setNewTitle] = useState(column.title);
   const [openCreateCardDialog, setOpenCreateCardDialog] = useState(false);
+  const [newTitle, setNewTitle] = useState(column.title);
   const [newCardTitle, setNewCardTitle] = useState("");
   const [newCardDescription, setNewCardDescription] = useState("");
+  const [refreshCards, setRefreshCards] = useState(false);
   const [loading, setLoading] = useState({
     createCard: false,
     editTitle: false,
     deleteColumn: false,
   });
-  const [refreshCards, setRefreshCards] = useState(false);
 
+  // DnD setup
   const {
     attributes,
     listeners,
@@ -72,6 +82,7 @@ function Column({
     data: { type: "Column" },
   });
 
+  // Styles
   const dndKitColumnStyles = {
     transform: CSS.Translate.toString(transform),
     transition: transition || "transform 0.2s ease, opacity 0.2s ease",
@@ -83,20 +94,34 @@ function Column({
     zIndex: isDragging ? 10 : 1,
   };
 
-  const COLUMN_HEADER_HEIGHT = "56px";
-  const COLUMN_FOOTER_HEIGHT = "56px";
-  const [anchorEl, setAnchorEl] = useState(null);
-  const open = Boolean(anchorEl);
+  const getColumnStyles = () => ({
+    minWidth: "350px",
+    maxWidth: "400px",
+    ml: 2,
+    borderRadius: "12px",
+    bgcolor: isOver
+      ? isDarkMode ? "rgba(255,255,255,0.05)" : theme.palette.grey[100]
+      : isDarkMode ? "#2a2a3d" : "#f4f5f7",
+    height: isExpanded ? "fit-content" : COLUMN_HEADER_HEIGHT,
+    maxHeight: isExpanded ? `calc(100vh - 100px)` : COLUMN_HEADER_HEIGHT,
+    boxShadow: isDarkMode ? "0 4px 12px rgba(0,0,0,0.4)" : theme.shadows[3],
+    display: "flex",
+    flexDirection: "column",
+    transition: "height 0.3s ease, transform 0.2s ease, box-shadow 0.2s ease",
+    "&:hover": {
+      transform: isDragging ? "none" : "translateY(-4px)",
+      boxShadow: isDarkMode ? "0 6px 16px rgba(0,0,0,0.5)" : theme.shadows[5],
+    },
+    overflow: "hidden",
+  });
 
-  const handleClick = (event) => {
-    setAnchorEl(event.currentTarget);
+  // Utility functions
+  const getToken = () => {
+    const token = localStorage.getItem("token");
+    if (!token) throw new Error("No token found");
+    return token;
   };
 
-  const handleClose = () => {
-    setAnchorEl(null);
-  };
-
-  // Normalize card data
   const normalizeCard = useCallback(
     (card) => ({
       _id: card._id || new Date().toISOString(),
@@ -106,48 +131,47 @@ function Column({
       board: card.board || boardId,
       members: Array.isArray(card.members)
         ? card.members.map((m) => ({
-            _id: m._id || "unknown",
-            fullName: m.fullName || m.email || "Unknown User",
-            avatar: m.avatar || "",
-            email: m.email || "",
-          }))
+          _id: m._id || "unknown",
+          fullName: m.fullName || m.email || "Unknown User",
+          avatar: m.avatar || "",
+          email: m.email || "",
+        }))
         : [],
       comments: Array.isArray(card.comments)
         ? card.comments.map((c) => ({
-            ...c,
-            user: {
-              _id: c.user?._id || "unknown",
-              fullName: c.user?.fullName || c.user?.email || "Unknown User",
-              avatar: c.user?.avatar || "",
-              email: c.user?.email || "",
-            },
-          }))
+          ...c,
+          user: {
+            _id: c.user?._id || "unknown",
+            fullName: c.user?.fullName || c.user?.email || "Unknown User",
+            avatar: c.user?.avatar || "",
+            email: c.user?.email || "",
+          },
+        }))
         : [],
       notes: Array.isArray(card.notes)
         ? card.notes.map((n) => ({
-            ...n,
-            createdBy: {
-              _id: n.createdBy?._id || "unknown",
-              fullName:
-                n.createdBy?.fullName || n.createdBy?.email || "Unknown User",
-              avatar: n.createdBy?.avatar || "",
-              email: n.createdBy?.email || "",
-            },
-          }))
+          ...n,
+          createdBy: {
+            _id: n.createdBy?._id || "unknown",
+            fullName: n.createdBy?.fullName || n.createdBy?.email || "Unknown User",
+            avatar: n.createdBy?.avatar || "",
+            email: n.createdBy?.email || "",
+          },
+        }))
         : [],
       checklists: Array.isArray(card.checklists)
         ? card.checklists.map((cl) => ({
-            _id: cl._id || new Date().toISOString(),
-            title: cl.title || "Untitled Checklist",
-            items: Array.isArray(cl.items)
-              ? cl.items.map((item) => ({
-                  _id: item._id || new Date().toISOString(),
-                  text: item.text || "",
-                  completed: !!item.completed,
-                  createdAt: item.createdAt || new Date().toISOString(),
-                }))
-              : [],
-          }))
+          _id: cl._id || new Date().toISOString(),
+          title: cl.title || "Untitled Checklist",
+          items: Array.isArray(cl.items)
+            ? cl.items.map((item) => ({
+              _id: item._id || new Date().toISOString(),
+              text: item.text || "",
+              completed: !!item.completed,
+              createdAt: item.createdAt || new Date().toISOString(),
+            }))
+            : [],
+        }))
         : [],
       completed: !!card.completed,
       createdAt: card.createdAt || new Date().toISOString(),
@@ -155,74 +179,9 @@ function Column({
     [boardId, column._id]
   );
 
-  // Socket event handling
-  useEffect(() => {
-    if (!socket || !socketReady || !boardId) {
-      console.warn("Column: Socket not available, not ready, or no boardId");
-      return;
-    }
-
-    socket.emit("join-board", { boardId });
-    console.log("Column: Emitted join-board:", { boardId });
-
-    const handleCardCreated = ({ listId, card }) => {
-      if (listId !== column._id) return;
-      console.log("Column: Received card-created:", { listId, card });
-      setColumns((prevColumns) =>
-        prevColumns.map((col) =>
-          col._id === listId
-            ? {
-                ...col,
-                cards: [...(col.cards || []), normalizeCard(card)],
-              }
-            : col
-        )
-      );
-      setRefreshCards((prev) => !prev);
-      toast.info("Thẻ mới đã được thêm vào cột.");
-    };
-
-    const handleListUpdated = ({ list }) => {
-      if (list._id !== column._id) return;
-      console.log("Column: Received list-updated:", { list });
-      setColumns((prevColumns) =>
-        prevColumns.map((col) =>
-          col._id === list._id
-            ? {
-                ...col,
-                title: list.title,
-                cards: Array.isArray(list.cards)
-                  ? list.cards.map(normalizeCard)
-                  : col.cards,
-              }
-            : col
-        )
-      );
-      setNewTitle(list.title);
-      toast.info("Tiêu đề cột đã được cập nhật.");
-    };
-
-    const handleListDeleted = ({ listId }) => {
-      if (listId !== column._id) return;
-      console.log("Column: Received list-deleted:", { listId });
-      setColumns((prevColumns) =>
-        prevColumns.filter((col) => col._id !== listId)
-      );
-      toast.info("Cột đã được xóa.");
-    };
-
-    socket.on("card-created", handleCardCreated);
-    socket.on("list-updated", handleListUpdated);
-    socket.on("list-deleted", handleListDeleted);
-
-    return () => {
-      socket.off("card-created", handleCardCreated);
-      socket.off("list-updated", handleListUpdated);
-      socket.off("list-deleted", handleListDeleted);
-      socket.emit("leave-board", { boardId });
-      console.log("Column: Emitted leave-board:", { boardId });
-    };
-  }, [socket, socketReady, boardId, column._id, setColumns, normalizeCard]);
+  // Event handlers
+  const handleMenuOpen = (event) => setAnchorEl(event.currentTarget);
+  const handleMenuClose = () => setAnchorEl(null);
 
   const handleToggleExpand = useCallback(() => {
     const newExpanded = !isExpanded;
@@ -234,38 +193,31 @@ function Column({
     );
   }, [isExpanded, setColumns, column._id]);
 
+  const resetDialogStates = () => {
+    setNewTitle(column.title);
+    setNewCardTitle("");
+    setNewCardDescription("");
+  };
+
+  // API functions
   const handleDeleteColumn = async () => {
     if (!window.confirm("Bạn có chắc chắn muốn xóa cột này?")) return;
 
     setLoading((prev) => ({ ...prev, deleteColumn: true }));
-
     try {
-      const token = localStorage.getItem("token");
-      if (!token) throw new Error("No token found");
-      await axios.delete(`http://localhost:5000/api/lists/${column._id}`, {
+      const token = getToken();
+      await axios.delete(`${API_BASE_URL}/lists/${column._id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      setColumns((prevColumns) =>
-        prevColumns.filter((c) => c._id !== column._id)
-      );
+      setColumns((prevColumns) => prevColumns.filter((c) => c._id !== column._id));
 
       if (socket && socketReady) {
-        socket.emit("list-deleted", {
-          boardId,
-          listId: column._id,
-        });
-        console.log("Column: Emitted list-deleted:", {
-          boardId,
-          listId: column._id,
-        });
+        socket.emit("list-deleted", { boardId, listId: column._id });
       }
       toast.success("Xóa cột thành công!");
     } catch (err) {
-      console.error("Column: Error deleting column:", {
-        message: err.message,
-        response: err.response?.data,
-      });
+      console.error("Error deleting column:", err);
       toast.error("Lỗi khi xóa cột!");
     } finally {
       setLoading((prev) => ({ ...prev, deleteColumn: false }));
@@ -279,12 +231,10 @@ function Column({
     }
 
     setLoading((prev) => ({ ...prev, editTitle: true }));
-
     try {
-      const token = localStorage.getItem("token");
-      if (!token) throw new Error("No token found");
+      const token = getToken();
       const response = await axios.put(
-        `http://localhost:5000/api/lists/${column._id}`,
+        `${API_BASE_URL}/lists/${column._id}`,
         { title: newTitle },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -296,22 +246,13 @@ function Column({
       );
 
       if (socket && socketReady) {
-        socket.emit("list-updated", {
-          boardId,
-          list: response.data,
-        });
-        console.log("Column: Emitted list-updated:", {
-          boardId,
-          list: response.data,
-        });
+        socket.emit("list-updated", { boardId, list: response.data });
       }
+
       toast.success("Cập nhật tiêu đề cột thành công!");
       setOpenEditTitleDialog(false);
     } catch (err) {
-      console.error("Column: Error updating column title:", {
-        message: err.message,
-        response: err.response?.data,
-      });
+      console.error("Error updating column title:", err);
       toast.error("Lỗi khi cập nhật tiêu đề cột!");
     } finally {
       setLoading((prev) => ({ ...prev, editTitle: false }));
@@ -329,12 +270,10 @@ function Column({
     }
 
     setLoading((prev) => ({ ...prev, createCard: true }));
-
     try {
-      const token = localStorage.getItem("token");
-      if (!token) throw new Error("No token found");
+      const token = getToken();
       const response = await axios.post(
-        "http://localhost:5000/api/cards",
+        `${API_BASE_URL}/cards`,
         {
           title: newCardTitle,
           description: newCardDescription,
@@ -359,67 +298,186 @@ function Column({
           listId: column._id,
           card: newCard,
         });
-        console.log("Column: Emitted card-created:", {
-          boardId,
-          listId: column._id,
-          card: newCard,
-        });
       }
 
       toast.success("Tạo thẻ thành công!");
       setOpenCreateCardDialog(false);
-      setNewCardTitle("");
-      setNewCardDescription("");
+      resetDialogStates();
       setRefreshCards((prev) => !prev);
     } catch (err) {
-      console.error("Column: Error creating card:", {
-        message: err.message,
-        response: err.response?.data,
-      });
+      console.error("Error creating card:", err);
       toast.error("Lỗi khi tạo thẻ!");
     } finally {
       setLoading((prev) => ({ ...prev, createCard: false }));
     }
   };
 
+  // Socket effects
+  useEffect(() => {
+    if (!socket || !socketReady || !boardId) return;
+
+    socket.emit("join-board", { boardId });
+
+    const handleCardCreated = ({ listId, card }) => {
+      if (listId !== column._id) return;
+      setColumns((prevColumns) =>
+        prevColumns.map((col) =>
+          col._id === listId
+            ? { ...col, cards: [...(col.cards || []), normalizeCard(card)] }
+            : col
+        )
+      );
+      setRefreshCards((prev) => !prev);
+      toast.info("Thẻ mới đã được thêm vào cột.");
+    };
+
+    const handleListUpdated = ({ list }) => {
+      if (list._id !== column._id) return;
+      setColumns((prevColumns) =>
+        prevColumns.map((col) =>
+          col._id === list._id
+            ? {
+              ...col,
+              title: list.title,
+              cards: Array.isArray(list.cards)
+                ? list.cards.map(normalizeCard)
+                : col.cards,
+            }
+            : col
+        )
+      );
+      setNewTitle(list.title);
+      toast.info("Tiêu đề cột đã được cập nhật.");
+    };
+
+    const handleListDeleted = ({ listId }) => {
+      if (listId !== column._id) return;
+      setColumns((prevColumns) => prevColumns.filter((col) => col._id !== listId));
+      toast.info("Cột đã được xóa.");
+    };
+
+    socket.on("card-created", handleCardCreated);
+    socket.on("list-updated", handleListUpdated);
+    socket.on("list-deleted", handleListDeleted);
+
+    return () => {
+      socket.off("card-created", handleCardCreated);
+      socket.off("list-updated", handleListUpdated);
+      socket.off("list-deleted", handleListDeleted);
+      socket.emit("leave-board", { boardId });
+    };
+  }, [socket, socketReady, boardId, column._id, setColumns, normalizeCard]);
+
+  // Dialog components
+  const EditTitleDialog = () => (
+    <Dialog
+      open={openEditTitleDialog}
+      onClose={() => {
+        setOpenEditTitleDialog(false);
+        resetDialogStates();
+      }}
+      maxWidth="sm"
+      fullWidth
+    >
+      <DialogTitle>Sửa tiêu đề cột</DialogTitle>
+      <DialogContent>
+        <TextField
+          autoFocus
+          margin="dense"
+          label="Tiêu đề cột"
+          fullWidth
+          variant="outlined"
+          value={newTitle}
+          onChange={(e) => setNewTitle(e.target.value)}
+          onKeyPress={(e) => {
+            if (e.key === "Enter" && newTitle.trim()) {
+              handleEditTitle();
+            }
+          }}
+        />
+      </DialogContent>
+      <DialogActions>
+        <Button
+          onClick={() => {
+            setOpenEditTitleDialog(false);
+            resetDialogStates();
+          }}
+        >
+          Hủy bỏ
+        </Button>
+        <Button
+          onClick={handleEditTitle}
+          disabled={!newTitle.trim() || loading.editTitle}
+          variant="contained"
+        >
+          {loading.editTitle ? "Đang lưu..." : "Lưu"}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+
+  const CreateCardDialog = () => (
+    <Dialog
+      open={openCreateCardDialog}
+      onClose={() => {
+        setOpenCreateCardDialog(false);
+        resetDialogStates();
+      }}
+      maxWidth="sm"
+      fullWidth
+    >
+      <DialogTitle>Tạo thẻ mới</DialogTitle>
+      <DialogContent>
+        <TextField
+          autoFocus
+          margin="dense"
+          label="Tiêu đề thẻ"
+          fullWidth
+          variant="outlined"
+          value={newCardTitle}
+          onChange={(e) => setNewCardTitle(e.target.value)}
+          onKeyPress={(e) => {
+            if (e.key === "Enter" && newCardTitle.trim()) {
+              handleCreateCard();
+            }
+          }}
+        />
+        <TextField
+          margin="dense"
+          label="Mô tả (tùy chọn)"
+          fullWidth
+          variant="outlined"
+          multiline
+          rows={3}
+          value={newCardDescription}
+          onChange={(e) => setNewCardDescription(e.target.value)}
+        />
+      </DialogContent>
+      <DialogActions>
+        <Button
+          onClick={() => {
+            setOpenCreateCardDialog(false);
+            resetDialogStates();
+          }}
+        >
+          Hủy bỏ
+        </Button>
+        <Button
+          onClick={handleCreateCard}
+          disabled={!newCardTitle.trim() || loading.createCard}
+          variant="contained"
+        >
+          {loading.createCard ? "Đang tạo..." : "Tạo thẻ"}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+
   return (
     <>
       <div ref={setNodeRef} style={dndKitColumnStyles} {...attributes}>
-        <Box
-          ref={setDroppableNodeRef}
-          {...listeners}
-          sx={{
-            minWidth: "350px",
-            maxWidth: "400px",
-            ml: 2,
-            borderRadius: "12px",
-            bgcolor: isOver
-              ? isDarkMode
-                ? "rgba(255,255,255,0.05)"
-                : theme.palette.grey[100]
-              : isDarkMode
-              ? "#2a2a3d"
-              : "#f4f5f7",
-            height: isExpanded ? "fit-content" : COLUMN_HEADER_HEIGHT,
-            maxHeight: isExpanded
-              ? `calc(100vh - 100px)`
-              : COLUMN_HEADER_HEIGHT,
-            boxShadow: isDarkMode
-              ? "0 4px 12px rgba(0,0,0,0.4)"
-              : theme.shadows[3],
-            display: "flex",
-            flexDirection: "column",
-            transition:
-              "height 0.3s ease, transform 0.2s ease, box-shadow 0.2s ease",
-            "&:hover": {
-              transform: isDragging ? "none" : "translateY(-4px)",
-              boxShadow: isDarkMode
-                ? "0 6px 16px rgba(0,0,0,0.5)"
-                : theme.shadows[5],
-            },
-            overflow: "hidden",
-          }}
-        >
+        <Box ref={setDroppableNodeRef} {...listeners} sx={getColumnStyles()}>
+          {/* Header */}
           <Box
             sx={{
               height: COLUMN_HEADER_HEIGHT,
@@ -427,22 +485,8 @@ function Column({
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
-              borderBottom: isExpanded
-                ? (theme) =>
-                    `1px solid ${
-                      isDarkMode
-                        ? theme.palette.grey[700]
-                        : theme.palette.grey[300]
-                    }`
-                : "none",
+              borderBottom: isExpanded ? `1px solid ${theme.palette.divider}` : "none",
               flexShrink: 0,
-              bgcolor: isDarkMode
-                ? "rgba(255,255,255,0.05)"
-                : "rgba(0,0,0,0.02)",
-              borderTopLeftRadius: "12px",
-              borderTopRightRadius: "12px",
-              borderBottomLeftRadius: isExpanded ? 0 : "12px",
-              borderBottomRightRadius: isExpanded ? 0 : "12px",
             }}
           >
             <Typography
@@ -450,19 +494,8 @@ function Column({
               onClick={() => setOpenEditTitleDialog(true)}
               sx={{
                 fontWeight: 600,
-                fontSize: "1.25rem",
                 cursor: "pointer",
-                color: isDarkMode
-                  ? theme.palette.grey[200]
-                  : theme.palette.text.primary,
-                background: isDarkMode
-                  ? `linear-gradient(90deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`
-                  : `linear-gradient(90deg, ${theme.palette.primary.main}, ${theme.palette.primary.dark})`,
-                WebkitBackgroundClip: "text",
-                WebkitTextFillColor: "transparent",
-                "&:hover": {
-                  textDecoration: "underline",
-                },
+                "&:hover": { textDecoration: "underline" },
               }}
             >
               {column?.title}
@@ -471,203 +504,45 @@ function Column({
               <Tooltip title={isExpanded ? "Thu gọn cột" : "Mở rộng cột"}>
                 <span>
                   {isExpanded ? (
-                    <ExpandMoreIcon
-                      sx={{
-                        color: isDarkMode
-                          ? theme.palette.grey[400]
-                          : theme.palette.text.secondary,
-                        cursor: "pointer",
-                        transition: "all 0.2s ease",
-                        "&:hover": {
-                          color: theme.palette.primary.main,
-                          transform: "scale(1.2)",
-                        },
-                      }}
-                      onClick={handleToggleExpand}
-                    />
+                    <ExpandMoreIcon onClick={handleToggleExpand} sx={{ cursor: "pointer" }} />
                   ) : (
-                    <ExpandLessIcon
-                      sx={{
-                        color: isDarkMode
-                          ? theme.palette.grey[400]
-                          : theme.palette.text.secondary,
-                        cursor: "pointer",
-                        transition: "all 0.2s ease",
-                        "&:hover": {
-                          color: theme.palette.primary.main,
-                          transform: "scale(1.2)",
-                        },
-                      }}
-                      onClick={handleToggleExpand}
-                    />
+                    <ExpandLessIcon onClick={handleToggleExpand} sx={{ cursor: "pointer" }} />
                   )}
                 </span>
               </Tooltip>
               <Tooltip title="Tùy chọn khác">
                 <span>
-                  <PixIcon
-                    sx={{
-                      color: isDarkMode
-                        ? theme.palette.grey[400]
-                        : theme.palette.text.secondary,
-                      cursor: "pointer",
-                      transition: "all 0.2s ease",
-                      "&:hover": {
-                        color: theme.palette.primary.main,
-                        transform: "scale(1.2)",
-                      },
-                    }}
-                    id="basic-column-dropdown"
-                    aria-controls={
-                      open ? "basic-menu-column-dropdown" : undefined
-                    }
-                    aria-haspopup="true"
-                    aria-expanded={open ? "true" : undefined}
-                    onClick={handleClick}
-                  />
+                  <PixIcon onClick={handleMenuOpen} sx={{ cursor: "pointer" }} />
                 </span>
               </Tooltip>
-              <Menu
-                id="basic-menu-column"
-                anchorEl={anchorEl}
-                open={open}
-                onClose={handleClose}
-                MenuListProps={{
-                  "aria-labelledby": "basic-column-dropdown",
-                }}
-                sx={{
-                  "& .MuiPaper-root": {
-                    borderRadius: "8px",
-                    boxShadow: isDarkMode
-                      ? "0 4px 16px rgba(0,0,0,0.5)"
-                      : theme.shadows[4],
-                    bgcolor: isDarkMode
-                      ? "#3a3a50"
-                      : theme.palette.background.paper,
-                    minWidth: "200px",
-                    transition: "all 0.2s ease",
-                  },
-                }}
-                transformOrigin={{ horizontal: "right", vertical: "top" }}
-                anchorOrigin={{ horizontal: "right", vertical: "bottom" }}
-              >
-                <MenuItem
-                  onClick={() => setOpenCreateCardDialog(true)}
-                  sx={{
-                    "&:hover": {
-                      bgcolor: isDarkMode
-                        ? theme.palette.grey[700]
-                        : theme.palette.grey[100],
-                      color: theme.palette.primary.main,
-                    },
-                  }}
-                >
+              <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={handleMenuClose}>
+                <MenuItem onClick={() => setOpenCreateCardDialog(true)}>
                   <ListItemIcon>
-                    <AddCardIcon fontSize="small" color="primary" />
+                    <AddCardIcon fontSize="small" />
                   </ListItemIcon>
-                  <ListItemText
-                    primaryTypographyProps={{
-                      fontWeight: 500,
-                      color: isDarkMode
-                        ? theme.palette.grey[200]
-                        : theme.palette.text.primary,
-                    }}
-                  >
-                    Thêm thẻ mới
-                  </ListItemText>
+                  <ListItemText>Thêm thẻ mới</ListItemText>
                 </MenuItem>
-                <MenuItem
-                  onClick={() => setOpenEditTitleDialog(true)}
-                  sx={{
-                    "&:hover": {
-                      bgcolor: isDarkMode
-                        ? theme.palette.grey[700]
-                        : theme.palette.grey[100],
-                      color: theme.palette.primary.main,
-                    },
-                  }}
-                >
+                <MenuItem onClick={() => setOpenEditTitleDialog(true)}>
                   <ListItemIcon>
-                    <AddCardIcon fontSize="small" color="primary" />
+                    <AddCardIcon fontSize="small" />
                   </ListItemIcon>
-                  <ListItemText
-                    primaryTypographyProps={{
-                      fontWeight: 500,
-                      color: isDarkMode
-                        ? theme.palette.grey[200]
-                        : theme.palette.text.primary,
-                    }}
-                  >
-                    Sửa tiêu đề cột
-                  </ListItemText>
+                  <ListItemText>Sửa tiêu đề cột</ListItemText>
                 </MenuItem>
-                <Divider
-                  sx={{
-                    bgcolor: isDarkMode
-                      ? theme.palette.grey[700]
-                      : theme.palette.grey[300],
-                  }}
-                />
-                <MenuItem
-                  onClick={handleDeleteColumn}
-                  sx={{
-                    "&:hover": {
-                      bgcolor: isDarkMode
-                        ? theme.palette.grey[700]
-                        : theme.palette.grey[100],
-                      color: theme.palette.error.main,
-                    },
-                  }}
-                >
+                <Divider />
+                <MenuItem onClick={handleDeleteColumn}>
                   <ListItemIcon>
                     <DeleteForeverIcon fontSize="small" color="error" />
                   </ListItemIcon>
-                  <ListItemText
-                    primaryTypographyProps={{
-                      fontWeight: 500,
-                      color: isDarkMode
-                        ? theme.palette.grey[200]
-                        : theme.palette.text.primary,
-                    }}
-                  >
-                    Xóa cột này
-                  </ListItemText>
+                  <ListItemText>Xóa cột này</ListItemText>
                 </MenuItem>
               </Menu>
             </Box>
           </Box>
 
+          {/* Content */}
           {isExpanded && (
             <>
-              <Box
-                sx={{
-                  maxHeight: `calc(100vh - ${COLUMN_HEADER_HEIGHT} - ${COLUMN_FOOTER_HEIGHT} - 32px)`,
-                  overflowY: "auto",
-                  "&::-webkit-scrollbar": {
-                    width: "8px",
-                  },
-                  "&::-webkit-scrollbar-track": {
-                    backgroundColor: isDarkMode
-                      ? "#3a3a50"
-                      : theme.palette.grey[200],
-                    borderRadius: "8px",
-                    m: "0 4px",
-                  },
-                  "&::-webkit-scrollbar-thumb": {
-                    backgroundColor: isDarkMode
-                      ? "#666"
-                      : theme.palette.grey[400],
-                    borderRadius: "8px",
-                    "&:hover": {
-                      backgroundColor: isDarkMode
-                        ? "#888"
-                        : theme.palette.grey[500],
-                    },
-                  },
-                  px: 1,
-                  py: 2,
-                }}
-              >
+              <Box sx={{ flex: 1, overflowY: "auto", px: 1, py: 2 }}>
                 <ListCards
                   listId={column._id}
                   refresh={refreshCards}
@@ -678,6 +553,7 @@ function Column({
                 />
               </Box>
 
+              {/* Footer */}
               <Box
                 sx={{
                   height: COLUMN_FOOTER_HEIGHT,
@@ -685,70 +561,21 @@ function Column({
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "space-between",
-                  borderTop: (theme) =>
-                    `1px solid ${
-                      isDarkMode
-                        ? theme.palette.grey[700]
-                        : theme.palette.grey[300]
-                    }`,
+                  borderTop: `1px solid ${theme.palette.divider}`,
                   flexShrink: 0,
-                  bgcolor: isDarkMode
-                    ? "rgba(255,255,255,0.05)"
-                    : "rgba(0,0,0,0.02)",
-                  borderBottomLeftRadius: "12px",
-                  borderBottomRightRadius: "12px",
                 }}
               >
                 <Button
                   startIcon={<AddCardIcon />}
                   onClick={() => setOpenCreateCardDialog(true)}
                   disabled={loading.createCard}
-                  sx={{
-                    textTransform: "none",
-                    fontWeight: 500,
-                    color: theme.palette.primary.contrastText,
-                    background: isDarkMode
-                      ? `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`
-                      : `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.primary.dark})`,
-                    borderRadius: "8px",
-                    px: 2,
-                    py: 0.75,
-                    boxShadow: isDarkMode
-                      ? "0 2px 8px rgba(0,0,0,0.3)"
-                      : theme.shadows[2],
-                    transition: "all 0.2s ease",
-                    "&:hover": {
-                      background: isDarkMode
-                        ? `linear-gradient(135deg, ${theme.palette.primary.dark}, ${theme.palette.secondary.dark})`
-                        : `linear-gradient(135deg, ${theme.palette.primary.dark}, ${theme.palette.primary.main})`,
-                      transform: "scale(1.05)",
-                      boxShadow: isDarkMode
-                        ? "0 4px 12px rgba(0,0,0,0.4)"
-                        : theme.shadows[3],
-                    },
-                    "&:disabled": {
-                      background: theme.palette.grey[500],
-                      color: theme.palette.grey[300],
-                      boxShadow: "none",
-                    },
-                  }}
+                  variant="contained"
+                  size="small"
                 >
                   {loading.createCard ? "Đang tạo..." : "Thêm thẻ mới"}
                 </Button>
-                <Tooltip title="Kéo để di chuyển">
-                  <DragHandleIcon
-                    sx={{
-                      cursor: "pointer",
-                      color: isDarkMode
-                        ? theme.palette.grey[400]
-                        : theme.palette.text.secondary,
-                      transition: "all 0.2s ease",
-                      "&:hover": {
-                        color: theme.palette.primary.main,
-                        transform: "scale(1.2)",
-                      },
-                    }}
-                  />
+                <Tooltip title="Kéo để di chuyển cột">
+                  <DragHandleIcon sx={{ cursor: "grab" }} className="drag-handle" />
                 </Tooltip>
               </Box>
             </>
@@ -756,332 +583,8 @@ function Column({
         </Box>
       </div>
 
-      <Dialog
-        open={openCreateCardDialog}
-        onClose={() => setOpenCreateCardDialog(false)}
-        sx={{
-          "& .MuiDialog-paper": {
-            borderRadius: "12px",
-            boxShadow: isDarkMode
-              ? "0 4px 16px rgba(0,0,0,0.5)"
-              : theme.shadows[5],
-            bgcolor: isDarkMode ? "#2a2a3d" : theme.palette.background.paper,
-            color: isDarkMode
-              ? theme.palette.grey[200]
-              : theme.palette.text.primary,
-            p: 2,
-            minWidth: { xs: "90%", sm: "400px" },
-          },
-        }}
-      >
-        <DialogTitle
-          sx={{
-            fontWeight: 600,
-            fontSize: "1.25rem",
-            color: isDarkMode
-              ? theme.palette.grey[100]
-              : theme.palette.text.primary,
-          }}
-        >
-          Tạo thẻ mới
-        </DialogTitle>
-        <DialogContent>
-          <TextField
-            autoFocus
-            margin="dense"
-            label="Tiêu đề thẻ"
-            fullWidth
-            value={newCardTitle}
-            onChange={(e) => setNewCardTitle(e.target.value)}
-            disabled={loading.createCard}
-            sx={{
-              mt: 1,
-              "& .MuiInputBase-root": {
-                borderRadius: "8px",
-                bgcolor: isDarkMode
-                  ? "rgba(255, 255, 255, 0.05)"
-                  : theme.palette.background.default,
-                color: isDarkMode
-                  ? theme.palette.grey[200]
-                  : theme.palette.text.primary,
-                transition: "all 0.2s ease",
-              },
-              "& .MuiInputLabel-root": {
-                fontWeight: 500,
-                color: isDarkMode
-                  ? theme.palette.grey[400]
-                  : theme.palette.text.secondary,
-                "&.Mui-focused": {
-                  color: theme.palette.primary.main,
-                },
-              },
-              "& .MuiOutlinedInput-notchedOutline": {
-                borderColor: isDarkMode
-                  ? theme.palette.grey[600]
-                  : theme.palette.grey[300],
-                transition: "border-color 0.2s ease",
-              },
-              "&:hover .MuiOutlinedInput-notchedOutline": {
-                borderColor: isDarkMode
-                  ? theme.palette.grey[500]
-                  : theme.palette.primary.main,
-              },
-              "& .Mui-focused .MuiOutlinedInput-notchedOutline": {
-                borderColor: theme.palette.primary.main,
-                borderWidth: "2px",
-              },
-            }}
-          />
-          <TextField
-            margin="dense"
-            label="Mô tả"
-            fullWidth
-            multiline
-            rows={3}
-            value={newCardDescription}
-            onChange={(e) => setNewCardDescription(e.target.value)}
-            disabled={loading.createCard}
-            sx={{
-              mt: 2,
-              "& .MuiInputBase-root": {
-                borderRadius: "8px",
-                bgcolor: isDarkMode
-                  ? "rgba(255, 255, 255, 0.05)"
-                  : theme.palette.background.default,
-                color: isDarkMode
-                  ? theme.palette.grey[200]
-                  : theme.palette.text.primary,
-                transition: "all 0.2s ease",
-              },
-              "& .MuiInputLabel-root": {
-                fontWeight: 500,
-                color: isDarkMode
-                  ? theme.palette.grey[400]
-                  : theme.palette.text.secondary,
-                "&.Mui-focused": {
-                  color: theme.palette.primary.main,
-                },
-              },
-              "& .MuiOutlinedInput-notchedOutline": {
-                borderColor: isDarkMode
-                  ? theme.palette.grey[600]
-                  : theme.palette.grey[300],
-                transition: "border-color 0.2s ease",
-              },
-              "&:hover .MuiOutlinedInput-notchedOutline": {
-                borderColor: isDarkMode
-                  ? theme.palette.grey[500]
-                  : theme.palette.primary.main,
-              },
-              "& .Mui-focused .MuiOutlinedInput-notchedOutline": {
-                borderColor: theme.palette.primary.main,
-                borderWidth: "2px",
-              },
-            }}
-          />
-        </DialogContent>
-        <DialogActions sx={{ p: 2 }}>
-          <Button
-            onClick={() => setOpenCreateCardDialog(false)}
-            disabled={loading.createCard}
-            sx={{
-              color: isDarkMode
-                ? theme.palette.grey[400]
-                : theme.palette.text.secondary,
-              fontWeight: 500,
-              borderRadius: "8px",
-              px: 2,
-              transition: "all 0.2s ease",
-              "&:hover": {
-                bgcolor: isDarkMode
-                  ? theme.palette.grey[700]
-                  : theme.palette.grey[100],
-                transform: "scale(1.05)",
-              },
-              "&:disabled": {
-                color: theme.palette.grey[600],
-              },
-            }}
-          >
-            Hủy
-          </Button>
-          <Button
-            onClick={handleCreateCard}
-            variant="contained"
-            disabled={loading.createCard}
-            sx={{
-              fontWeight: 500,
-              borderRadius: "8px",
-              px: 3,
-              py: 0.75,
-              background: isDarkMode
-                ? `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`
-                : `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.primary.dark})`,
-              color: theme.palette.primary.contrastText,
-              boxShadow: isDarkMode
-                ? "0 2px 8px rgba(0,0,0,0.3)"
-                : theme.shadows[2],
-              transition: "all 0.2s ease",
-              "&:hover": {
-                background: isDarkMode
-                  ? `linear-gradient(135deg, ${theme.palette.primary.dark}, ${theme.palette.secondary.dark})`
-                  : `linear-gradient(135deg, ${theme.palette.primary.dark}, ${theme.palette.primary.main})`,
-                transform: "scale(1.05)",
-                boxShadow: isDarkMode
-                  ? "0 4px 12px rgba(0,0,0,0.4)"
-                  : theme.shadows[3],
-              },
-              "&:disabled": {
-                background: theme.palette.grey[500],
-                color: theme.palette.grey[300],
-                boxShadow: "none",
-              },
-            }}
-          >
-            {loading.createCard ? "Đang tạo..." : "Tạo"}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      <Dialog
-        open={openEditTitleDialog}
-        onClose={() => setOpenEditTitleDialog(false)}
-        sx={{
-          "& .MuiDialog-paper": {
-            borderRadius: "12px",
-            boxShadow: isDarkMode
-              ? "0 4px 16px rgba(0,0,0,0.5)"
-              : theme.shadows[5],
-            bgcolor: isDarkMode ? "#2a2a3d" : theme.palette.background.paper,
-            color: isDarkMode
-              ? theme.palette.grey[200]
-              : theme.palette.text.primary,
-            p: 2,
-            minWidth: { xs: "90%", sm: "400px" },
-          },
-        }}
-      >
-        <DialogTitle
-          sx={{
-            fontWeight: 600,
-            fontSize: "1.25rem",
-            color: isDarkMode
-              ? theme.palette.grey[100]
-              : theme.palette.text.primary,
-          }}
-        >
-          Sửa tiêu đề cột
-        </DialogTitle>
-        <DialogContent>
-          <TextField
-            autoFocus
-            margin="dense"
-            label="Tiêu đề cột"
-            fullWidth
-            value={newTitle}
-            onChange={(e) => setNewTitle(e.target.value)}
-            disabled={loading.editTitle}
-            sx={{
-              mt: 1,
-              "& .MuiInputBase-root": {
-                borderRadius: "8px",
-                bgcolor: isDarkMode
-                  ? "rgba(255, 255, 255, 0.05)"
-                  : theme.palette.background.default,
-                color: isDarkMode
-                  ? theme.palette.grey[200]
-                  : theme.palette.text.primary,
-                transition: "all 0.2s ease",
-              },
-              "& .MuiInputLabel-root": {
-                fontWeight: 500,
-                color: isDarkMode
-                  ? theme.palette.grey[400]
-                  : theme.palette.text.secondary,
-                "&.Mui-focused": {
-                  color: theme.palette.primary.main,
-                },
-              },
-              "& .MuiOutlinedInput-notchedOutline": {
-                borderColor: isDarkMode
-                  ? theme.palette.grey[600]
-                  : theme.palette.grey[300],
-                transition: "border-color 0.2s ease",
-              },
-              "&:hover .MuiOutlinedInput-notchedOutline": {
-                borderColor: isDarkMode
-                  ? theme.palette.grey[500]
-                  : theme.palette.primary.main,
-              },
-              "& .Mui-focused .MuiOutlinedInput-notchedOutline": {
-                borderColor: theme.palette.primary.main,
-                borderWidth: "2px",
-              },
-            }}
-          />
-        </DialogContent>
-        <DialogActions sx={{ p: 2 }}>
-          <Button
-            onClick={() => setOpenEditTitleDialog(false)}
-            disabled={loading.editTitle}
-            sx={{
-              color: isDarkMode
-                ? theme.palette.grey[400]
-                : theme.palette.text.secondary,
-              fontWeight: 500,
-              borderRadius: "8px",
-              px: 2,
-              transition: "all 0.2s ease",
-              "&:hover": {
-                bgcolor: isDarkMode
-                  ? theme.palette.grey[700]
-                  : theme.palette.grey[100],
-                transform: "scale(1.05)",
-              },
-              "&:disabled": {
-                color: theme.palette.grey[600],
-              },
-            }}
-          >
-            Hủy
-          </Button>
-          <Button
-            onClick={handleEditTitle}
-            variant="contained"
-            disabled={loading.editTitle}
-            sx={{
-              fontWeight: 500,
-              borderRadius: "8px",
-              px: 3,
-              py: 0.75,
-              background: isDarkMode
-                ? `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`
-                : `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.primary.dark})`,
-              color: theme.palette.primary.contrastText,
-              boxShadow: isDarkMode
-                ? "0 2px 8px rgba(0,0,0,0.3)"
-                : theme.shadows[2],
-              transition: "all 0.2s ease",
-              "&:hover": {
-                background: isDarkMode
-                  ? `linear-gradient(135deg, ${theme.palette.primary.dark}, ${theme.palette.secondary.dark})`
-                  : `linear-gradient(135deg, ${theme.palette.primary.dark}, ${theme.palette.primary.main})`,
-                transform: "scale(1.05)",
-                boxShadow: isDarkMode
-                  ? "0 4px 12px rgba(0,0,0,0.4)"
-                  : theme.shadows[3],
-              },
-              "&:disabled": {
-                background: theme.palette.grey[500],
-                color: theme.palette.grey[300],
-                boxShadow: "none",
-              },
-            }}
-          >
-            {loading.editTitle ? "Đang lưu..." : "Lưu"}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <EditTitleDialog />
+      <CreateCardDialog />
     </>
   );
 }

@@ -264,7 +264,7 @@ function BoardBar({ board, setBoard }) {
         });
         toast.error(
           err.response?.data?.message ||
-            "Có lỗi khi tìm kiếm người dùng. Vui lòng thử lại!"
+          "Có lỗi khi tìm kiếm người dùng. Vui lòng thử lại!"
         );
         setSearchResults([]);
       } finally {

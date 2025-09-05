@@ -104,8 +104,7 @@ function Board() {
           err.response?.data || err.message
         );
         alert(
-          `Có lỗi xảy ra khi tải bảng: ${
-            err.response?.data?.message || err.message
+          `Có lỗi xảy ra khi tải bảng: ${err.response?.data?.message || err.message
           }`
         );
         setLoading(false);
@@ -179,6 +178,7 @@ function Board() {
       sx={{
         height: "100vh",
         backgroundColor: isDarkMode ? "#000000" : "#FFFFFF",
+        overflow: "hidden",  // Ngăn khoảng trắng dư khi scroll
       }}
       onContextMenu={handleRightClick}
     >
@@ -223,9 +223,9 @@ function Board() {
                   prevNotesList.map((note) =>
                     note.id === noteItem.id
                       ? {
-                          ...note,
-                          notes: [...note.notes, { id: Date.now(), text }],
-                        }
+                        ...note,
+                        notes: [...note.notes, { id: Date.now(), text }],
+                      }
                       : note
                   )
                 );
@@ -235,9 +235,9 @@ function Board() {
                   prevNotesList.map((note) =>
                     note.id === noteItem.id
                       ? {
-                          ...note,
-                          notes: note.notes.filter((n) => n.id !== noteId),
-                        }
+                        ...note,
+                        notes: note.notes.filter((n) => n.id !== noteId),
+                      }
                       : note
                   )
                 );

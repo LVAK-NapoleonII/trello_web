@@ -11,12 +11,13 @@ import NoteAddIcon from "@mui/icons-material/NoteAdd";
 import Button from "@mui/material/Button";
 import {
   DndContext,
-  rectIntersection,
+  closestCorners,
+  PointerSensor,
+  TouchSensor,
+  MouseSensor,
+  DragOverlay,
   useSensor,
   useSensors,
-  MouseSensor,
-  TouchSensor,
-  DragOverlay,
 } from "@dnd-kit/core";
 import {
   SortableContext,
@@ -30,12 +31,20 @@ import {
   DialogContent,
   DialogActions,
   TextField,
+  Fade,
+  Slide,
+  Paper,
+  Typography,
 } from "@mui/material";
 import { useParams } from "react-router-dom";
 import { toast } from "react-toastify";
 import { SocketContext } from "../../../../context/SocketContext";
 import { useTheme } from "@mui/material/styles";
-import Cards from "./Column/ListCards/Cards/Cards";
+
+// Enhanced transition component
+const Transition = React.forwardRef(function Transition(props, ref) {
+  return <Slide direction="up" ref={ref} {...props} />;
+});
 
 function ListColumns({ boardId: propBoardId }) {
   const { boardId: urlBoardId } = useParams();
@@ -50,11 +59,18 @@ function ListColumns({ boardId: propBoardId }) {
   const [activeDragItem, setActiveDragItem] = useState(null);
   const [recentlyCreatedListId, setRecentlyCreatedListId] = useState(null);
   const [predictedPosition, setPredictedPosition] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [dragStartPosition, setDragStartPosition] = useState(null);
 
   const sensors = useSensors(
-    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 8 },
+    }),
+    useSensor(MouseSensor, {
+      activationConstraint: { distance: 8 },
+    }),
     useSensor(TouchSensor, {
-      activationConstraint: { delay: 100, tolerance: 5 },
+      activationConstraint: { delay: 150, tolerance: 8 },
     })
   );
 
@@ -79,6 +95,8 @@ function ListColumns({ boardId: propBoardId }) {
       console.error("ListColumns: Cannot fetch columns, boardId is missing");
       return;
     }
+
+    setIsLoading(true);
     try {
       const token = localStorage.getItem("token");
       if (!token) throw new Error("No token found");
@@ -115,6 +133,8 @@ function ListColumns({ boardId: propBoardId }) {
         response: err.response?.data,
       });
       toast.error("Lỗi khi tải danh sách cột!");
+    } finally {
+      setIsLoading(false);
     }
   }, [boardId]);
 
@@ -154,7 +174,7 @@ function ListColumns({ boardId: propBoardId }) {
         return;
       }
       setColumns((prev) => {
-        if (prev.some((col) => col._id === list._id)) {
+        if (prev.some((ws) => ws._id === list._id)) {
           console.log("ListColumns: List already exists:", list._id);
           return prev;
         }
@@ -294,7 +314,7 @@ function ListColumns({ boardId: propBoardId }) {
       if (!cardOrder || !Array.isArray(cardOrder)) return;
       setColumns((prevColumns) => {
         const newColumns = [...prevColumns];
-        const targetColumn = newColumns.find((c) => c._id === listId);
+        const targetColumn = newColumns.find((col) => col._id === listId);
         if (targetColumn) {
           const reorderedCards = cardOrder
             .map((id) => targetColumn.cards.find((card) => card._id === id))
@@ -436,15 +456,43 @@ function ListColumns({ boardId: propBoardId }) {
   };
 
   const handleDragStart = (event) => {
-    setActiveDragItem({
-      id: event.active.id,
-      type: event.active.data.current?.type,
-      data: event.active.data.current,
+    const { active } = event;
+    const dragData = active.data.current;
+
+    console.log("ListColumns: Drag event data:", {
+      activeId: active.id,
+      dragData: JSON.stringify(dragData, null, 2),
     });
+
+    if (!dragData) {
+      console.error("ListColumns: No data in active drag item", active);
+      return;
+    }
+
+    const dragItem = {
+      id: active.id,
+      type: dragData.type,
+      data: dragData,
+    };
+
+    if (dragData.type === "Column" && !dragData.column) {
+      console.error("ListColumns: Column data missing for drag item", active);
+      return;
+    }
+
+    setActiveDragItem(dragItem);
+    setDragStartPosition({
+      x: event.activatorEvent.clientX,
+      y: event.activatorEvent.clientY,
+    });
+
     console.log("ListColumns: Drag started:", {
-      type: event.active.data.current?.type,
-      id: event.active.id,
+      type: dragData.type,
+      id: active.id,
+      column: dragData.column,
     });
+
+    document.body.classList.add("is-dragging");
   };
 
   const handleDragOver = (event) => {
@@ -480,7 +528,7 @@ function ListColumns({ boardId: propBoardId }) {
 
     let insertIndex = overCardId
       ? columns[overColumnIndex].cards.findIndex((c) => c._id === overCardId) +
-        1
+      1
       : columns[overColumnIndex].cards.length;
 
     if (insertIndex === -1) insertIndex = 0;
@@ -495,6 +543,9 @@ function ListColumns({ boardId: propBoardId }) {
     async (event) => {
       setActiveDragItem(null);
       setPredictedPosition(null);
+      setDragStartPosition(null);
+      document.body.classList.remove("is-dragging");
+
       const { active, over } = event;
       if (!over || active.id === over.id) return;
 
@@ -527,8 +578,7 @@ function ListColumns({ boardId: propBoardId }) {
             response: err.response?.data,
           });
           toast.error(
-            `Lỗi khi cập nhật thứ tự cột: ${
-              err.response?.data?.message || err.message
+            `Lỗi khi cập nhật thứ tự cột: ${err.response?.data?.message || err.message
             }`
           );
           fetchColumns();
@@ -634,22 +684,21 @@ function ListColumns({ boardId: propBoardId }) {
               response: err.response?.data,
             });
             toast.error(
-              `Lỗi khi cập nhật thứ tự thẻ: ${
-                err.response?.data?.message || err.message
+              `Lỗi khi cập nhật thứ tự thẻ: ${err.response?.data?.message || err.message
               }`
             );
             fetchColumns();
           }
         } else {
-          newColumns.forEach((col) => {
-            col.cards = col.cards.filter((c) => c._id !== activeCardId);
-          });
+          newColumns[activeColumnIndex].cards = newColumns[
+            activeColumnIndex
+          ].cards.filter((c) => c._id !== activeCardId);
 
           const updatedCard = { ...activeCard, list: overColumnId };
           let insertIndex = overCardId
             ? newColumns[overColumnIndex].cards.findIndex(
-                (c) => c._id === overCardId
-              ) + 1
+              (c) => c._id === overCardId
+            ) + 1
             : newColumns[overColumnIndex].cards.length;
 
           if (insertIndex === -1) insertIndex = 0;
@@ -706,8 +755,7 @@ function ListColumns({ boardId: propBoardId }) {
               response: err.response?.data,
             });
             toast.error(
-              `Lỗi khi di chuyển thẻ: ${
-                err.response?.data?.message || err.message
+              `Lỗi khi di chuyển thẻ: ${err.response?.data?.message || err.message
               }`
             );
             fetchColumns();
@@ -718,173 +766,432 @@ function ListColumns({ boardId: propBoardId }) {
     [columns, boardId, socket, socketReady, fetchColumns]
   );
 
-  const sortableItems = useMemo(() => {
-    if (!Array.isArray(columns)) {
-      console.error("ListColumns: columns is not an array", columns);
-      return [];
-    }
-    const items = [
-      ...columns.map((c) => ({ id: c._id, type: "Column" })),
-      ...columns.flatMap((c) => {
-        if (!Array.isArray(c.cards)) {
-          console.error("ListColumns: c.cards is not an array", c);
-          return [];
-        }
-        const uniqueCards = c.cards.filter(
-          (card, index, self) =>
-            self.findIndex((c) => c._id === card._id) === index
-        );
-        return uniqueCards.map((card) => ({
-          id: card._id,
-          type: "Card",
-          list: c._id,
-        }));
-      }),
-    ];
-    const uniqueItems = items.filter(
-      (item, index, self) =>
-        self.findIndex((i) => i.id === item.id && i.type === item.type) ===
-        index
+  const columnIds = useMemo(() => columns.map((c) => c._id), [columns]);
+
+  // Enhanced loading skeleton
+  if (isLoading) {
+    return (
+      <Box
+        sx={{
+          width: "100%",
+          height: { xs: "calc(100vh - 56px)", sm: "calc(100vh - 64px)" },
+          display: "flex",
+          overflowX: "auto",
+          overflowY: "hidden",
+          p: { xs: 1, sm: 2 },
+          gap: { xs: 1, sm: 2 },
+        }}
+      >
+        {[...Array(3)].map((_, index) => (
+          <Box
+            key={index}
+            sx={{
+              minWidth: "350px",
+              maxWidth: "400px",
+              borderRadius: "12px",
+              bgcolor: isDarkMode ? "#2a2a3d" : "#f4f5f7",
+              height: "400px",
+              opacity: 0.7,
+              animation: "pulse 1.5s ease-in-out infinite",
+              "@keyframes pulse": {
+                "0%": { opacity: 0.4 },
+                "50%": { opacity: 0.8 },
+                "100%": { opacity: 0.4 },
+              },
+            }}
+          />
+        ))}
+      </Box>
     );
-    console.log("ListColumns: sortableItems created", uniqueItems);
-    return uniqueItems;
-  }, [columns]);
+  }
 
   return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={rectIntersection}
-      onDragStart={handleDragStart}
-      onDragOver={handleDragOver}
-      onDragEnd={handleDragEnd}
+    <Box
+      sx={{
+        position: "relative",
+        width: "100%",
+        height: "100%",
+        // Global drag styles
+        "&.is-dragging": {
+          "& *": {
+            userSelect: "none",
+            pointerEvents: "none",
+          },
+          "& .drag-handle": {
+            pointerEvents: "auto",
+          },
+        },
+      }}
     >
-      <SortableContext
-        items={sortableItems}
-        strategy={horizontalListSortingStrategy}
-      >
-        <Box
-          sx={{
-            bgcolor: isDarkMode ? "#1e1e2d" : "inherit",
-            width: "100%",
-            height: { xs: "calc(100vh - 56px)", sm: "calc(100vh - 64px)" },
-            display: "flex",
-            overflowX: "auto",
-            overflowY: "hidden",
-            p: { xs: 1, sm: 2 },
-            gap: { xs: 1, sm: 2 },
-            "&::-webkit-scrollbar": {
-              height: { xs: "6px", sm: "10px" },
-            },
-            "&::-webkit-scrollbar-track": {
-              backgroundColor: isDarkMode ? "#2a2a3d" : theme.palette.grey[200],
-              borderRadius: "8px",
-              m: 1,
-            },
-            "&::-webkit-scrollbar-thumb": {
-              backgroundColor: isDarkMode ? "#666" : theme.palette.grey[400],
-              borderRadius: "8px",
-              "&:hover": {
-                backgroundColor: isDarkMode ? "#888" : theme.palette.grey[500],
-              },
-            },
-          }}
-        >
-          {columns?.length > 0 ? (
-            columns.map((column) => (
-              <Column
-                key={column._id}
-                column={column}
-                setColumns={setColumns}
-                boardId={boardId}
-                boardMembers={boardMembers}
-                setBoardMembers={setBoardMembers}
-                initialExpanded={column.isExpanded ?? true}
-                predictedPosition={
-                  predictedPosition?.listId === column._id
-                    ? predictedPosition
-                    : null
-                }
-              />
-            ))
-          ) : (
-            <Box
-              sx={{
-                p: 2,
-                color: isDarkMode
-                  ? theme.palette.grey[400]
-                  : theme.palette.text.secondary,
-                bgcolor: isDarkMode ? "#2a2a3d" : theme.palette.grey[100],
-                borderRadius: "8px",
-                mx: 1,
-                boxShadow: isDarkMode
-                  ? "0 2px 8px rgba(0,0,0,0.3)"
-                  : theme.shadows[2],
-              }}
-            >
-              Không có cột nào trong bảng này.
-            </Box>
-          )}
+      <style>
+        {`
+          .is-dragging * {
+            user-select: none !important;
+            pointer-events: none !important;
+            cursor: grabbing !important;
+          }
+          
+          .is-dragging .drag-handle {
+            pointer-events: auto !important;
+          }
+          
+          @keyframes slideInFromRight {
+            from {
+              opacity: 0;
+              transform: translateX(50px);
+            }
+            to {
+              opacity: 1;
+              transform: translateX(0);
+            }
+          }
+          
+          @keyframes fadeInUp {
+            from {
+              opacity: 0;
+              transform: translateY(20px);
+            }
+            to {
+              opacity: 1;
+              transform: translateY(0);
+            }
+          }
+          
+          @keyframes bounceIn {
+            0% {
+              opacity: 0;
+              transform: scale(0.3);
+            }
+            50% {
+              opacity: 1;
+              transform: scale(1.1);
+            }
+            70% {
+              transform: scale(0.9);
+            }
+            100% {
+              opacity: 1;
+              transform: scale(1);
+            }
+          }
+          
+          .column-enter {
+            animation: slideInFromRight 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+          }
+          
+          .column-exit {
+            animation: slideOutToRight 0.3s cubic-bezier(0.55, 0.06, 0.68, 0.19);
+          }
+          
+          @keyframes slideOutToRight {
+            from {
+              opacity: 1;
+              transform: translateX(0);
+            }
+            to {
+              opacity: 0;
+              transform: translateX(50px);
+            }
+          }
+        `}
+      </style>
 
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCorners}
+        onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
+        onDragEnd={handleDragEnd}
+      >
+        <SortableContext
+          items={columnIds}
+          strategy={horizontalListSortingStrategy}
+        >
           <Box
             sx={{
-              minWidth: "250px",
-              maxWidth: "250px",
-              mx: 1,
-              borderRadius: "8px",
-              height: "fit-content",
-              bgcolor: isDarkMode ? "#2a2a3d" : theme.palette.grey[100],
-              boxShadow: isDarkMode
-                ? "0 2px 8px rgba(0,0,0,0.3)"
-                : theme.shadows[2],
-              transition: "all 0.2s ease",
-              "&:hover": {
-                bgcolor: isDarkMode ? "#3a3a50" : theme.palette.grey[200],
-                transform: "translateY(-2px)",
-                boxShadow: isDarkMode
-                  ? "0 4px 12px rgba(0,0,0,0.4)"
-                  : theme.shadows[3],
+              width: "100%",
+              height: { xs: "calc(100vh - 56px)", sm: "calc(100vh - 64px)" },
+              display: "flex",
+              overflowX: "auto",
+              overflowY: "hidden",
+              p: { xs: 1, sm: 2 },
+              gap: { xs: 1, sm: 2 },
+              position: "relative",
+              scrollBehavior: "smooth",
+              "&::-webkit-scrollbar": {
+                height: { xs: "8px", sm: "12px" },
+              },
+              "&::-webkit-scrollbar-track": {
+                backgroundColor: isDarkMode
+                  ? "rgba(42, 42, 61, 0.3)"
+                  : "rgba(0, 0, 0, 0.05)",
+                borderRadius: "10px",
+                m: 1,
+              },
+              "&::-webkit-scrollbar-thumb": {
+                background: isDarkMode
+                  ? `linear-gradient(135deg, ${theme.palette.primary.main}40, ${theme.palette.secondary.main}40)`
+                  : `linear-gradient(135deg, ${theme.palette.primary.main}60, ${theme.palette.primary.dark}60)`,
+                borderRadius: "10px",
+                border: `2px solid ${isDarkMode ? "#2a2a3d" : "#f4f5f7"}`,
+                transition: "all 0.3s ease",
+                "&:hover": {
+                  background: isDarkMode
+                    ? `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`
+                    : `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.primary.dark})`,
+                },
               },
             }}
           >
-            <Button
-              startIcon={<NoteAddIcon />}
-              onClick={() => setOpenCreateColumnDialog(true)}
-              sx={{
-                color: isDarkMode
-                  ? theme.palette.grey[200]
-                  : theme.palette.text.primary,
-                width: "100%",
-                justifyContent: "flex-start",
-                pl: 2,
-                py: 1.5,
-                fontWeight: 500,
-                textTransform: "none",
-                "&:hover": {
-                  bgcolor: isDarkMode
-                    ? "rgba(255, 255, 255, 0.1)"
-                    : "transparent",
-                  color: isDarkMode
-                    ? theme.palette.grey[100]
-                    : theme.palette.text.primary,
-                },
-              }}
-            >
-              Thêm cột mới
-            </Button>
-          </Box>
-        </Box>
+            {columns?.length > 0 ? (
+              columns.map((column, index) => (
+                <Fade
+                  key={column._id}
+                  in={true}
+                  timeout={300 + index * 100}
+                  style={{ transformOrigin: "left center" }}
+                >
+                  <Box className="column-enter">
+                    <Column
+                      column={column}
+                      setColumns={setColumns}
+                      boardId={boardId}
+                      boardMembers={boardMembers}
+                      setBoardMembers={setBoardMembers}
+                      initialExpanded={column.isExpanded ?? true}
+                      predictedPosition={
+                        predictedPosition?.listId === column._id
+                          ? predictedPosition
+                          : null
+                      }
+                    />
+                  </Box>
+                </Fade>
+              ))
+            ) : (
+              <Fade in={true} timeout={800}>
+                <Paper
+                  elevation={0}
+                  sx={{
+                    p: 4,
+                    color: isDarkMode
+                      ? theme.palette.grey[400]
+                      : theme.palette.text.secondary,
+                    bgcolor: isDarkMode
+                      ? "rgba(42, 42, 61, 0.3)"
+                      : "rgba(244, 245, 247, 0.8)",
+                    backdropFilter: "blur(10px)",
+                    borderRadius: "16px",
+                    mx: 1,
+                    border: `1px solid ${isDarkMode ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.05)"
+                      }`,
+                    textAlign: "center",
+                    minWidth: "350px",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    gap: 2,
+                    transition: "all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)",
+                    "&:hover": {
+                      transform: "translateY(-4px)",
+                      bgcolor: isDarkMode
+                        ? "rgba(42, 42, 61, 0.5)"
+                        : "rgba(244, 245, 247, 0.95)",
+                      boxShadow: isDarkMode
+                        ? "0 8px 32px rgba(0,0,0,0.3)"
+                        : "0 8px 32px rgba(0,0,0,0.1)",
+                    },
+                  }}
+                >
+                  <Box
+                    sx={{
+                      width: 60,
+                      height: 60,
+                      borderRadius: "50%",
+                      bgcolor: isDarkMode
+                        ? `${theme.palette.primary.main}20`
+                        : `${theme.palette.primary.main}10`,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      mb: 1,
+                    }}
+                  >
+                    <NoteAddIcon
+                      sx={{
+                        fontSize: 28,
+                        color: theme.palette.primary.main,
+                        opacity: 0.7,
+                      }}
+                    />
+                  </Box>
+                  <Typography
+                    variant="h6"
+                    sx={{
+                      fontWeight: 600,
+                      mb: 1,
+                    }}
+                  >
+                    Chưa có cột nào
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      opacity: 0.8,
+                      maxWidth: 280,
+                      lineHeight: 1.6,
+                    }}
+                  >
+                    Bắt đầu tạo cột đầu tiên để tổ chức công việc của bạn
+                  </Typography>
+                </Paper>
+              </Fade>
+            )}
 
+            {/* Enhanced Add Column Button */}
+            <Fade in={true} timeout={600}>
+              <Paper
+                elevation={0}
+                sx={{
+                  minWidth: "280px",
+                  maxWidth: "280px",
+                  mx: 1,
+                  borderRadius: "16px",
+                  height: "fit-content",
+                  bgcolor: isDarkMode
+                    ? "rgba(42, 42, 61, 0.4)"
+                    : "rgba(244, 245, 247, 0.6)",
+                  backdropFilter: "blur(15px)",
+                  border: `2px dashed ${isDarkMode
+                    ? theme.palette.primary.main + "40"
+                    : theme.palette.primary.main + "30"
+                    }`,
+                  transition: "all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)",
+                  position: "relative",
+                  overflow: "hidden",
+                  "&::before": {
+                    content: '""',
+                    position: "absolute",
+                    top: 0,
+                    left: "-100%",
+                    width: "100%",
+                    height: "100%",
+                    background: `linear-gradient(90deg, transparent, ${isDarkMode
+                      ? theme.palette.primary.main + "20"
+                      : theme.palette.primary.main + "10"
+                      }, transparent)`,
+                    transition: "left 0.6s ease",
+                  },
+                  "&:hover": {
+                    bgcolor: isDarkMode
+                      ? "rgba(42, 42, 61, 0.7)"
+                      : "rgba(244, 245, 247, 0.9)",
+                    border: `2px dashed ${theme.palette.primary.main}`,
+                    transform: "translateY(-6px) scale(1.02)",
+                    boxShadow: isDarkMode
+                      ? `0 12px 40px rgba(0,0,0,0.4), 0 0 0 1px ${theme.palette.primary.main}20`
+                      : `0 12px 40px rgba(0,0,0,0.15), 0 0 0 1px ${theme.palette.primary.main}20`,
+                    "&::before": {
+                      left: "100%",
+                    },
+                  },
+                }}
+              >
+                <Button
+                  startIcon={
+                    <NoteAddIcon
+                      sx={{
+                        fontSize: "20px !important",
+                        transition: "all 0.3s ease",
+                      }}
+                    />
+                  }
+                  onClick={() => setOpenCreateColumnDialog(true)}
+                  sx={{
+                    color: isDarkMode
+                      ? theme.palette.grey[200]
+                      : theme.palette.text.primary,
+                    width: "100%",
+                    justifyContent: "flex-start",
+                    pl: 3,
+                    pr: 3,
+                    py: 2.5,
+                    fontWeight: 600,
+                    fontSize: "0.95rem",
+                    textTransform: "none",
+                    borderRadius: "16px",
+                    transition: "all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)",
+                    "&:hover": {
+                      bgcolor: "transparent",
+                      color: theme.palette.primary.main,
+                      "& .MuiButton-startIcon": {
+                        transform: "rotate(180deg) scale(1.1)",
+                      },
+                    },
+                  }}
+                >
+                  Thêm cột mới
+                </Button>
+              </Paper>
+            </Fade>
+          </Box>
+        </SortableContext>
+        {/* Enhanced Dialog */}
         <Dialog
           open={openCreateColumnDialog}
           onClose={() => {
             setOpenCreateColumnDialog(false);
             setNewColumnTitle("");
           }}
-          fullWidth
+          TransitionComponent={Transition}
           maxWidth="sm"
+          fullWidth
+          PaperProps={{
+            sx: {
+              borderRadius: "20px",
+              bgcolor: isDarkMode
+                ? "rgba(42, 42, 61, 0.95)"
+                : "rgba(255, 255, 255, 0.95)",
+              backdropFilter: "blur(20px)",
+              border: `1px solid ${isDarkMode ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.05)"
+                }`,
+              boxShadow: isDarkMode
+                ? "0 24px 48px rgba(0,0,0,0.4)"
+                : "0 24px 48px rgba(0,0,0,0.12)",
+              overflow: "visible",
+              position: "relative",
+              "&::before": {
+                content: '""',
+                position: "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                height: "4px",
+                background: `linear-gradient(90deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`,
+                borderTopLeftRadius: "20px",
+                borderTopRightRadius: "20px",
+              },
+            },
+          }}
         >
-          <DialogTitle>Thêm cột mới</DialogTitle>
-          <DialogContent>
+          <DialogTitle
+            sx={{
+              pb: 1,
+              pt: 3,
+              px: 3,
+              fontWeight: 700,
+              fontSize: "1.4rem",
+              color: isDarkMode
+                ? theme.palette.grey[100]
+                : theme.palette.text.primary,
+              background: `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`,
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+            }}
+          >
+            ✨ Tạo cột mới
+          </DialogTitle>
+          <DialogContent sx={{ px: 3, py: 2 }}>
             <TextField
               autoFocus
               margin="dense"
@@ -895,98 +1202,212 @@ function ListColumns({ boardId: propBoardId }) {
               value={newColumnTitle}
               onChange={(e) => setNewColumnTitle(e.target.value)}
               onKeyPress={(e) => {
-                if (e.key === "Enter") {
+                if (e.key === "Enter" && newColumnTitle.trim()) {
                   handleCreateColumn();
                 }
               }}
+              sx={{
+                mt: 2,
+                "& .MuiInputBase-root": {
+                  borderRadius: "12px",
+                  bgcolor: isDarkMode
+                    ? "rgba(255, 255, 255, 0.05)"
+                    : "rgba(0, 0, 0, 0.02)",
+                  transition: "all 0.3s ease",
+                  "&:hover": {
+                    bgcolor: isDarkMode
+                      ? "rgba(255, 255, 255, 0.08)"
+                      : "rgba(0, 0, 0, 0.04)",
+                  },
+                  "&.Mui-focused": {
+                    bgcolor: isDarkMode
+                      ? "rgba(255, 255, 255, 0.1)"
+                      : "rgba(255, 255, 255, 0.8)",
+                    boxShadow: `0 0 0 3px ${theme.palette.primary.main}20`,
+                  },
+                },
+                "& .MuiInputLabel-root": {
+                  fontWeight: 500,
+                  "&.Mui-focused": {
+                    color: theme.palette.primary.main,
+                    fontWeight: 600,
+                  },
+                },
+                "& .MuiOutlinedInput-notchedOutline": {
+                  borderColor: isDarkMode
+                    ? theme.palette.grey[600]
+                    : theme.palette.grey[300],
+                  borderWidth: "2px",
+                  transition: "all 0.3s ease",
+                },
+                "&:hover .MuiOutlinedInput-notchedOutline": {
+                  borderColor: theme.palette.primary.main + "60",
+                },
+                "& .Mui-focused .MuiOutlinedInput-notchedOutline": {
+                  borderColor: theme.palette.primary.main,
+                  borderWidth: "2px",
+                },
+              }}
             />
           </DialogContent>
-          <DialogActions>
+          <DialogActions sx={{ p: 3, pt: 1, gap: 1 }}>
             <Button
               onClick={() => {
                 setOpenCreateColumnDialog(false);
                 setNewColumnTitle("");
               }}
-              color="inherit"
+              sx={{
+                color: isDarkMode
+                  ? theme.palette.grey[400]
+                  : theme.palette.text.secondary,
+                fontWeight: 600,
+                borderRadius: "10px",
+                px: 3,
+                py: 1,
+                transition: "all 0.3s ease",
+                "&:hover": {
+                  bgcolor: isDarkMode
+                    ? theme.palette.grey[800]
+                    : theme.palette.grey[100],
+                  color: isDarkMode
+                    ? theme.palette.grey[200]
+                    : theme.palette.text.primary,
+                  transform: "translateY(-1px)",
+                },
+              }}
             >
-              Hủy
+              Hủy bỏ
             </Button>
             <Button
               onClick={handleCreateColumn}
-              color="primary"
+              disabled={!newColumnTitle.trim()}
               variant="contained"
+              sx={{
+                fontWeight: 700,
+                borderRadius: "10px",
+                px: 4,
+                py: 1,
+                background: `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`,
+                boxShadow: `0 4px 12px ${theme.palette.primary.main}40`,
+                transition: "all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94)",
+                "&:hover": {
+                  background: `linear-gradient(135deg, ${theme.palette.primary.dark}, ${theme.palette.secondary.dark})`,
+                  transform: "translateY(-2px)",
+                  boxShadow: `0 8px 20px ${theme.palette.primary.main}60`,
+                },
+                "&:disabled": {
+                  background: theme.palette.grey[400],
+                  color: theme.palette.grey[600],
+                  boxShadow: "none",
+                },
+              }}
             >
-              Tạo
+              Tạo ngay
             </Button>
           </DialogActions>
         </Dialog>
 
-        <DragOverlay dropAnimation={null}>
-          {activeDragItem?.type === "Column" && (
-            <Box
+        {/* Enhanced Drag Overlay */}
+        <DragOverlay
+          dropAnimation={{
+            duration: 400,
+            easing: "cubic-bezier(0.25, 0.46, 0.45, 0.94)",
+          }}
+        >
+          {activeDragItem?.type === "Column" && activeDragItem?.data?.column && (
+            <Paper
+              elevation={12}
               sx={{
                 bgcolor: isDarkMode ? "#2a2a3d" : "#f4f5f7",
-                borderRadius: "12px",
+                borderRadius: "16px",
                 boxShadow: isDarkMode
-                  ? "0 4px 12px rgba(0,0,0,0.6)"
-                  : "0 4px 12px rgba(0,0,0,0.2)",
+                  ? "0 20px 60px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.1)"
+                  : "0 20px 60px rgba(0,0,0,0.25), 0 0 0 1px rgba(0,0,0,0.05)",
                 opacity: 0.95,
-                transform: "scale(1.01)",
+                transform: "scale(1.02) rotate(2deg)",
                 transition: "transform 0.2s ease, opacity 0.2s ease",
                 cursor: "grabbing",
-                minWidth: "300px",
-                maxWidth: "300px",
-                height: activeDragItem.data.isExpanded ? "fit-content" : "56px",
-                maxHeight: activeDragItem.data.isExpanded
+                minWidth: "350px",
+                maxWidth: "400px",
+                height: activeDragItem.data.column.isExpanded ?? true
+                  ? "fit-content"
+                  : "56px",
+                maxHeight: activeDragItem.data.column.isExpanded ?? true
                   ? `calc(100vh - 100px)`
                   : "56px",
                 zIndex: 1000,
+                overflow: "hidden",
+                "&::before": {
+                  content: '""',
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: "4px",
+                  background: `linear-gradient(90deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`,
+                  borderTopLeftRadius: "16px",
+                  borderTopRightRadius: "16px",
+                },
               }}
             >
               <Column
-                column={activeDragItem.data}
+                column={activeDragItem.data.column}
                 setColumns={setColumns}
                 boardId={boardId}
                 boardMembers={boardMembers}
                 setBoardMembers={setBoardMembers}
-                initialExpanded={activeDragItem.data.isExpanded}
               />
-            </Box>
+            </Paper>
           )}
           {activeDragItem?.type === "Card" && (
-            <Box
+            <Paper
+              elevation={16}
               sx={{
                 bgcolor: isDarkMode ? "#3a3a50" : "#fff",
-                borderRadius: "12px",
+                borderRadius: "16px",
                 boxShadow: isDarkMode
-                  ? "0 2px 12px rgba(0,0,0,0.6)"
-                  : "0 2px 12px rgba(0,0,0,0.2)",
+                  ? "0 20px 60px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.1)"
+                  : "0 20px 60px rgba(0,0,0,0.3), 0 0 0 1px rgba(0,0,0,0.05)",
                 opacity: 0.95,
-                transform: "scale(1.01)",
+                transform: "scale(1.03) rotate(-1deg)",
                 transition: "transform 0.2s ease, opacity 0.2s ease",
-                p: 2,
+                p: 2.5,
                 cursor: "grabbing",
                 border: activeDragItem.data.card.completed
-                  ? `2px solid ${theme.palette.success.main}`
-                  : `1px solid ${theme.palette.divider}`,
-                height: "120px",
+                  ? `3px solid ${theme.palette.success.main}`
+                  : `2px solid ${isDarkMode ? theme.palette.grey[600] : theme.palette.grey[200]
+                  }`,
+                height: "auto",
+                minHeight: "120px",
                 width: "100%",
-                maxWidth: "300px",
+                maxWidth: "320px",
                 zIndex: 1000,
+                position: "relative",
+                "&::before": {
+                  content: '""',
+                  position: "absolute",
+                  top: -2,
+                  left: -2,
+                  right: -2,
+                  bottom: -2,
+                  background: `linear-gradient(135deg, ${theme.palette.primary.main}40, ${theme.palette.secondary.main}40)`,
+                  borderRadius: "18px",
+                  zIndex: -1,
+                },
               }}
             >
-              <Cards
-                card={activeDragItem.data.card}
-                setCards={() => {}}
-                setColumns={setColumns}
-                boardMembers={boardMembers}
-                setBoardMembers={setBoardMembers}
-              />
-            </Box>
+              <Typography variant="body1" fontWeight={500}>
+                {activeDragItem.data.card.title}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {activeDragItem.data.card.description}
+              </Typography>
+              {/* Add more card content as needed */}
+            </Paper>
           )}
         </DragOverlay>
-      </SortableContext>
-    </DndContext>
+      </DndContext>
+    </Box>
   );
 }
 

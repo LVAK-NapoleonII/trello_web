@@ -26,11 +26,11 @@ const normalizeChecklists = (checklists) => {
     title: checklist.title || "Untitled Checklist",
     items: Array.isArray(checklist.items)
       ? checklist.items.map((item) => ({
-          _id: item._id || new Date().toISOString(),
-          text: item.text || "",
-          completed: !!item.completed,
-          createdAt: item.createdAt || new Date().toISOString(),
-        }))
+        _id: item._id || new Date().toISOString(),
+        text: item.text || "",
+        completed: !!item.completed,
+        createdAt: item.createdAt || new Date().toISOString(),
+      }))
       : [],
   }));
 };
@@ -66,13 +66,13 @@ function CardContainer({
     border: isDragging
       ? "2px solid"
       : card.completed
-      ? "2px solid"
-      : "1px solid",
+        ? "2px solid"
+        : "1px solid",
     borderColor: isDragging
       ? (theme) => theme.palette.success.main
       : card.completed
-      ? (theme) => theme.palette.success.main
-      : (theme) => theme.palette.divider,
+        ? (theme) => theme.palette.success.main
+        : (theme) => theme.palette.divider,
   };
 
   const updateCardState = useCallback(
@@ -81,27 +81,27 @@ function CardContainer({
         prevCards.map((c) =>
           c._id === cardId
             ? {
-                ...c,
-                ...updatedFields,
-                members: updatedFields.members
-                  ? updatedFields.members.map(normalizeUser)
-                  : c.members,
-                comments: updatedFields.comments
-                  ? updatedFields.comments.map((comment) => ({
-                      ...comment,
-                      user: normalizeUser(comment.user),
-                    }))
-                  : c.comments,
-                notes: updatedFields.notes
-                  ? updatedFields.notes.map((note) => ({
-                      ...note,
-                      createdBy: normalizeUser(note.createdBy),
-                    }))
-                  : c.notes,
-                checklists: normalizeChecklists(
-                  updatedFields.checklists || c.checklists
-                ),
-              }
+              ...c,
+              ...updatedFields,
+              members: updatedFields.members
+                ? updatedFields.members.map(normalizeUser)
+                : c.members,
+              comments: updatedFields.comments
+                ? updatedFields.comments.map((comment) => ({
+                  ...comment,
+                  user: normalizeUser(comment.user),
+                }))
+                : c.comments,
+              notes: updatedFields.notes
+                ? updatedFields.notes.map((note) => ({
+                  ...note,
+                  createdBy: normalizeUser(note.createdBy),
+                }))
+                : c.notes,
+              checklists: normalizeChecklists(
+                updatedFields.checklists || c.checklists
+              ),
+            }
             : c
         )
       );
@@ -111,27 +111,27 @@ function CardContainer({
           cards: col.cards.map((c) =>
             c._id === cardId
               ? {
-                  ...c,
-                  ...updatedFields,
-                  members: updatedFields.members
-                    ? updatedFields.members.map(normalizeUser)
-                    : c.members,
-                  comments: updatedFields.comments
-                    ? updatedFields.comments.map((comment) => ({
-                        ...comment,
-                        user: normalizeUser(comment.user),
-                      }))
-                    : c.comments,
-                  notes: updatedFields.notes
-                    ? updatedFields.notes.map((note) => ({
-                        ...note,
-                        createdBy: normalizeUser(note.createdBy),
-                      }))
-                    : c.notes,
-                  checklists: normalizeChecklists(
-                    updatedFields.checklists || c.checklists
-                  ),
-                }
+                ...c,
+                ...updatedFields,
+                members: updatedFields.members
+                  ? updatedFields.members.map(normalizeUser)
+                  : c.members,
+                comments: updatedFields.comments
+                  ? updatedFields.comments.map((comment) => ({
+                    ...comment,
+                    user: normalizeUser(comment.user),
+                  }))
+                  : c.comments,
+                notes: updatedFields.notes
+                  ? updatedFields.notes.map((note) => ({
+                    ...note,
+                    createdBy: normalizeUser(note.createdBy),
+                  }))
+                  : c.notes,
+                checklists: normalizeChecklists(
+                  updatedFields.checklists || c.checklists
+                ),
+              }
               : c
           ),
         }))
@@ -146,6 +146,11 @@ function CardContainer({
         "CardContainer: Socket not available, not ready, or no boardId",
         { socket: !!socket, socketReady, boardId }
       );
+      return;
+    }
+
+    if (typeof boardId !== 'string' || boardId.trim() === '') {
+      console.error("CardContainer: Invalid boardId format", { boardId });
       return;
     }
 
@@ -190,33 +195,33 @@ function CardContainer({
             updatedColumns = updatedColumns.map((col) =>
               col._id === oldListId
                 ? {
-                    ...col,
-                    cards: col.cards.filter((c) => c._id !== movedCard._id),
-                  }
+                  ...col,
+                  cards: col.cards.filter((c) => c._id !== movedCard._id),
+                }
                 : col
             );
             updatedColumns = updatedColumns.map((col) =>
               col._id === newListId
                 ? {
-                    ...col,
-                    cards: [
-                      ...col.cards.slice(0, newPosition),
-                      {
-                        ...movedCard,
-                        checklists: normalizeChecklists(movedCard.checklists),
-                        members: (movedCard.members || []).map(normalizeUser),
-                        comments: (movedCard.comments || []).map((c) => ({
-                          ...c,
-                          user: normalizeUser(c.user),
-                        })),
-                        notes: (movedCard.notes || []).map((n) => ({
-                          ...n,
-                          createdBy: normalizeUser(n.createdBy),
-                        })),
-                      },
-                      ...col.cards.slice(newPosition),
-                    ],
-                  }
+                  ...col,
+                  cards: [
+                    ...col.cards.slice(0, newPosition),
+                    {
+                      ...movedCard,
+                      checklists: normalizeChecklists(movedCard.checklists),
+                      members: (movedCard.members || []).map(normalizeUser),
+                      comments: (movedCard.comments || []).map((c) => ({
+                        ...c,
+                        user: normalizeUser(c.user),
+                      })),
+                      notes: (movedCard.notes || []).map((n) => ({
+                        ...n,
+                        createdBy: normalizeUser(n.createdBy),
+                      })),
+                    },
+                    ...col.cards.slice(newPosition),
+                  ],
+                }
                 : col
             );
             return updatedColumns;
@@ -256,8 +261,7 @@ function CardContainer({
           });
           updateCardState(cardId, { completed });
           toast.info(
-            `Thẻ đã được ${
-              completed ? "đánh dấu hoàn thành" : "bỏ hoàn thành"
+            `Thẻ đã được ${completed ? "đánh dấu hoàn thành" : "bỏ hoàn thành"
             }.`
           );
         }

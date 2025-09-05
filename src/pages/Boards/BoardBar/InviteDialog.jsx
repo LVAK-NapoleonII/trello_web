@@ -58,39 +58,46 @@ function InviteDialog({
       maxWidth="md"
       sx={{
         "& .MuiDialog-paper": {
-          borderRadius: 2,
+          borderRadius: 12,
           bgcolor: theme.palette.background.paper,
-          border: `1px solid ${theme.palette.divider}`,
+          border: `1px solid ${isDarkMode ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.1)"}`,
+          boxShadow: `0 8px 32px ${isDarkMode ? "rgba(0, 0, 0, 0.3)" : "rgba(0, 0, 0, 0.15)"}`,
         },
       }}
     >
       <DialogTitle
         sx={{
-          bgcolor: theme.palette.primary.main,
+          bgcolor: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
           color: theme.palette.primary.contrastText,
-          py: 2,
+          py: 2.5,
           display: "flex",
           alignItems: "center",
-          gap: 1,
+          gap: 1.5,
+          borderTopLeftRadius: 12,
+          borderTopRightRadius: 12,
         }}
       >
         <PersonAddIcon />
-        Mời thành viên vào bảng "{board?.title}"
+        <Typography variant="h6" fontWeight={600}>
+          Invite to "{board?.title}"
+        </Typography>
       </DialogTitle>
       <DialogContent sx={{ pt: 3, pb: 2 }}>
         <Paper
-          elevation={2}
+          elevation={0}
           sx={{
             p: 2,
             mb: 2,
-            bgcolor: theme.palette.background.default,
-            borderRadius: 2,
+            bgcolor: isDarkMode ? "rgba(255, 255, 255, 0.05)" : "rgba(255, 255, 255, 0.6)",
+            borderRadius: 12,
+            border: `1px solid ${isDarkMode ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.1)"}`,
+            backdropFilter: "blur(10px)",
           }}
         >
           <TextField
             autoFocus
             fullWidth
-            label="Tìm kiếm bằng email hoặc tên"
+            label="Search by email or name"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             InputProps={{
@@ -110,7 +117,7 @@ function InviteDialog({
             disabled={loading}
             sx={{
               "& .MuiOutlinedInput-root": {
-                borderRadius: 2,
+                borderRadius: 10,
                 bgcolor: theme.palette.background.paper,
                 "&:hover fieldset": {
                   borderColor: theme.palette.primary.light,
@@ -122,22 +129,21 @@ function InviteDialog({
             }}
           />
         </Paper>
-        {(uniqueSearchResults.length > 0 ||
-          uniquePastMembersAndInvited.length > 0) && (
+        {(uniqueSearchResults.length > 0 || uniquePastMembersAndInvited.length > 0) && (
           <Box
             sx={{
               maxHeight: 400,
               overflowY: "auto",
               "&::-webkit-scrollbar": {
-                width: 8,
+                width: 6,
               },
               "&::-webkit-scrollbar-track": {
-                bgcolor: theme.palette.divider,
-                borderRadius: 4,
+                bgcolor: isDarkMode ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.05)",
+                borderRadius: 3,
               },
               "&::-webkit-scrollbar-thumb": {
                 bgcolor: theme.palette.primary.main,
-                borderRadius: 4,
+                borderRadius: 3,
               },
             }}
           >
@@ -145,10 +151,10 @@ function InviteDialog({
               <Box sx={{ mb: 3 }}>
                 <Typography
                   variant="subtitle1"
-                  fontWeight="bold"
+                  fontWeight={600}
                   sx={{ color: theme.palette.text.primary, mb: 1.5 }}
                 >
-                  Kết quả tìm kiếm
+                  Search Results
                 </Typography>
                 <List dense>
                   {uniqueSearchResults.map((user) => {
@@ -160,7 +166,7 @@ function InviteDialog({
                         key={user._id}
                         disablePadding
                         sx={{
-                          borderRadius: 2,
+                          borderRadius: 10,
                           mb: 0.5,
                           bgcolor:
                             selectedUserId === user._id
@@ -172,7 +178,7 @@ function InviteDialog({
                                 ? theme.palette.action.selected
                                 : theme.palette.action.hover,
                           },
-                          transition: "all 0.2s ease",
+                          transition: "all 0.3s ease",
                         }}
                       >
                         <ListItemButton
@@ -180,7 +186,7 @@ function InviteDialog({
                             setSelectedUserId(user._id);
                             setSearchQuery(user.email || user.fullName);
                           }}
-                          sx={{ py: 1.5 }}
+                          sx={{ py: 1.5, borderRadius: 10 }}
                         >
                           <ListItemAvatar>
                             <Avatar
@@ -194,11 +200,10 @@ function InviteDialog({
                               sx={{
                                 width: 40,
                                 height: 40,
-                                border: `2px solid ${
-                                  isOnline
-                                    ? theme.palette.success.main
-                                    : theme.palette.grey[500]
-                                } !important`,
+                                border: `2px solid ${isOnline
+                                  ? theme.palette.success.main
+                                  : theme.palette.grey[500]
+                                  } !important`,
                               }}
                             />
                           </ListItemAvatar>
@@ -218,7 +223,7 @@ function InviteDialog({
                             >
                               <Typography
                                 variant="body1"
-                                fontWeight="medium"
+                                fontWeight={500}
                                 color={theme.palette.text.primary}
                               >
                                 {user.fullName || user.email}{" "}
@@ -226,7 +231,7 @@ function InviteDialog({
                               </Typography>
                               {user.isPastMember && (
                                 <Chip
-                                  label="Đã rời"
+                                  label="Left"
                                   size="small"
                                   color="warning"
                                   variant="outlined"
@@ -241,7 +246,7 @@ function InviteDialog({
                               )}
                               {user.isInvited && (
                                 <Chip
-                                  label="Đã mời"
+                                  label="Invited"
                                   size="small"
                                   color="info"
                                   variant="outlined"
@@ -273,10 +278,10 @@ function InviteDialog({
               <Box>
                 <Typography
                   variant="subtitle1"
-                  fontWeight="bold"
+                  fontWeight={600}
                   sx={{ color: theme.palette.text.primary, mb: 1.5 }}
                 >
-                  Thành viên cũ hoặc đã được mời
+                  Past Members or Invited
                 </Typography>
                 <List dense>
                   {uniquePastMembersAndInvited.map((entry) => {
@@ -289,7 +294,7 @@ function InviteDialog({
                         key={entry.user?._id}
                         disablePadding
                         sx={{
-                          borderRadius: 2,
+                          borderRadius: 10,
                           mb: 0.5,
                           bgcolor:
                             selectedUserId === entry.user?._id
@@ -301,7 +306,7 @@ function InviteDialog({
                                 ? theme.palette.action.selected
                                 : theme.palette.action.hover,
                           },
-                          transition: "all 0.2s ease",
+                          transition: "all 0.3s ease",
                         }}
                       >
                         <ListItemButton
@@ -311,7 +316,7 @@ function InviteDialog({
                               entry.user?.email || entry.user?.fullName
                             );
                           }}
-                          sx={{ py: 1.5 }}
+                          sx={{ py: 1.5, borderRadius: 10 }}
                         >
                           <ListItemAvatar>
                             <Avatar
@@ -325,11 +330,10 @@ function InviteDialog({
                               sx={{
                                 width: 40,
                                 height: 40,
-                                border: `2px solid ${
-                                  isOnline
-                                    ? theme.palette.success.main
-                                    : theme.palette.grey[500]
-                                } !important`,
+                                border: `2px solid ${isOnline
+                                  ? theme.palette.success.main
+                                  : theme.palette.grey[500]
+                                  } !important`,
                               }}
                             />
                           </ListItemAvatar>
@@ -349,7 +353,7 @@ function InviteDialog({
                             >
                               <Typography
                                 variant="body1"
-                                fontWeight="medium"
+                                fontWeight={500}
                                 color={theme.palette.text.primary}
                               >
                                 {entry.user?.fullName || entry.user?.email}{" "}
@@ -357,7 +361,7 @@ function InviteDialog({
                               </Typography>
                               {!entry.isActive && (
                                 <Chip
-                                  label="Đã rời"
+                                  label="Left"
                                   size="small"
                                   color="warning"
                                   variant="outlined"
@@ -372,7 +376,7 @@ function InviteDialog({
                               )}
                               {entry.isActive && (
                                 <Chip
-                                  label="Đã mời"
+                                  label="Invited"
                                   size="small"
                                   color="info"
                                   variant="outlined"
@@ -414,14 +418,12 @@ function InviteDialog({
                 textAlign: "center",
               }}
             >
-              Không tìm thấy người dùng nào phù hợp.
+              No matching users found.
             </Typography>
           )}
         {loading && (
           <Box sx={{ display: "flex", justifyContent: "center", my: 3 }}>
-            <CircularProgress
-              sx={{ size: "32", color: theme.palette.primary.main }}
-            />
+            <CircularProgress sx={{ color: theme.palette.primary.main }} />
           </Box>
         )}
       </DialogContent>
@@ -433,15 +435,19 @@ function InviteDialog({
           disabled={loading}
           sx={{
             textTransform: "none",
-            borderColor: theme.palette.divider,
+            borderColor: isDarkMode ? "rgba(255, 255, 255, 0.2)" : "rgba(0, 0, 0, 0.1)",
             color: theme.palette.text.primary,
+            borderRadius: 8,
+            padding: "6px 16px",
             "&:hover": {
               borderColor: theme.palette.primary.light,
               bgcolor: theme.palette.action.hover,
+              transform: "translateY(-2px)",
             },
+            transition: "all 0.3s ease",
           }}
         >
-          Hủy
+          Cancel
         </Button>
         <Button
           onClick={handleInviteMember}
@@ -454,14 +460,17 @@ function InviteDialog({
           sx={{
             textTransform: "none",
             bgcolor: theme.palette.primary.main,
+            borderRadius: 8,
+            padding: "6px 16px",
             "&:hover": {
               bgcolor: theme.palette.primary.dark,
-              transform: "scale(1.05)",
+              transform: "translateY(-2px)",
+              boxShadow: `0 4px 12px ${theme.palette.primary.main}40`,
             },
-            transition: "all 0.2s ease",
+            transition: "all 0.3s ease",
           }}
         >
-          {loading ? "Đang xử lý..." : "Mời"}
+          {loading ? "Processing..." : "Invite"}
         </Button>
       </DialogActions>
     </Dialog>

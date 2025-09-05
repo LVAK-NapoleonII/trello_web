@@ -1,4 +1,4 @@
-import { useState, useEffect, useContext, useCallback } from "react";
+import { useState, useEffect, useContext, useCallback, useRef } from "react";
 import {
   Dialog,
   DialogTitle,
@@ -36,6 +36,11 @@ function AddMemberDialog({
   const [searchQuery, setSearchQuery] = useState("");
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+
+  // Ref để maintain focus
+  const searchInputRef = useRef(null);
+  const searchTimeoutRef = useRef(null);
 
   // Kiểm tra dữ liệu đầu vào
   if (!card || !card._id || !card.board) {
@@ -46,10 +51,10 @@ function AddMemberDialog({
   // Chuẩn hóa boardMembers
   const normalizedBoardMembers = Array.isArray(boardMembers)
     ? boardMembers.map((member) => ({
-        ...member,
-        id: (member.user?._id || member._id)?.toString(),
-        isActive: member.isActive === true,
-      }))
+      ...member,
+      id: (member.user?._id || member._id)?.toString(),
+      isActive: member.isActive === true,
+    }))
     : [];
 
   useEffect(() => {
@@ -113,15 +118,15 @@ function AddMemberDialog({
         setCards((prevCards) =>
           prevCards.map((c) =>
             c.board === boardId &&
-            c.members?.some((m) => m._id.toString() === memberId.toString())
+              c.members?.some((m) => m._id.toString() === memberId.toString())
               ? {
-                  ...c,
-                  members: c.members.map((m) =>
-                    m._id.toString() === memberId.toString()
-                      ? { ...m, isActive: false }
-                      : m
-                  ),
-                }
+                ...c,
+                members: c.members.map((m) =>
+                  m._id.toString() === memberId.toString()
+                    ? { ...m, isActive: false }
+                    : m
+                ),
+              }
               : c
           )
         );
@@ -130,15 +135,15 @@ function AddMemberDialog({
             ...col,
             cards: col.cards.map((c) =>
               c.board === boardId &&
-              c.members?.some((m) => m._id.toString() === memberId.toString())
+                c.members?.some((m) => m._id.toString() === memberId.toString())
                 ? {
-                    ...c,
-                    members: c.members.map((m) =>
-                      m._id.toString() === memberId.toString()
-                        ? { ...m, isActive: false }
-                        : m
-                    ),
-                  }
+                  ...c,
+                  members: c.members.map((m) =>
+                    m._id.toString() === memberId.toString()
+                      ? { ...m, isActive: false }
+                      : m
+                  ),
+                }
                 : c
             ),
           }))
@@ -161,14 +166,14 @@ function AddMemberDialog({
           prevCards.map((c) =>
             c._id === cardId
               ? {
-                  ...c,
-                  members: [
-                    ...(c.members || []).filter(
-                      (m) => m._id.toString() !== member._id.toString()
-                    ),
-                    { ...member, isActive: true },
-                  ],
-                }
+                ...c,
+                members: [
+                  ...(c.members || []).filter(
+                    (m) => m._id.toString() !== member._id.toString()
+                  ),
+                  { ...member, isActive: true },
+                ],
+              }
               : c
           )
         );
@@ -178,14 +183,14 @@ function AddMemberDialog({
             cards: col.cards.map((c) =>
               c._id === cardId
                 ? {
-                    ...c,
-                    members: [
-                      ...(c.members || []).filter(
-                        (m) => m._id.toString() !== member._id.toString()
-                      ),
-                      { ...member, isActive: true },
-                    ],
-                  }
+                  ...c,
+                  members: [
+                    ...(c.members || []).filter(
+                      (m) => m._id.toString() !== member._id.toString()
+                    ),
+                    { ...member, isActive: true },
+                  ],
+                }
                 : c
             ),
           }))
@@ -213,59 +218,81 @@ function AddMemberDialog({
     setColumns,
   ]);
 
-  const handleSearchUsers = useCallback(async () => {
+  const handleSearchUsers = useCallback(async (query, isInitialLoad = false) => {
     try {
-      setLoading(true);
+      if (!isInitialLoad) {
+        setIsSearching(true);
+      } else {
+        setLoading(true);
+      }
+
       const token = localStorage.getItem("token");
       if (!token) {
         throw new Error("Không tìm thấy token! Vui lòng đăng nhập lại.");
       }
+      if (!card.board || typeof card.board !== "string") {
+        throw new Error("ID bảng không hợp lệ!");
+      }
 
       const params = { boardId: card.board };
-      if (searchQuery.trim()) {
-        params.query = searchQuery;
+      if (query && query.trim()) {
+        params.query = query.trim();
       } else {
         params.onlyActiveMembers = true;
       }
 
-      const response = await axios.get(
-        "http://localhost:5000/api/auth/search",
-        {
-          headers: { Authorization: `Bearer ${token}` },
-          params,
-        }
-      );
+      const response = await axios.get("http://localhost:5000/api/auth/search", {
+        headers: { Authorization: `Bearer ${token}` },
+        params,
+      });
 
       console.log("AddMemberDialog: Search response:", response.data);
       setUsers(response.data.users);
-      if (response.data.users.length === 0) {
+
+      if (response.data.users.length === 0 && isInitialLoad) {
         toast.info(
-          searchQuery.trim()
+          query && query.trim()
             ? "Không tìm thấy người dùng phù hợp!"
             : "Không có thành viên active trong bảng!"
         );
       }
     } catch (err) {
-      console.error(
-        "Lỗi tìm kiếm người dùng:",
-        err.response?.data || err.message
-      );
+      console.error("Lỗi tìm kiếm người dùng:", err.response?.data || err.message);
       const errorMessage =
         err.response?.status === 404
           ? "Bảng không tồn tại!"
           : err.response?.status === 401
-          ? "Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại!"
-          : err.response?.data?.message || "Có lỗi khi tìm kiếm người dùng!";
+            ? "Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại!"
+            : err.response?.status === 403
+              ? "Bạn không có quyền truy cập bảng này! Vui lòng liên hệ quản trị viên."
+              : err.response?.data?.message || "Có lỗi khi tìm kiếm người dùng!";
+      if (err.response?.status === 401) {
+        localStorage.removeItem("token");
+        window.location.href = "/login";
+      }
+      if (err.response?.status === 403) {
+        onClose();
+      }
       toast.error(errorMessage);
       setUsers([]);
     } finally {
-      setLoading(false);
+      if (!isInitialLoad) {
+        setIsSearching(false);
+      } else {
+        setLoading(false);
+      }
     }
-  }, [searchQuery, card]);
+  }, [card, onClose]);
 
   const handleAddMember = async (memberId) => {
-    if (!card?._id) {
+    if (!card?._id || typeof card._id !== "string" || !/^[0-9a-fA-F]{24}$/.test(card._id)) {
+      console.error("handleAddMember: Invalid card ID", { cardId: card._id });
       toast.error("ID thẻ không hợp lệ!");
+      return;
+    }
+    if (!memberId || typeof memberId !== "string" || !/^[0-9a-fA-F]{24}$/.test(memberId)) {
+      console.error("handleAddMember: Invalid member ID", { memberId });
+      toast.error("ID thành viên không hợp lệ!");
       return;
     }
 
@@ -278,6 +305,7 @@ function AddMemberDialog({
       (member) => member.id === memberId.toString() && member.isActive
     );
     if (!isValidMember) {
+      console.error("handleAddMember: Member not active in board", { memberId });
       toast.error("Người dùng không phải thành viên active của bảng!");
       return;
     }
@@ -286,127 +314,97 @@ function AddMemberDialog({
       setLoading(true);
       const token = localStorage.getItem("token");
       if (!token) {
+        console.error("handleAddMember: Missing token");
         throw new Error("Không tìm thấy token! Vui lòng đăng nhập lại.");
       }
 
+      console.log("handleAddMember: Sending request", { cardId: card._id, memberId });
       const response = await axios.post(
         `http://localhost:5000/api/cards/${card._id}/members`,
         { memberId },
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      const selectedUser = users.find(
-        (u) => u._id.toString() === memberId.toString()
-      );
-      const newMember = {
-        _id: memberId,
-        fullName:
-          selectedUser?.fullName ||
-          response.data.members.find(
-            (m) => m._id.toString() === memberId.toString()
-          )?.fullName ||
-          "Unknown",
-        email: selectedUser?.email || "",
-        avatar: selectedUser?.avatar || "",
-        isActive: true,
-      };
-
-      setCards((prevCards) =>
-        prevCards.map((c) =>
-          c._id === card._id
-            ? {
-                ...c,
-                members: response.data.members
-                  .filter(
-                    (m, index, self) =>
-                      self.findIndex(
-                        (x) => x._id.toString() === m._id.toString()
-                      ) === index
-                  )
-                  .map((m) => ({
-                    _id: m._id,
-                    fullName: m.fullName,
-                    email: m.email,
-                    avatar: m.avatar || "",
-                    isActive: m.isActive !== false,
-                  })),
-              }
-            : c
-        )
-      );
-
-      setColumns((prevColumns) =>
-        prevColumns.map((col) => ({
-          ...col,
-          cards: col.cards.map((c) =>
-            c._id === card._id
-              ? {
-                  ...c,
-                  members: response.data.members
-                    .filter(
-                      (m, index, self) =>
-                        self.findIndex(
-                          (x) => x._id.toString() === m._id.toString()
-                        ) === index
-                    )
-                    .map((m) => ({
-                      _id: m._id,
-                      fullName: m.fullName,
-                      email: m.email,
-                      avatar: m.avatar || "",
-                      isActive: m.isActive !== false,
-                    })),
-                }
-              : c
-          ),
-        }))
-      );
-
-      if (socket && socketReady) {
-        socket.emit("member-added", {
-          cardId: card._id,
-          member: newMember,
-          clientId: socket.id,
-        });
-        console.log("Emitted member-added:", {
-          cardId: card._id,
-          member: newMember,
-          clientId: socket.id,
-        });
-      }
-
+      console.log("handleAddMember: Success", response.data);
       toast.success("Thêm thành viên thành công!");
+      setUsers((prev) => prev.filter((u) => u._id !== memberId));
+      onClose();
     } catch (err) {
-      console.error("Lỗi thêm thành viên:", err.response?.data || err.message);
-      toast.error(
-        `Có lỗi khi thêm thành viên: ${
-          err.response?.data?.message || err.message
-        }`
-      );
+      console.error("Lỗi thêm thành viên:", {
+        message: err.message,
+        response: err.response?.data,
+        status: err.response?.status,
+      });
+      const errorMessage =
+        err.response?.status === 400 && err.response?.data?.message === "Thiếu ID mục tiêu!"
+          ? "Thiếu thông tin thẻ. Vui lòng thử lại!"
+          : err.response?.status === 401
+            ? "Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại!"
+            : err.response?.status === 403
+              ? "Bạn không có quyền thêm thành viên vào thẻ này!"
+              : err.response?.data?.message || "Có lỗi khi thêm thành viên!";
+      if (err.response?.status === 401) {
+        localStorage.removeItem("token");
+        window.location.href = "/login";
+      }
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
   };
 
+  // Load initial data when dialog opens
   useEffect(() => {
     if (open && card?.board) {
-      handleSearchUsers();
+      handleSearchUsers("", true);
     }
   }, [open, card?.board, handleSearchUsers]);
 
+  // Debounced search with focus preservation
   const debouncedSearchUsers = useCallback(
-    debounce(() => {
-      handleSearchUsers();
+    debounce((query) => {
+      handleSearchUsers(query, false);
     }, 300),
     [handleSearchUsers]
   );
 
+  // Handle search input change
+  const handleSearchChange = (e) => {
+    const value = e.target.value;
+    setSearchQuery(value);
+
+    // Clear previous timeout
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    // Set new timeout to preserve focus
+    searchTimeoutRef.current = setTimeout(() => {
+      debouncedSearchUsers(value);
+    }, 300);
+  };
+
+  // Cleanup timeout on unmount
   useEffect(() => {
-    debouncedSearchUsers();
     return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
       debouncedSearchUsers.cancel();
     };
-  }, [searchQuery, debouncedSearchUsers]);
+  }, [debouncedSearchUsers]);
+
+  // Reset search when dialog opens/closes
+  useEffect(() => {
+    if (!open) {
+      setSearchQuery("");
+      setUsers([]);
+      setIsSearching(false);
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    }
+  }, [open]);
 
   return (
     <Dialog
@@ -463,12 +461,13 @@ function AddMemberDialog({
           </Box>
         )}
         <TextField
+          inputRef={searchInputRef}
           autoFocus
           margin="dense"
           label="Tìm kiếm người dùng (tên hoặc email)"
           fullWidth
           value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
+          onChange={handleSearchChange}
           disabled={loading || normalizedBoardMembers.length === 0}
           sx={{
             mt: 1,
@@ -507,7 +506,7 @@ function AddMemberDialog({
           }}
         />
         <Box sx={{ mt: 2, maxHeight: "300px", overflowY: "auto" }}>
-          {loading ? (
+          {(loading || isSearching) ? (
             <Box sx={{ display: "flex", justifyContent: "center", p: 2 }}>
               <CircularProgress size={24} />
             </Box>
@@ -520,6 +519,7 @@ function AddMemberDialog({
                   onClick={() => handleAddMember(user._id)}
                   disabled={
                     loading ||
+                    isSearching ||
                     card.members?.some(
                       (m) => m._id.toString() === user._id.toString()
                     ) ||
@@ -552,26 +552,26 @@ function AddMemberDialog({
                         {card.members?.some(
                           (m) => m._id.toString() === user._id.toString()
                         ) && (
-                          <Typography
-                            component="span"
-                            color="text.secondary"
-                            sx={{ ml: 1, fontStyle: "italic" }}
-                          >
-                            (Đã thêm)
-                          </Typography>
-                        )}
+                            <Typography
+                              component="span"
+                              color="text.secondary"
+                              sx={{ ml: 1, fontStyle: "italic" }}
+                            >
+                              (Đã thêm)
+                            </Typography>
+                          )}
                         {!normalizedBoardMembers.some(
                           (member) =>
                             member.id === user._id.toString() && member.isActive
                         ) && (
-                          <Typography
-                            component="span"
-                            color="error.main"
-                            sx={{ ml: 1, fontStyle: "italic" }}
-                          >
-                            (Không phải thành viên bảng)
-                          </Typography>
-                        )}
+                            <Typography
+                              component="span"
+                              color="error.main"
+                              sx={{ ml: 1, fontStyle: "italic" }}
+                            >
+                              (Không phải thành viên bảng)
+                            </Typography>
+                          )}
                       </>
                     }
                     primaryTypographyProps={{

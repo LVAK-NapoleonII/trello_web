@@ -1,4 +1,4 @@
-import { useState, useEffect, useContext, forwardRef } from "react";
+import React, { useState, useEffect, useContext, forwardRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Avatar,
@@ -10,6 +10,7 @@ import {
   Box,
   IconButton,
   ListItemIcon,
+  useTheme,
 } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
 import axios from "axios";
@@ -19,93 +20,102 @@ import { toast } from "react-toastify";
 import { formatDistanceToNow } from "date-fns";
 import vi from "date-fns/locale/vi";
 
-const Profiles = forwardRef((props, ref) => {
-  const { socket, socketReady } = useContext(SocketContext);
+const menuStyles = {
+  minWidth: 320,
+  maxWidth: 400,
+  maxHeight: 400,
+  overflowY: "auto",
+  borderRadius: 12,
+  backdropFilter: "blur(12px)",
+  "&::-webkit-scrollbar": { width: 6 },
+  "&::-webkit-scrollbar-track": { borderRadius: 3 },
+  "&::-webkit-scrollbar-thumb": { borderRadius: 3 },
+};
+
+const menuItemStyles = {
+  borderRadius: 8,
+  mx: 1,
+  my: 0.5,
+  "&:hover": {
+    bgcolor: "action.selected",
+    transform: "translateY(-1px)",
+  },
+  transition: "all 0.3s ease",
+};
+
+const useProfileMenu = () => {
   const { user, logout } = useAuth();
+  const { socket, socketReady } = useContext(SocketContext);
   const navigate = useNavigate();
-  const [anchorEl, setAnchorEl] = useState(null);
-  const open = Boolean(anchorEl);
   const [activities, setActivities] = useState([]);
+
+  const fetchActivities = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) throw new Error("Vui lòng đăng nhập lại!");
+      const response = await axios.get("http://localhost:5000/api/activities", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setActivities(response.data.activities?.slice(0, 10) || []);
+    } catch (err) {
+      toast.error("Không thể tải hoạt động!");
+    }
+  };
 
   useEffect(() => {
     if (!user?._id) return;
-    if (!socket || !socketReady) {
-      console.warn("Socket not available or not ready in Profiles");
-      return;
-    }
-
-    console.log("Profiles: Fetching activities for user:", user._id);
-    const fetchActivities = async () => {
-      try {
-        const token = localStorage.getItem("token");
-        if (!token) {
-          console.log("Profiles: No token found, cannot fetch activities");
-          return;
-        }
-        const response = await axios.get(
-          "http://localhost:5000/api/activities",
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          }
-        );
-        console.log("Profiles: Activities response:", response.data);
-        setActivities(response.data.activities?.slice(0, 10) || []);
-      } catch (err) {
-        console.error("Profiles: Error fetching activities:", {
-          message: err.message,
-          response: err.response?.data,
-        });
-        toast.error("Không thể tải hoạt động!");
-      }
-    };
     fetchActivities();
 
-    const handleNewActivity = (activity) => {
-      console.log("Profiles: Received new activity:", activity);
+    if (!socket || !socketReady) return;
+
+    socket.on("new-activity", (activity) => {
       if (!activity.isHidden) {
         setActivities((prev) => [activity, ...prev].slice(0, 10));
-        toast.info(activity.details || "Không có chi tiết", {
-          autoClose: 3000,
-        });
+        toast.info(activity.details || "Không có chi tiết", { autoClose: 3000 });
       }
-    };
+    });
 
-    socket.on("new-activity", handleNewActivity);
-    return () => {
-      socket.off("new-activity", handleNewActivity);
-    };
+    return () => socket.off("new-activity");
   }, [user, socket, socketReady]);
 
-  const handleOpen = (event) => {
-    setAnchorEl(event.currentTarget);
-  };
+  return { user, logout, activities, fetchActivities, navigate };
+};
 
-  const handleClose = () => {
-    setAnchorEl(null);
-  };
+const Profiles = forwardRef((props, ref) => {
+  const theme = useTheme();
+  const isDarkMode = theme.palette.mode === "dark";
+  const { user, logout, activities, navigate } = useProfileMenu();
+  const [anchorEl, setAnchorEl] = useState(null);
+  const open = Boolean(anchorEl);
+  if (!user) {
+    return <Typography>Đang tải...</Typography>;
+  }
+  const handleOpen = (event) => setAnchorEl(event.currentTarget);
+  const handleClose = () => setAnchorEl(null);
 
   const handleActivityClick = (activity) => {
-    if (activity.target && activity.targetModel) {
-      switch (activity.targetModel) {
-        case "Board":
-          navigate(`/boards/${activity.target._id}`);
-          break;
-        case "Workspace":
-          navigate(`/workspace/${activity.target._id}/boards`);
-          break;
-        case "Card":
-          const workspaceId = activity.target.board?.workspace?._id || activity.target.board?.workspace;
-          const boardId = activity.target.board?._id;
-          if (boardId && workspaceId) {
-            navigate(`/workspace/${workspaceId}/board/${boardId}`);
-          } else {
-            console.warn("Profiles: Missing board or workspace ID for card activity", activity);
-            toast.error("Không thể điều hướng: Thiếu thông tin bảng hoặc không gian làm việc!");
-          }
-          break;
-        default:
-          break;
-      }
+    if (!activity.target || !activity.targetModel) {
+      toast.error("Hoạt động không hợp lệ!");
+      return;
+    }
+    switch (activity.targetModel) {
+      case "Board":
+        navigate(`/boards/${activity.target._id}`);
+        break;
+      case "Workspace":
+        navigate(`/workspace/${activity.target._id}/boards`);
+        break;
+      case "Card":
+        const workspaceId = activity.target.board?.workspace?._id || activity.target.board?.workspace;
+        const boardId = activity.target.board?._id;
+        if (boardId && workspaceId) {
+          navigate(`/workspace/${workspaceId}/board/${boardId}`);
+        } else {
+          toast.error("Thiếu thông tin bảng hoặc không gian làm việc!");
+        }
+        break;
+      default:
+        break;
     }
     handleClose();
   };
@@ -114,15 +124,12 @@ const Profiles = forwardRef((props, ref) => {
     event.stopPropagation();
     try {
       const token = localStorage.getItem("token");
-      await axios.put(
-        `http://localhost:5000/api/activities/${activityId}/hide`,
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      await axios.put(`http://localhost:5000/api/activities/${activityId}/hide`, {}, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       setActivities((prev) => prev.filter((a) => a._id !== activityId));
       toast.success("Đã ẩn hoạt động!");
     } catch (err) {
-      console.error("Profiles: Error hiding activity:", err);
       toast.error("Không thể ẩn hoạt động!");
     }
   };
@@ -130,15 +137,12 @@ const Profiles = forwardRef((props, ref) => {
   const handleHideAllActivities = async () => {
     try {
       const token = localStorage.getItem("token");
-      await axios.put(
-        "http://localhost:5000/api/activities/hide-all",
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      await axios.put("http://localhost:5000/api/activities/hide-all", {}, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       setActivities([]);
       toast.success("Đã ẩn tất cả hoạt động!");
     } catch (err) {
-      console.error("Profiles: Error hiding all activities:", err);
       toast.error("Không thể ẩn tất cả hoạt động!");
     }
   };
@@ -149,22 +153,30 @@ const Profiles = forwardRef((props, ref) => {
     handleClose();
   };
 
-  const handleProfileEdit = () => {
-    navigate("/profile");
-    handleClose();
-  };
-
-  const avatarUrl = user?.avatar
-    ? user.avatar.startsWith("https://api.dicebear.com")
-      ? user.avatar
-      : `http://localhost:5000${user.avatar}`
-    : "";
+  const avatarUrl = user?.avatar?.startsWith("https://api.dicebear.com")
+    ? user.avatar
+    : `http://localhost:5000${user.avatar}` || "";
 
   return (
     <>
-      <IconButton onClick={handleOpen} ref={ref}>
+      <IconButton
+        onClick={handleOpen}
+        ref={ref}
+        sx={{
+          "&:hover": {
+            bgcolor: "rgba(255, 255, 255, 0.1)",
+            transform: "translateY(-2px)",
+            boxShadow: `0 4px 12px rgba(0, 0, 0, 0.2)`,
+          },
+          transition: "all 0.3s ease",
+        }}
+      >
         <Avatar
-          sx={{ width: 32, height: 32 }}
+          sx={{
+            width: 32,
+            height: 32,
+            border: `2px solid ${isDarkMode ? "rgba(255, 255, 255, 0.3)" : "rgba(0, 0, 0, 0.1)"}`,
+          }}
           alt={user?.fullName}
           src={avatarUrl}
         />
@@ -175,60 +187,64 @@ const Profiles = forwardRef((props, ref) => {
         onClose={handleClose}
         PaperProps={{
           sx: {
-            maxWidth: 400,
-            minWidth: 300,
-            maxHeight: 400,
-            overflowY: "auto",
-            borderRadius: 2,
-            boxShadow: 3,
+            ...menuStyles,
+            bgcolor: isDarkMode ? "rgba(255, 255, 255, 0.08)" : "rgba(255, 255, 255, 0.6)",
+            border: `1px solid ${isDarkMode ? "rgba(255, 255, 255, 0.15)" : "rgba(0, 0, 0, 0.1)"}`,
+            boxShadow: `0 8px 32px ${isDarkMode ? "rgba(0, 0, 0, 0.3)" : "rgba(0, 0, 0, 0.15)"}`,
+            "&::-webkit-scrollbar-track": {
+              bgcolor: isDarkMode ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.05)",
+            },
+            "&::-webkit-scrollbar-thumb": { bgcolor: theme.palette.primary.main },
           },
         }}
       >
-        <Box sx={{ px: 2, py: 1, display: "flex", alignItems: "center" }}>
+        <Box sx={{ px: 2, py: 1.5, display: "flex", alignItems: "center" }}>
           <Avatar
-            sx={{ width: 40, height: 40, mr: 2 }}
+            sx={{ width: 40, height: 40, mr: 2, border: `2px solid ${theme.palette.primary.main}` }}
             alt={user?.fullName}
             src={avatarUrl}
           />
           <Box>
-            <Typography variant="subtitle2">{user?.fullName}</Typography>
+            <Typography variant="subtitle1" fontWeight={600}>
+              {user?.fullName}
+            </Typography>
             <Typography variant="caption" color="text.secondary">
               {user?.email}
             </Typography>
           </Box>
         </Box>
-        <Divider />
-        <MenuItem onClick={handleProfileEdit}>
-          <ListItemText primary="Chỉnh sửa hồ sơ" />
-        </MenuItem>
-        <MenuItem onClick={handleLogout}>
-          <ListItemText primary="Đăng xuất" />
-        </MenuItem>
-        <Divider />
-        <Box
-          sx={{
-            px: 2,
-            py: 1,
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
+        <Divider sx={{ mx: 2, my: 1, opacity: 0.5 }} />
+        <MenuItem
+          onClick={() => { navigate("/profile"); handleClose(); }}
+          sx={menuItemStyles}
         >
-          <Typography variant="subtitle1">Hoạt động</Typography>
+          <ListItemText primary="Edit Profile" primaryTypographyProps={{ fontWeight: 500 }} />
+        </MenuItem>
+        <MenuItem
+          onClick={handleLogout}
+          sx={menuItemStyles}
+        >
+          <ListItemText primary="Logout" primaryTypographyProps={{ fontWeight: 500 }} />
+        </MenuItem>
+        <Divider sx={{ mx: 2, my: 1, opacity: 0.5 }} />
+        <Box sx={{ px: 2, py: 1.5, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <Typography variant="subtitle1" fontWeight={600}>
+            Activities
+          </Typography>
           {activities.length > 0 && (
             <IconButton
               size="small"
               onClick={handleHideAllActivities}
-              color="error"
+              sx={{ color: theme.palette.error.main, "&:hover": { bgcolor: theme.palette.error.light + "20" } }}
             >
-              <DeleteIcon />
+              <DeleteIcon fontSize="small" />
             </IconButton>
           )}
         </Box>
         {activities.length === 0 ? (
-          <MenuItem>
+          <MenuItem sx={{ justifyContent: "center" }}>
             <Typography variant="body2" color="text.secondary">
-              Không có hoạt động nào
+              No activities
             </Typography>
           </MenuItem>
         ) : (
@@ -236,36 +252,19 @@ const Profiles = forwardRef((props, ref) => {
             <MenuItem
               key={activity._id}
               onClick={() => handleActivityClick(activity)}
-              sx={{
-                whiteSpace: "normal",
-                py: 0.5,
-                px: 2,
-                "&:hover": { bgcolor: "action.selected" },
-              }}
+              sx={{ ...menuItemStyles, whiteSpaceiteral: "normal" }}
             >
-              <Box
-                sx={{ display: "flex", alignItems: "center", width: "100%" }}
-              >
+              <Box sx={{ display: "flex", alignItems: "center", width: "100%", gap: 2 }}>
                 <ListItemText
-                  primary={activity.details || "Không có chi tiết"}
+                  primary={activity.details || "No details"}
                   secondary={formatDistanceToNow(new Date(activity.createdAt), {
                     addSuffix: true,
                     locale: vi,
                   })}
-                  primaryTypographyProps={{
-                    variant: "body2",
-                    noWrap: true,
-                    sx: { maxWidth: 220 },
-                  }}
-                  secondaryTypographyProps={{
-                    variant: "caption",
-                    color: "text.secondary",
-                  }}
+                  primaryTypographyProps={{ variant: "body2", fontWeight: 500, sx: { maxWidth: 220 } }}
+                  secondaryTypographyProps={{ variant: "caption", color: "text.secondary" }}
                 />
-                <ListItemIcon
-                  sx={{ minWidth: 0 }}
-                  onClick={(e) => handleHideActivity(activity._id, e)}
-                >
+                <ListItemIcon sx={{ minWidth: 0 }} onClick={(e) => handleHideActivity(activity._id, e)}>
                   <DeleteIcon fontSize="small" color="error" />
                 </ListItemIcon>
               </Box>
@@ -274,14 +273,13 @@ const Profiles = forwardRef((props, ref) => {
         )}
         {activities.length > 0 && (
           <>
-            <Divider />
-            <MenuItem onClick={() => navigate("/profile")}>
-              <Typography
-                variant="body2"
-                color="primary"
-                sx={{ textAlign: "center", width: "100%" }}
-              >
-                Xem tất cả hoạt động
+            <Divider sx={{ mx: 2, my: 1, opacity: 0.5 }} />
+            <MenuItem
+              onClick={() => navigate("/profile")}
+              sx={menuItemStyles}
+            >
+              <Typography variant="body2" color="primary" sx={{ textAlign: "center", width: "100%", fontWeight: 500 }}>
+                View all activities
               </Typography>
             </MenuItem>
           </>

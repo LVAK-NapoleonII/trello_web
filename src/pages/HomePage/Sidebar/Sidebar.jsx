@@ -18,35 +18,58 @@ import {
   FormControlLabel,
   Checkbox,
   IconButton,
+  Tooltip,
+  Fade,
+  Alert,
 } from "@mui/material";
-import DashboardIcon from "@mui/icons-material/Dashboard";
-import TemplateIcon from "@mui/icons-material/Category";
-import HomeIcon from "@mui/icons-material/Home";
-import ExpandLessIcon from "@mui/icons-material/ExpandLess";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import FolderIcon from "@mui/icons-material/Folder";
-import StarIcon from "@mui/icons-material/Star";
-import ImageIcon from "@mui/icons-material/Image";
-import PeopleIcon from "@mui/icons-material/People";
-import SettingsIcon from "@mui/icons-material/Settings";
-import UpgradeIcon from "@mui/icons-material/Upgrade";
-import AddIcon from "@mui/icons-material/Add";
-import DeleteIcon from "@mui/icons-material/Delete";
+import {
+  Dashboard as DashboardIcon,
+  Home as HomeIcon,
+  ExpandLess as ExpandLessIcon,
+  ExpandMore as ExpandMoreIcon,
+  Folder as FolderIcon,
+  Star as StarIcon,
+  People as PeopleIcon,
+  Settings as SettingsIcon,
+  Upgrade as UpgradeIcon,
+  Add as AddIcon,
+  Delete as DeleteIcon,
+  ExitToApp as ExitToAppIcon,
+  Public as PublicIcon,
+  AccountBox as AccountBoxIcon,
+} from "@mui/icons-material";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import { SocketContext } from "../../../context/SocketContext";
 
-const Sidebar = ({ onSelectWorkspace, selectedWorkspaceId }) => {
-  const { socket, socketReady } = useContext(SocketContext); // Correctly destructure socket and socketReady
-  const [workspaces, setWorkspaces] = useState([]);
+const handleApiError = (error, navigate, defaultMessage) => {
+  const message = error.response?.data?.message || defaultMessage;
+  toast.error(message);
+  if (error.response?.status === 401 || error.message.includes("token")) {
+    navigate("/login");
+  }
+  return message;
+};
+
+const Sidebar = ({
+  onSelectWorkspace,
+  selectedWorkspaceId,
+  workspaces,
+  setWorkspaces,
+  deletedWorkspaces,
+  setDeletedWorkspaces,
+}) => {
+  const { socket, socketReady, userId, joinWorkspaceRoom } = useContext(SocketContext);
   const [openWorkspaces, setOpenWorkspaces] = useState({});
   const [loading, setLoading] = useState(true);
   const [openCreateDialog, setOpenCreateDialog] = useState(false);
-  const [newWorkspaceName, setNewWorkspaceName] = useState("");
-  const [newWorkspaceDescription, setNewWorkspaceDescription] = useState("");
-  const [newWorkspaceIsPublic, setNewWorkspaceIsPublic] = useState(false);
-  const [newWorkspaceBackground, setNewWorkspaceBackground] = useState("");
+  const [newWorkspace, setNewWorkspace] = useState({
+    name: "",
+    description: "",
+    isPublic: false,
+    background: "",
+  });
   const [createLoading, setCreateLoading] = useState(false);
   const [error, setError] = useState(null);
   const theme = useTheme();
@@ -57,159 +80,146 @@ const Sidebar = ({ onSelectWorkspace, selectedWorkspaceId }) => {
     try {
       setLoading(true);
       const token = localStorage.getItem("token");
-      if (!token) {
-        throw new Error("Không tìm thấy token!");
-      }
+      if (!token) throw new Error("Please log in!");
 
-      const response = await axios.get("http://localhost:5000/api/workspaces", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setWorkspaces(response.data);
+      const [activeResponse, deletedResponse] = await Promise.all([
+        axios.get("http://localhost:5000/api/workspaces", {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        axios.get("http://localhost:5000/api/workspaces/deleted", {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+      ]);
 
-      const initialOpenState = {};
-      response.data.forEach((workspace) => {
-        initialOpenState[workspace._id] = true;
-      });
+      setWorkspaces(activeResponse.data);
+      setDeletedWorkspaces(deletedResponse.data);
+
+      const initialOpenState = activeResponse.data.reduce(
+        (acc, ws) => ({ ...acc, [ws._id]: true }),
+        {}
+      );
       setOpenWorkspaces(initialOpenState);
-    } catch (error) {
-      console.error("Lỗi tải workspaces:", error);
-      toast.error("Không thể tải danh sách không gian làm việc!");
-      if (error.response?.status === 401 || error.message.includes("token")) {
-        navigate("/login");
+
+      if (socket && socketReady) {
+        activeResponse.data.forEach((ws) => joinWorkspaceRoom(ws._id));
       }
+    } catch (error) {
+      console.error("[Sidebar] Fetch error:", error.message);
+      handleApiError(error, navigate, "Failed to load workspaces!");
     } finally {
       setLoading(false);
     }
   };
 
-  // Fetch workspaces on mount
   useEffect(() => {
     fetchWorkspaces();
-  }, [navigate]);
+  }, []);
 
-  // Handle socket events when socket is ready
   useEffect(() => {
-    if (!socket || !socketReady) {
-      console.warn("Socket not available or not ready in Sidebar");
-      return;
-    }
+    if (!socket || !socketReady) return;
 
     const userId = localStorage.getItem("userId");
-    if (userId) {
-      socket.emit("join", userId);
-      console.log("Sidebar tham gia phòng socket:", userId);
-    }
+    if (userId) socket.emit("join", userId);
 
-    const handleWorkspacesLoaded = (workspaceIds) => {
-      workspaceIds.forEach((workspaceId) => {
-        socket.emit("join", workspaceId);
-        console.log("Sidebar tham gia phòng workspace:", workspaceId);
-      });
-    };
-
-    const handleWorkspaceCreated = (data) => {
-      console.log("Nhận workspace-created:", data);
-      setWorkspaces((prev) => {
-        if (!prev.some((ws) => ws._id === data.workspace._id)) {
-          return [...prev, data.workspace];
-        }
-        return prev;
-      });
-      setOpenWorkspaces((prev) => ({
-        ...prev,
-        [data.workspace._id]: true,
-      }));
-      socket.emit("join", data.workspace._id);
-    };
-
-    const handleWorkspaceUpdated = (data) => {
-      console.log("Nhận workspace-updated:", data);
-      setWorkspaces((prev) =>
-        prev.map((ws) => (ws._id === data.workspace._id ? data.workspace : ws))
-      );
-    };
-
-    const handleWorkspaceHidden = (data) => {
-      console.log("Nhận workspace-hidden:", data);
-      setWorkspaces((prev) => {
-        const updated = prev.filter((ws) => ws._id !== data.workspaceId);
-        console.log("Danh sách workspaces sau khi xóa:", updated);
-        return updated;
-      });
-      setOpenWorkspaces((prev) => {
-        const newOpenWorkspaces = { ...prev };
-        delete newOpenWorkspaces[data.workspaceId];
-        console.log("Open workspaces sau khi xóa:", newOpenWorkspaces);
-        return newOpenWorkspaces;
-      });
-      if (selectedWorkspaceId === data.workspaceId) {
-        console.log("Reset selectedWorkspaceId");
-        onSelectWorkspace("");
-      }
-    };
-
-    const handleMemberDeactivated = (data) => {
-      console.log("Nhận member-deactivated:", data);
-      if (data.deactivatedUserId === localStorage.getItem("userId")) {
-        if (data.workspaceRemoved) {
+    const socketHandlers = {
+      "workspace-created": (data) => {
+        setWorkspaces((prev) => {
+          if (!prev.some((ws) => ws._id === data.workspace._id)) {
+            return [...prev, data.workspace];
+          }
+          return prev;
+        });
+        setOpenWorkspaces((prev) => ({ ...prev, [data.workspace._id]: true }));
+        if (socket && socketReady) joinWorkspaceRoom(data.workspace._id);
+      },
+      "workspace-updated": (data) => {
+        setWorkspaces((prev) =>
+          prev.map((ws) => (ws._id === data.workspace._id ? data.workspace : ws))
+        );
+      },
+      "workspace-hidden": (data) => {
+        const hiddenWorkspace = workspaces.find((ws) => ws._id === data.workspaceId);
+        setWorkspaces((prev) => prev.filter((ws) => ws._id !== data.workspaceId));
+        setDeletedWorkspaces((prev) => {
+          if (!prev.some((ws) => ws._id === data.workspaceId)) {
+            return [
+              ...prev,
+              {
+                _id: data.workspaceId,
+                name: hiddenWorkspace?.name || data.message?.split('"')[1] || "Deleted Workspace",
+              },
+            ];
+          }
+          return prev;
+        });
+        setOpenWorkspaces((prev) => {
+          const updated = { ...prev };
+          delete updated[data.workspaceId];
+          return updated;
+        });
+        if (selectedWorkspaceId === data.workspaceId) onSelectWorkspace("");
+      },
+      "workspace-restored": (data) => {
+        setDeletedWorkspaces((prev) => prev.filter((ws) => ws._id !== data.workspaceId));
+        setWorkspaces((prev) => {
+          if (!prev.some((ws) => ws._id === data.workspaceId)) {
+            return [...prev, data.workspace];
+          }
+          return prev;
+        });
+        setOpenWorkspaces((prev) => ({ ...prev, [data.workspaceId]: true }));
+        if (socket && socketReady) joinWorkspaceRoom(data.workspaceId);
+      },
+      "member-deactivated": (data) => {
+        if (
+          data.deactivatedUserId === localStorage.getItem("userId") &&
+          data.workspaceRemoved
+        ) {
           setWorkspaces((prev) =>
             prev.filter((ws) => ws._id !== data.board.workspace._id)
           );
           setOpenWorkspaces((prev) => {
-            const newOpenWorkspaces = { ...prev };
-            delete newOpenWorkspaces[data.board.workspace._id];
-            return newOpenWorkspaces;
+            const updated = { ...prev };
+            delete updated[data.board.workspace._id];
+            return updated;
           });
-          if (selectedWorkspaceId === data.board.workspace._id) {
-            onSelectWorkspace("");
-          }
+          if (selectedWorkspaceId === data.board.workspace._id) onSelectWorkspace("");
         }
-      }
+      },
+      "refresh-sidebar": (data) => {
+        if (data.userId === localStorage.getItem("userId")) fetchWorkspaces();
+      },
     };
 
-    const handleRefreshSidebar = (data) => {
-      console.log("Nhận refresh-sidebar:", data);
-      if (data.userId === localStorage.getItem("userId")) {
-        fetchWorkspaces();
-      }
-    };
-
-    socket.on("workspaces-loaded", handleWorkspacesLoaded);
-    socket.on("workspace-created", handleWorkspaceCreated);
-    socket.on("workspace-updated", handleWorkspaceUpdated);
-    socket.on("workspace-hidden", handleWorkspaceHidden);
-    socket.on("member-deactivated", handleMemberDeactivated);
-    socket.on("refresh-sidebar", handleRefreshSidebar);
+    Object.entries(socketHandlers).forEach(([event, handler]) => {
+      socket.on(event, handler);
+      socket.on("workspace-left", socketHandlers["workspace-hidden"]);
+    });
 
     return () => {
-      socket.off("workspaces-loaded", handleWorkspacesLoaded);
-      socket.off("workspace-created", handleWorkspaceCreated);
-      socket.off("workspace-updated", handleWorkspaceUpdated);
-      socket.off("workspace-hidden", handleWorkspaceHidden);
-      socket.off("member-deactivated", handleMemberDeactivated);
-      socket.off("refresh-sidebar", handleRefreshSidebar);
+      Object.keys(socketHandlers).forEach((event) => {
+        socket.off(event, socketHandlers[event]);
+        socket.off("workspace-left", socketHandlers["workspace-hidden"]);
+      });
     };
-  }, [socket, socketReady, onSelectWorkspace, selectedWorkspaceId]);
+  }, [socket, socketReady, selectedWorkspaceId, onSelectWorkspace, workspaces]);
 
   const handleToggleWorkspace = (workspaceId) => {
-    setOpenWorkspaces((prev) => ({
-      ...prev,
-      [workspaceId]: !prev[workspaceId],
-    }));
+    setOpenWorkspaces((prev) => ({ ...prev, [workspaceId]: !prev[workspaceId] }));
   };
 
   const handleNavigation = (path, workspaceId) => {
-    if (path === "boards" && onSelectWorkspace) {
+    if (path === "boards") {
       onSelectWorkspace(workspaceId);
-      navigate("/boards");
+      navigate(`/workspace/${workspaceId}/boards`);
     } else {
       navigate(`/workspace/${workspaceId}/${path}`);
     }
   };
 
   const handleCreateWorkspace = async () => {
-    if (!newWorkspaceName.trim()) {
-      setError("Tên không gian làm việc không được để trống!");
+    if (!newWorkspace.name.trim()) {
+      setError("Workspace name cannot be empty!");
       return;
     }
 
@@ -217,405 +227,573 @@ const Sidebar = ({ onSelectWorkspace, selectedWorkspaceId }) => {
       setCreateLoading(true);
       setError(null);
       const token = localStorage.getItem("token");
-      if (!token) {
-        throw new Error("Vui lòng đăng nhập để tạo không gian làm việc!");
-      }
+      if (!token) throw new Error("Please log in!");
 
       const response = await axios.post(
         "http://localhost:5000/api/workspaces",
-        {
-          name: newWorkspaceName,
-          description: newWorkspaceDescription,
-          isPublic: newWorkspaceIsPublic,
-          background: newWorkspaceBackground,
-        },
+        newWorkspace,
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
       if (socket && socketReady) {
         socket.emit("workspace-created", {
           workspace: response.data,
-          message: `Workspace "${response.data.name}" đã được tạo.`,
+          message: `Workspace "${response.data.name}" created.`,
         });
       } else {
-        console.warn("Socket not available or not ready for workspace-created");
+        setWorkspaces((prev) => [...prev, response.data]);
+        setOpenWorkspaces((prev) => ({ ...prev, [response.data._id]: true }));
       }
 
       setOpenCreateDialog(false);
-      setNewWorkspaceName("");
-      setNewWorkspaceDescription("");
-      setNewWorkspaceIsPublic(false);
-      setNewWorkspaceBackground("");
-      toast.success("Tạo không gian làm việc thành công!");
-      fetchWorkspaces();
+      setNewWorkspace({ name: "", description: "", isPublic: false, background: "" });
+      toast.success("Workspace created successfully!");
     } catch (error) {
-      console.error("Lỗi tạo workspace:", error);
-      const message =
-        error.response?.data?.message ||
-        "Có lỗi xảy ra khi tạo không gian làm việc!";
-      setError(message);
-      toast.error(message);
-      if (message.includes("đăng nhập")) {
-        navigate("/login");
-      }
+      console.error("[Sidebar] Create error:", error.message);
+      setError(handleApiError(error, navigate, "Failed to create workspace!"));
     } finally {
       setCreateLoading(false);
     }
   };
 
   const handleDeleteWorkspace = async (workspaceId) => {
+    const workspace = workspaces.find((ws) => ws._id === workspaceId);
+    if (!window.confirm(`Are you sure you want to delete workspace "${workspace?.name}"? This action cannot be undone.`)) {
+      return;
+    }
+
     try {
       const token = localStorage.getItem("token");
-      await axios.delete(
-        `http://localhost:5000/api/workspaces/${workspaceId}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
+      if (!token) throw new Error("Please log in!");
+
+      await axios.delete(`http://localhost:5000/api/workspaces/${workspaceId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (socket && socketReady) {
+        socket.emit("workspace-hidden", {
+          workspaceId,
+          message: `Workspace "${workspace?.name}" deleted.`,
+        });
+      } else {
+        setWorkspaces((prev) => prev.filter((ws) => ws._id !== workspaceId));
+        if (selectedWorkspaceId === workspaceId) onSelectWorkspace("");
+      }
+
+      toast.success("Workspace deleted successfully!");
+    } catch (error) {
+      console.error("[Sidebar] Delete error:", error.message);
+      handleApiError(error, navigate, "Failed to delete workspace!");
+    }
+  };
+
+  const handleLeaveWorkspace = async (workspaceId) => {
+    const workspace = workspaces.find((ws) => ws._id === workspaceId);
+    if (!window.confirm(`Are you sure you want to leave workspace "${workspace?.name}"?`)) {
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) throw new Error("Please log in!");
+
+      await axios.post(
+        `http://localhost:5000/api/workspaces/${workspaceId}/leave`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      toast.success("Xóa không gian làm việc thành công!");
-      setWorkspaces((prev) => prev.filter((ws) => ws._id !== workspaceId));
-      setOpenWorkspaces((prev) => {
-        const newOpenWorkspaces = { ...prev };
-        delete newOpenWorkspaces[workspaceId];
-        return newOpenWorkspaces;
-      });
-      if (selectedWorkspaceId === workspaceId) {
-        onSelectWorkspace("");
+      if (socket && socketReady) {
+        socket.emit("workspace-left", {
+          workspaceId,
+          message: `Left workspace "${workspace?.name}".`,
+        });
+      } else {
+        setWorkspaces((prev) => prev.filter((ws) => ws._id !== workspaceId));
+        if (selectedWorkspaceId === workspaceId) onSelectWorkspace("");
       }
+
+      toast.success("Left workspace successfully!");
     } catch (error) {
-      console.error("Lỗi xóa workspace:", error);
-      toast.error("Có lỗi xảy ra khi xóa không gian làm việc!");
+      console.error("[Sidebar] Leave error:", error.message);
+      handleApiError(error, navigate, "Failed to leave workspace!");
     }
+  };
+
+  const getWorkspaceBackground = (workspace, isSelected) => {
+    if (workspace.background?.startsWith("http")) {
+      return `linear-gradient(rgba(0,0,0,0.6), rgba(0,0,0,0.6)), url(${workspace.background}) no-repeat center/cover`;
+    }
+    return isSelected
+      ? isDarkMode
+        ? "#667EEA"
+        : "#3182CE"
+      : isDarkMode
+        ? "#2D3748"
+        : "#EDF2F7";
+  };
+
+  const renderWorkspaceItem = (workspace, index) => {
+    const isSelected = selectedWorkspaceId === workspace._id;
+    const isOwner = workspace.owner?._id === userId;
+    const isExpanded = openWorkspaces[workspace._id];
+
+    return (
+      <Fade in key={workspace._id} timeout={300} style={{ transitionDelay: `${index * 50}ms` }}>
+        <Box sx={{ mb: 1 }}>
+          <Box sx={{ display: "flex", alignItems: "center" }}>
+            <ListItemButton
+              onClick={() => {
+                handleToggleWorkspace(workspace._id);
+                onSelectWorkspace(workspace._id);
+              }}
+              sx={{
+                flex: 1,
+                borderRadius: "12px",
+                background: getWorkspaceBackground(workspace, isSelected),
+                color: workspace.background?.startsWith("http")
+                  ? "#ffffff"
+                  : isSelected
+                    ? "#ffffff"
+                    : isDarkMode
+                      ? "#E2E8F0"
+                      : "#4A5568",
+                "&:hover": {
+                  bgcolor: isSelected
+                    ? isDarkMode
+                      ? "#7F9CF5"
+                      : "#2B6CB0"
+                    : isDarkMode
+                      ? "#4A5568"
+                      : "#E2E8F0",
+                  transform: "translateY(-1px)",
+                },
+                transition: "all 0.2s ease",
+                py: 1.5,
+                px: 2,
+                boxShadow: isSelected
+                  ? isDarkMode
+                    ? "0 4px 12px rgba(102, 126, 234, 0.3)"
+                    : "0 4px 12px rgba(49, 130, 206, 0.3)"
+                  : "none",
+              }}
+            >
+              <ListItemIcon sx={{ color: "inherit", minWidth: 36 }}>
+                <FolderIcon />
+              </ListItemIcon>
+              <ListItemText
+                primary={
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    <Typography
+                      sx={{
+                        fontWeight: isSelected ? 700 : 500,
+                        fontSize: "0.95rem",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                        flex: 1,
+                      }}
+                    >
+                      {workspace.name}
+                    </Typography>
+                    {workspace.isPublic && <PublicIcon sx={{ fontSize: 14, opacity: 0.8 }} />}
+                    {isOwner && <AccountBoxIcon sx={{ fontSize: 14, opacity: 0.8 }} />}
+                  </Box>
+                }
+              />
+              {isExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+            </ListItemButton>
+            <Tooltip title={isOwner ? "Delete workspace" : "Leave workspace"}>
+              <IconButton
+                onClick={() =>
+                  isOwner
+                    ? handleDeleteWorkspace(workspace._id)
+                    : handleLeaveWorkspace(workspace._id)
+                }
+                sx={{
+                  color: isOwner
+                    ? isDarkMode
+                      ? "#EF4444"
+                      : "#DC2626"
+                    : isDarkMode
+                      ? "#F59E0B"
+                      : "#D97706",
+                  "&:hover": {
+                    bgcolor: isOwner
+                      ? isDarkMode
+                        ? "rgba(239, 68, 68, 0.1)"
+                        : "rgba(220, 38, 38, 0.1)"
+                      : isDarkMode
+                        ? "rgba(245, 158, 11, 0.1)"
+                        : "rgba(217, 119, 6, 0.1)",
+                    transform: "scale(1.1)",
+                  },
+                  transition: "all 0.2s ease",
+                  ml: 0.5,
+                }}
+                size="small"
+              >
+                {isOwner ? <DeleteIcon fontSize="small" /> : <ExitToAppIcon fontSize="small" />}
+              </IconButton>
+            </Tooltip>
+          </Box>
+          <Collapse in={isExpanded} timeout="auto" unmountOnExit>
+            <List component="div" disablePadding sx={{ pl: 3, mt: 0.5 }}>
+              {[
+                { text: "Highlights", icon: <StarIcon />, path: "highlights" },
+                { text: "Members", icon: <PeopleIcon />, path: "members" },
+                { text: "Settings", icon: <SettingsIcon />, path: "settings" },
+              ].map((item) => (
+                <ListItemButton
+                  key={item.text}
+                  onClick={() => handleNavigation(item.path, workspace._id)}
+                  sx={{
+                    borderRadius: "12px",
+                    py: 1,
+                    px: 2,
+                    mb: 0.5,
+                    "&:hover": {
+                      bgcolor: isDarkMode ? "#4A5568" : "#E2E8F0",
+                      transform: "translateX(4px)",
+                    },
+                    transition: "all 0.2s ease",
+                  }}
+                >
+                  <ListItemIcon sx={{ color: isDarkMode ? "#A0AEC0" : "#4A5568", minWidth: 32 }}>
+                    {item.icon}
+                  </ListItemIcon>
+                  <ListItemText
+                    primary={<Typography sx={{ fontSize: "0.9rem", fontWeight: 500 }}>{item.text}</Typography>}
+                  />
+                </ListItemButton>
+              ))}
+            </List>
+          </Collapse>
+        </Box>
+      </Fade>
+    );
   };
 
   return (
     <Box
       sx={{
-        width: 250,
-        bgcolor: isDarkMode ? "#1E1E2D" : "#F2F2F5",
-        color: isDarkMode ? "#fff" : "#333",
-        height: "100vh",
+        width: 280,
+        bgcolor: isDarkMode ? "#1A202C" : "#F7FAFC",
+        color: isDarkMode ? "#E2E8F0" : "#2D3748",
+        minHeight: "calc(100vh - 16px)",
+        maxHeight: "calc(100vh - 16px)",
         display: "flex",
         flexDirection: "column",
-        transition: "all 0.3s ease",
-        borderRadius: "20px",
-        boxShadow: isDarkMode
-          ? "0px 4px 12px rgba(0,0,0,0.5)"
-          : "0px 4px 12px rgba(0,0,0,0.1)",
+        borderRadius: "16px",
+        boxShadow: isDarkMode ? "0 12px 40px rgba(0,0,0,0.5)" : "0 12px 40px rgba(0,0,0,0.08)",
+        overflow: "hidden",
       }}
     >
+      <Box
+        sx={{
+          p: 3,
+          borderBottom: `1px solid ${isDarkMode ? "#4A5568" : "#E2E8F0"}`,
+          bgcolor: isDarkMode ? "#2D3748" : "#ffffff",
+          flexShrink: 0,
+        }}
+      >
+        <Typography variant="h6" sx={{ fontWeight: 700, color: isDarkMode ? "#E2E8F0" : "#2D3748", mb: 2 }}>
+          Workspace
+        </Typography>
+        <List sx={{ p: 0 }}>
+          <ListItemButton
+            onClick={() => navigate("/")}
+            sx={{
+              borderRadius: "12px",
+              "&:hover": {
+                bgcolor: isDarkMode ? "#4A5568" : "#E2E8F0",
+                transform: "translateY(-1px)",
+              },
+              transition: "all 0.2s ease",
+              py: 1.5,
+            }}
+          >
+            <ListItemIcon sx={{ color: isDarkMode ? "#667EEA" : "#3182CE" }}>
+              <HomeIcon />
+            </ListItemIcon>
+            <ListItemText primary={<Typography sx={{ fontWeight: 600 }}>Home</Typography>} />
+          </ListItemButton>
+        </List>
+      </Box>
+
       <Box
         sx={{
           flex: 1,
           overflowY: "auto",
           px: 2,
-          py: 2,
-          scrollBehavior: "smooth",
+          py: 3,
+          minHeight: 0,
           "&::-webkit-scrollbar": {
             width: "6px",
           },
           "&::-webkit-scrollbar-track": {
-            background: isDarkMode ? "#2A2A3D" : "#E6E6EB",
+            background: isDarkMode ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.05)",
             borderRadius: "10px",
-            margin: "4px 0",
           },
           "&::-webkit-scrollbar-thumb": {
-            background: isDarkMode ? "#666" : "#bbb",
+            background: isDarkMode ? "#667EEA" : "#3182CE",
             borderRadius: "10px",
-            border: "1px solid transparent",
-            backgroundClip: "padding-box",
             "&:hover": {
-              background: isDarkMode ? "#888" : "#999",
+              background: isDarkMode ? "#7F9CF5" : "#2B6CB0",
             },
           },
         }}
       >
-        <List>
-          <ListItemButton onClick={() => navigate("/boards")}>
-            <ListItemIcon
-              sx={{
-                borderRadius: "8px",
-                "&:hover": { bgcolor: isDarkMode ? "#29293D" : "#E6E6EB" },
-              }}
-            >
-              <DashboardIcon />
-            </ListItemIcon>
-            <ListItemText primary="Bảng" />
-          </ListItemButton>
-          <ListItemButton onClick={() => navigate("/templates")}>
-            <ListItemIcon
-              sx={{
-                borderRadius: "8px",
-                "&:hover": { bgcolor: isDarkMode ? "#29293D" : "#E6E6EB" },
-              }}
-            >
-              <TemplateIcon />
-            </ListItemIcon>
-            <ListItemText primary="Mẫu" />
-          </ListItemButton>
-          <ListItemButton onClick={() => navigate("/")}>
-            <ListItemIcon
-              sx={{
-                borderRadius: "8px",
-                "&:hover": { bgcolor: isDarkMode ? "#29293D" : "#E6E6EB" },
-              }}
-            >
-              <HomeIcon />
-            </ListItemIcon>
-            <ListItemText primary="Trang chủ" />
-          </ListItemButton>
-        </List>
-        <Box
-          sx={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            mb: 1,
-          }}
-        >
-          <Typography
-            variant="body2"
-            sx={{
-              pl: 2,
-              mt: 2,
-              opacity: 0.7,
-              color: isDarkMode ? "#aaa" : "#666",
-            }}
-          >
-            CÁC KHÔNG GIAN LÀM VIỆC
+        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3, px: 1 }}>
+          <Typography variant="overline" sx={{ color: isDarkMode ? "#A0AEC0" : "#718096", fontWeight: 600, letterSpacing: 1 }}>
+            Workspaces
           </Typography>
-          <Button
-            size="small"
-            startIcon={<AddIcon />}
-            onClick={() => setOpenCreateDialog(true)}
+          <Tooltip title="Create new workspace">
+            <Button
+              size="small"
+              startIcon={<AddIcon />}
+              onClick={() => setOpenCreateDialog(true)}
+              sx={{
+                color: isDarkMode ? "#667EEA" : "#3182CE",
+                "&:hover": {
+                  bgcolor: isDarkMode ? "rgba(102, 126, 234, 0.1)" : "rgba(49, 130, 206, 0.1)",
+                  transform: "scale(1.05)",
+                },
+                borderRadius: "8px",
+                textTransform: "none",
+                fontWeight: 600,
+                fontSize: "0.8rem",
+                transition: "all 0.2s ease",
+              }}
+            >
+              Create
+            </Button>
+          </Tooltip>
+        </Box>
+
+        {loading ? (
+          <Box sx={{ display: "flex", justifyContent: "center", mt: 4 }}>
+            <CircularProgress size={32} sx={{ color: isDarkMode ? "#667EEA" : "#3182CE" }} />
+          </Box>
+        ) : workspaces.length === 0 ? (
+          <Box
             sx={{
-              color: isDarkMode ? "#fff" : "#333",
-              "&:hover": { bgcolor: isDarkMode ? "#29293D" : "#E6E6EB" },
+              textAlign: "center",
+              py: 4,
+              px: 2,
+              bgcolor: isDarkMode ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.02)",
+              borderRadius: "12px",
+              border: `2px dashed ${isDarkMode ? "#4A5568" : "#E2E8F0"}`,
             }}
           >
-            Tạo
-          </Button>
-        </Box>
-        {loading ? (
-          <Box sx={{ display: "flex", justifyContent: "center", mt: 2 }}>
-            <CircularProgress size={24} />
+            <FolderIcon sx={{ fontSize: 48, color: isDarkMode ? "#4A5568" : "#CBD5E0", mb: 2 }} />
+            <Typography sx={{ color: isDarkMode ? "#A0AEC0" : "#718096", fontWeight: 500, mb: 1 }}>
+              No workspaces yet
+            </Typography>
+            <Typography sx={{ color: isDarkMode ? "#718096" : "#A0AEC0", fontSize: "0.9rem" }}>
+              Create your first workspace
+            </Typography>
           </Box>
         ) : (
-          <List>
-            {workspaces.map((workspace) => (
-              <div key={workspace._id}>
-                <Box sx={{ display: "flex", alignItems: "center" }}>
-                  <ListItemButton
-                    onClick={() => handleToggleWorkspace(workspace._id)}
-                    sx={{
-                      flex: 1,
-                      borderRadius: "8px",
-                      background: workspace.background
-                        ? `url(${workspace.background}) no-repeat center/cover`
-                        : isDarkMode
-                        ? "#29293D"
-                        : "#E6E6EB",
-                      "&:hover": {
-                        background: workspace.background
-                          ? `linear-gradient(rgba(0,0,0,0.2), rgba(0,0,0,0.2)), url(${workspace.background}) no-repeat center/cover`
-                          : isDarkMode
-                          ? "#3A3A50"
-                          : "#D5D5E0",
-                      },
-                    }}
-                  >
-                    <ListItemIcon sx={{ color: isDarkMode ? "#fff" : "#555" }}>
-                      <FolderIcon />
-                    </ListItemIcon>
-                    <ListItemText primary={workspace.name} />
-                    {openWorkspaces[workspace._id] ? (
-                      <ExpandLessIcon />
-                    ) : (
-                      <ExpandMoreIcon />
-                    )}
-                  </ListItemButton>
-                  <IconButton
-                    onClick={() => handleDeleteWorkspace(workspace._id)}
-                    sx={{
-                      color: isDarkMode ? "#ff6b6b" : "#d63031",
-                      "&:hover": {
-                        bgcolor: isDarkMode ? "#3A3A50" : "#D5D5E0",
-                      },
-                    }}
-                  >
-                    <DeleteIcon fontSize="small" />
-                  </IconButton>
-                </Box>
-                <Collapse
-                  in={openWorkspaces[workspace._id]}
-                  timeout="auto"
-                  unmountOnExit
-                >
-                  <List component="div" disablePadding sx={{ pl: 4 }}>
-                    <ListItemButton
-                      onClick={() => handleNavigation("boards", workspace._id)}
-                    >
-                      <ListItemIcon
-                        sx={{ color: isDarkMode ? "#fff" : "#555" }}
-                      >
-                        <DashboardIcon />
-                      </ListItemIcon>
-                      <ListItemText primary="Bảng" />
-                    </ListItemButton>
-                    <ListItemButton
-                      onClick={() =>
-                        handleNavigation("highlights", workspace._id)
-                      }
-                    >
-                      <ListItemIcon
-                        sx={{ color: isDarkMode ? "#fff" : "#555" }}
-                      >
-                        <StarIcon />
-                      </ListItemIcon>
-                      <ListItemText primary="Điểm nổi bật" />
-                    </ListItemButton>
-                    <ListItemButton
-                      onClick={() => handleNavigation("images", workspace._id)}
-                    >
-                      <ListItemIcon
-                        sx={{ color: isDarkMode ? "#fff" : "#555" }}
-                      >
-                        <ImageIcon />
-                      </ListItemIcon>
-                      <ListItemText primary="Hình" />
-                    </ListItemButton>
-                    <ListItemButton
-                      onClick={() => handleNavigation("members", workspace._id)}
-                    >
-                      <ListItemIcon
-                        sx={{ color: isDarkMode ? "#fff" : "#555" }}
-                      >
-                        <PeopleIcon />
-                      </ListItemIcon>
-                      <ListItemText primary="Thành viên" />
-                    </ListItemButton>
-                    <ListItemButton
-                      onClick={() =>
-                        handleNavigation("settings", workspace._id)
-                      }
-                    >
-                      <ListItemIcon
-                        sx={{ color: isDarkMode ? "#fff" : "#555" }}
-                      >
-                        <SettingsIcon />
-                      </ListItemIcon>
-                      <ListItemText primary="Cài đặt" />
-                    </ListItemButton>
-                  </List>
-                </Collapse>
-              </div>
-            ))}
-            {workspaces.length === 0 && (
-              <Typography sx={{ pl: 2, color: isDarkMode ? "#aaa" : "#666" }}>
-                Không có không gian làm việc
-              </Typography>
-            )}
-          </List>
+          <List sx={{ p: 0 }}>{workspaces.map((workspace, index) => renderWorkspaceItem(workspace, index))}</List>
         )}
       </Box>
+
       <Box
         sx={{
-          bgcolor: isDarkMode ? "#333347" : "#e8eaf6",
-          borderRadius: 2,
-          p: 2,
+          bgcolor: isDarkMode ? "#2D3748" : "#EDF2F7",
+          p: 3,
           textAlign: "center",
-          borderTop: `1px solid ${isDarkMode ? "#444" : "#ddd"}`,
+          borderTop: `1px solid ${isDarkMode ? "#4A5568" : "#E2E8F0"}`,
+          flexShrink: 0,
         }}
       >
         <Typography
           variant="body2"
-          sx={{ opacity: 0.8, mb: 1, color: isDarkMode ? "#ddd" : "#444" }}
+          sx={{
+            color: isDarkMode ? "#A0AEC0" : "#4A5568",
+            mb: 2,
+            lineHeight: 1.4,
+          }}
         >
-          Nhận các bảng không giới hạn, tự động hóa nâng cao và hơn thế nữa.
+          Upgrade for unlimited boards and advanced features.
         </Typography>
         <Button
           variant="contained"
           startIcon={<UpgradeIcon />}
+          fullWidth
           sx={{
-            bgcolor: isDarkMode ? "#ff6b6b" : "#d63031",
-            "&:hover": { bgcolor: isDarkMode ? "#e63946" : "#b22222" },
+            bgcolor: isDarkMode ? "#667EEA" : "#3182CE",
+            "&:hover": {
+              bgcolor: isDarkMode ? "#7F9CF5" : "#2B6CB0",
+              transform: "translateY(-2px)",
+            },
+            borderRadius: "12px",
             textTransform: "none",
+            fontWeight: 600,
+            py: 1.5,
+            boxShadow: isDarkMode
+              ? "0 4px 12px rgba(102, 126, 234, 0.3)"
+              : "0 4px 12px rgba(49, 130, 206, 0.3)",
+            transition: "all 0.2s ease",
           }}
         >
-          Nâng cấp
+          Upgrade Now
         </Button>
       </Box>
+
       <Dialog
         open={openCreateDialog}
         onClose={() => {
           setOpenCreateDialog(false);
           setError(null);
+          setNewWorkspace({ name: "", description: "", isPublic: false, background: "" });
+        }}
+        maxWidth="sm"
+        fullWidth
+        sx={{
+          "& .MuiDialog-paper": {
+            borderRadius: "16px",
+            bgcolor: isDarkMode ? "#1A202C" : "#ffffff",
+            color: isDarkMode ? "#E2E8F0" : "#2D3748",
+          },
         }}
       >
-        <DialogTitle>Tạo không gian làm việc mới</DialogTitle>
-        <DialogContent>
+        <DialogTitle
+          sx={{
+            fontWeight: 700,
+            fontSize: "1.25rem",
+            borderBottom: `1px solid ${isDarkMode ? "#4A5568" : "#E2E8F0"}`,
+            display: "flex",
+            alignItems: "center",
+            gap: 1,
+          }}
+        >
+          <AddIcon sx={{ color: isDarkMode ? "#667EEA" : "#3182CE" }} />
+          Create New Workspace
+        </DialogTitle>
+        <DialogContent sx={{ mt: 2 }}>
+          {error && (
+            <Alert
+              severity="error"
+              sx={{
+                mb: 2,
+                borderRadius: "12px",
+                bgcolor: isDarkMode ? "rgba(239, 68, 68, 0.1)" : "rgba(239, 68, 68, 0.1)",
+              }}
+            >
+              {error}
+            </Alert>
+          )}
           <TextField
             autoFocus
             margin="dense"
-            label="Tên không gian làm việc"
+            label="Workspace Name"
             fullWidth
-            value={newWorkspaceName}
-            onChange={(e) => setNewWorkspaceName(e.target.value)}
-            error={!!error && error.includes("Tên")}
-            helperText={error && error.includes("Tên") ? error : ""}
+            value={newWorkspace.name}
+            onChange={(e) => setNewWorkspace({ ...newWorkspace, name: e.target.value })}
+            placeholder="Enter workspace name..."
+            sx={{
+              mb: 2,
+              "& .MuiOutlinedInput-root": {
+                borderRadius: "12px",
+                bgcolor: isDarkMode ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.02)",
+              },
+            }}
           />
           <TextField
             margin="dense"
-            label="Mô tả"
+            label="Description (optional)"
             fullWidth
             multiline
             rows={3}
-            value={newWorkspaceDescription}
-            onChange={(e) => setNewWorkspaceDescription(e.target.value)}
+            value={newWorkspace.description}
+            onChange={(e) => setNewWorkspace({ ...newWorkspace, description: e.target.value })}
+            placeholder="Describe this workspace..."
+            sx={{
+              mb: 2,
+              "& .MuiOutlinedInput-root": {
+                borderRadius: "12px",
+                bgcolor: isDarkMode ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.02)",
+              },
+            }}
           />
           <FormControlLabel
             control={
               <Checkbox
-                checked={newWorkspaceIsPublic}
-                onChange={(e) => setNewWorkspaceIsPublic(e.target.checked)}
-                color="primary"
+                checked={newWorkspace.isPublic}
+                onChange={(e) => setNewWorkspace({ ...newWorkspace, isPublic: e.target.checked })}
+                sx={{
+                  color: isDarkMode ? "#667EEA" : "#3182CE",
+                  "&.Mui-checked": {
+                    color: isDarkMode ? "#667EEA" : "#3182CE",
+                  },
+                }}
               />
             }
-            label="Công khai"
-            sx={{ mt: 1 }}
+            label={
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <PublicIcon fontSize="small" />
+                <Typography>Public</Typography>
+                <Typography variant="caption" sx={{ color: isDarkMode ? "#A0AEC0" : "#718096" }}>
+                  (Anyone can join)
+                </Typography>
+              </Box>
+            }
+            sx={{ mb: 2 }}
           />
           <TextField
             margin="dense"
-            label="URL Background (nếu có)"
+            label="Background URL (optional)"
             fullWidth
-            value={newWorkspaceBackground}
-            onChange={(e) => setNewWorkspaceBackground(e.target.value)}
-            placeholder="Nhập URL hình ảnh background"
+            value={newWorkspace.background}
+            onChange={(e) => setNewWorkspace({ ...newWorkspace, background: e.target.value })}
+            placeholder="https://example.com/image.jpg"
+            sx={{
+              "& .MuiOutlinedInput-root": {
+                borderRadius: "12px",
+                bgcolor: isDarkMode ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.02)",
+              },
+            }}
           />
-          {error && !error.includes("Tên") && (
-            <Typography color="error" variant="body2" sx={{ mt: 1 }}>
-              {error}
-            </Typography>
-          )}
         </DialogContent>
-        <DialogActions>
+        <DialogActions sx={{ p: 3, borderTop: `1px solid ${isDarkMode ? "#4A5568" : "#E2E8F0"}` }}>
           <Button
             onClick={() => {
               setOpenCreateDialog(false);
               setError(null);
+              setNewWorkspace({ name: "", description: "", isPublic: false, background: "" });
             }}
             disabled={createLoading}
+            sx={{
+              color: isDarkMode ? "#A0AEC0" : "#4A5568",
+              borderRadius: "12px",
+              textTransform: "none",
+              px: 3,
+            }}
           >
-            Hủy
+            Cancel
           </Button>
           <Button
             onClick={handleCreateWorkspace}
             variant="contained"
-            disabled={createLoading || !newWorkspaceName.trim()}
-            startIcon={createLoading ? <CircularProgress size={16} /> : null}
+            disabled={createLoading || !newWorkspace.name.trim()}
+            startIcon={createLoading ? <CircularProgress size={16} /> : <AddIcon />}
+            sx={{
+              bgcolor: isDarkMode ? "#667EEA" : "#3182CE",
+              "&:hover": {
+                bgcolor: isDarkMode ? "#7F9CF5" : "#2B6CB0",
+              },
+              "&:disabled": {
+                bgcolor: isDarkMode ? "#4A5568" : "#CBD5E0",
+              },
+              borderRadius: "12px",
+              textTransform: "none",
+              px: 3,
+              fontWeight: 600,
+            }}
           >
-            {createLoading ? "Đang tạo..." : "Tạo"}
+            {createLoading ? "Creating..." : "Create Workspace"}
           </Button>
         </DialogActions>
       </Dialog>

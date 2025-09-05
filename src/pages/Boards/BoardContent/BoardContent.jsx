@@ -1,5 +1,4 @@
-import Box from "@mui/material/Box";
-import ListColumns from "./ListColumns/ListColumns";
+import { useState, useEffect, useContext, useCallback, useRef } from "react";
 import {
   DndContext,
   PointerSensor,
@@ -12,14 +11,15 @@ import {
   closestCorners,
 } from "@dnd-kit/core";
 import { mapOrder } from "../../../utils/softs.js";
-import { useEffect, useState, useCallback, useRef, useContext } from "react";
-import Column from "./ListColumns/Column/Column.jsx";
-import Cards from "./ListColumns/Column/ListCards/Cards/Cards.jsx";
 import { cloneDeep } from "lodash";
 import { arrayMove } from "@dnd-kit/sortable";
 import { toast } from "react-toastify";
 import axios from "axios";
 import { SocketContext } from "../../../context/SocketContext.jsx";
+import Box from "@mui/material/Box";
+import ListColumns from "./ListColumns/ListColumns";
+import Column from "./ListColumns/Column/Column.jsx";
+import Cards from "./ListColumns/Column/ListCards/Cards/Cards.jsx";
 
 const ACTIVE_DRAG_ITEM_TYPE = {
   COLUMN: "ACTIVE_DRAG_ITEM_TYPE_COLUMN",
@@ -30,7 +30,20 @@ function BoardContent({ board, boardMembers, setBoardMembers }) {
   const { socket, socketReady } = useContext(SocketContext);
   const [orderedColumnsState, setOrderedColumnsState] = useState([]);
   const [activeDragItem, setActiveDragItem] = useState(null);
+  const [backgroundError, setBackgroundError] = useState(false);
   const lastOverId = useRef(null);
+
+  // Kiểm tra lỗi tải ảnh background
+  useEffect(() => {
+    if (board?.background && board.background.startsWith("http")) {
+      const img = new Image();
+      img.src = board.background;
+      img.onload = () => setBackgroundError(false);
+      img.onerror = () => setBackgroundError(true);
+    } else {
+      setBackgroundError(false);
+    }
+  }, [board?.background]);
 
   // Tham gia phòng socket và xử lý các sự kiện
   useEffect(() => {
@@ -464,8 +477,6 @@ function BoardContent({ board, boardMembers, setBoardMembers }) {
         }
       }
 
-      ლ;
-
       setActiveDragItem(null);
     },
     [
@@ -507,25 +518,85 @@ function BoardContent({ board, boardMembers, setBoardMembers }) {
       <Box
         sx={{
           width: "100%",
-          height: (theme) => theme.trelloCustom.boardContentHeight,
+          height: "calc(100vh - 64px)",  // Điều chỉnh chiều cao để tránh khoảng trắng (giả sử BoardBar cao 64px)
           display: "flex",
-          bgcolor: (theme) =>
-            theme.palette.mode === "dark" ? "#34495e" : "#1976d2",
+          bgcolor: board?.background && !backgroundError && board.background.startsWith("http")
+            ? "transparent"
+            : (theme) => (theme.palette.mode === "dark" ? "#34495e" : "#1976d2"),
+          backgroundImage:
+            board?.background && !backgroundError && board.background.startsWith("http")
+              ? `url(${board.background})`
+              : "none",
+          backgroundSize: "cover",  // Giữ tỷ lệ ảnh, tránh vỡ
+          backgroundPosition: "center",
+          backgroundRepeat: "no-repeat",
+          backgroundAttachment: "fixed",  // Giữ ảnh cố định khi scroll
           p: "10px 0",
           position: "relative",
           overflowX: "auto",
+          overflowY: "hidden",  // Ngăn scroll dọc để tránh khoảng trắng
+          "&::-webkit-scrollbar": {
+            height: "8px",
+          },
+          "&::-webkit-scrollbar-track": {
+            background: (theme) =>
+              theme.palette.mode === "dark" ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.05)",
+            borderRadius: "10px",
+          },
+          "&::-webkit-scrollbar-thumb": {
+            background: (theme) =>
+              theme.palette.mode === "dark" ? "#667EEA" : "#3182CE",
+            borderRadius: "10px",
+            "&:hover": {
+              background: (theme) =>
+                theme.palette.mode === "dark" ? "#7F9CF5" : "#2B6CB0",
+            },
+          },
         }}
       >
-        <ListColumns columns={orderedColumnsState} />
-        <DragOverlay dropAnimation={dropAnimation}>
-          {!activeDragItem && null}
-          {activeDragItem?.type === ACTIVE_DRAG_ITEM_TYPE.COLUMN && (
-            <Column column={activeDragItem.data} />
-          )}
-          {activeDragItem?.type === ACTIVE_DRAG_ITEM_TYPE.CARD && (
-            <Cards card={activeDragItem.data} />
-          )}
-        </DragOverlay>
+        {/* Lớp phủ để đảm bảo văn bản dễ đọc */}
+        {board?.background && board.background.startsWith("http") && (
+          <>
+            <Box
+              sx={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                bgcolor: (theme) =>
+                  theme.palette.mode === "dark" ? "rgba(0,0,0,0.3)" : "rgba(255,255,255,0.4)",
+                zIndex: 0,
+              }}
+            />
+            <img
+              src={board.background}
+              alt="Board background"
+              style={{ display: "none" }}
+              onError={() => setBackgroundError(true)}
+            />
+          </>
+        )}
+        <Box
+          sx={{
+            position: "relative",
+            zIndex: 1,
+            display: "flex",
+            height: "100%",
+            width: "100%",
+          }}
+        >
+          <ListColumns columns={orderedColumnsState} />
+          <DragOverlay dropAnimation={dropAnimation}>
+            {!activeDragItem && null}
+            {activeDragItem?.type === ACTIVE_DRAG_ITEM_TYPE.COLUMN && (
+              <Column column={activeDragItem.data} />
+            )}
+            {activeDragItem?.type === ACTIVE_DRAG_ITEM_TYPE.CARD && (
+              <Cards card={activeDragItem.data} />
+            )}
+          </DragOverlay>
+        </Box>
       </Box>
     </DndContext>
   );

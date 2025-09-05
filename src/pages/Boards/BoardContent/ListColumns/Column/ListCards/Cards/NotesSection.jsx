@@ -8,13 +8,15 @@ import {
   Button,
   CircularProgress,
   IconButton,
-} from "@mui/material";
-import NoteIcon from "@mui/icons-material/Note";
-import DeleteIcon from "@mui/icons-material/Delete";
-import { useTheme } from "@mui/material/styles";
+} from '@mui/material';
+import NoteIcon from '@mui/icons-material/Note';
+import DeleteIcon from '@mui/icons-material/Delete';
+import { useTheme } from '@mui/material/styles';
+import { useMemo } from 'react';
+import { normalizeNotes } from "../../../../../../../components/utils/normalize";
 
 const NotesSection = ({
-  notes,
+  notes = [],
   note,
   setNote,
   loading,
@@ -25,36 +27,41 @@ const NotesSection = ({
   isBoardOwner,
 }) => {
   const theme = useTheme();
-  const isDarkMode = theme.palette.mode === "dark";
+  const isDarkMode = theme.palette.mode === 'dark';
 
-  // Filter out deleted notes
-  const visibleNotes = notes.filter((n) => !n.isDeleted);
+  // Sử dụng normalizeNotes trực tiếp để xử lý tất cả ghi chú, bao gồm unknown user
+  const visibleNotes = useMemo(() => normalizeNotes(notes), [notes]);
+
+  const canDeleteNote = (noteCreatorId) => {
+    // Nếu noteCreatorId null hoặc không hợp lệ, chỉ owner mới xóa được
+    if (!currentUserId) return false;
+    return currentUserId === noteCreatorId || isBoardOwner;
+  };
 
   return (
     <Box sx={{ mb: 3 }}>
       <Typography
         variant="h6"
         sx={{
-          color: isDarkMode
-            ? theme.palette.grey[200]
-            : theme.palette.text.primary,
+          color: isDarkMode ? theme.palette.grey[200] : theme.palette.text.primary,
           mb: 1,
         }}
       >
         Ghi chú
       </Typography>
-      {visibleNotes?.length > 0 ? (
+
+      {visibleNotes.length > 0 ? (
         <List dense>
-          {visibleNotes.map((note, index) => (
+          {visibleNotes.map((noteItem, index) => (
             <ListItem
-              key={note._id || index}
+              key={noteItem._id || `note-${index}`}
               sx={{ py: 0.5 }}
               secondaryAction={
-                (currentUserId === note.createdBy?._id || isBoardOwner) && (
+                canDeleteNote(noteItem.createdBy?._id) && (
                   <IconButton
                     edge="end"
                     aria-label="hide"
-                    onClick={() => handleHideNote(note._id)}
+                    onClick={() => handleHideNote(noteItem._id)}
                     disabled={loading.note}
                     sx={{
                       color: isDarkMode
@@ -68,7 +75,7 @@ const NotesSection = ({
               }
             >
               <ListItemText
-                primary={note.content}
+                primary={noteItem.content || 'Ghi chú không có nội dung'}
                 primaryTypographyProps={{
                   color: isDarkMode
                     ? theme.palette.grey[200]
@@ -76,15 +83,18 @@ const NotesSection = ({
                 }}
                 secondary={
                   <>
-                    {new Date(note.createdAt).toLocaleString()} -{" "}
+                    {noteItem.createdAt && noteItem.createdAt !== 'Unknown time'
+                      ? new Date(noteItem.createdAt).toLocaleString()
+                      : 'Thời gian không xác định'}
+                    {' - '}
                     <span
                       style={{
-                        textDecoration: !isMemberInBoard(note.createdBy?._id)
-                          ? "line-through"
-                          : "none",
+                        textDecoration: isMemberInBoard(noteItem.createdBy?._id)
+                          ? 'none'
+                          : 'line-through',
                       }}
                     >
-                      {note.createdBy?.fullName || "Không xác định"}
+                      {noteItem.createdBy?.fullName || 'Người dùng không xác định'}
                     </span>
                   </>
                 }
@@ -109,7 +119,8 @@ const NotesSection = ({
           Chưa có ghi chú nào.
         </Typography>
       )}
-      <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: 2 }}>
+
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 2 }}>
         <NoteIcon
           fontSize="small"
           sx={{
@@ -127,26 +138,26 @@ const NotesSection = ({
           variant="outlined"
           disabled={loading.note}
           sx={{
-            "& .MuiOutlinedInput-root": {
+            '& .MuiOutlinedInput-root': {
               bgcolor: isDarkMode
-                ? "rgba(255, 255, 255, 0.05)"
+                ? 'rgba(255, 255, 255, 0.05)'
                 : theme.palette.background.default,
               borderRadius: 2,
-              "& fieldset": {
+              '& fieldset': {
                 borderColor: isDarkMode
                   ? theme.palette.grey[600]
                   : theme.palette.divider,
               },
-              "&:hover fieldset": {
+              '&:hover fieldset': {
                 borderColor: isDarkMode
                   ? theme.palette.grey[500]
                   : theme.palette.text.secondary,
               },
-              "&.Mui-focused fieldset": {
+              '&.Mui-focused fieldset': {
                 borderColor: theme.palette.primary.main,
               },
             },
-            "& .MuiInputBase-input": {
+            '& .MuiInputBase-input': {
               color: isDarkMode
                 ? theme.palette.grey[200]
                 : theme.palette.text.primary,
@@ -157,18 +168,18 @@ const NotesSection = ({
           variant="contained"
           size="small"
           onClick={handleAddNote}
-          disabled={loading.note || !note.trim()}
+          disabled={loading.note || !note?.trim()}
           sx={{
             bgcolor: theme.palette.primary.main,
-            "&:hover": {
+            '&:hover': {
               bgcolor: theme.palette.primary.dark,
             },
-            "&:disabled": {
+            '&:disabled': {
               bgcolor: theme.palette.grey[400],
             },
           }}
         >
-          {loading.note ? <CircularProgress size={20} /> : "Thêm"}
+          {loading.note ? <CircularProgress size={20} /> : 'Thêm'}
         </Button>
       </Box>
     </Box>
