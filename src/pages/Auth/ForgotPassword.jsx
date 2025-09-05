@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Box,
   Button,
@@ -21,6 +21,10 @@ const ForgotPassword = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const navigate = useNavigate();
+
+  useEffect(() => {
+    localStorage.removeItem("token");
+  }, []);
 
   const transition = { duration: 0.5, ease: "easeInOut" };
 
@@ -132,7 +136,7 @@ const ForgotPassword = () => {
         err.response?.status === 401
           ? "OTP không hợp lệ hoặc đã hết hạn. Vui lòng thử gửi lại OTP!"
           : err.response?.data?.message ||
-            "Không thể đặt lại mật khẩu. Vui lòng thử lại!";
+          "Không thể đặt lại mật khẩu. Vui lòng thử lại!";
       setError(message);
       toast.error(message);
     } finally {

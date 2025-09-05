@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { Routes, Route, useLocation } from "react-router-dom";
 import { Box } from "@mui/material";
 import Board from "./pages/Boards/Boards";
 import HomePage from "./pages/HomePage/HomePage";
@@ -10,23 +10,30 @@ import ForgotPassword from "./pages/Auth/ForgotPassword";
 import VerifyOTPPage from "./pages/Auth/VerifyOTPPage";
 import WorkspaceMembersPage from "./pages/Workspace/WorkspaceMembersPage.jsx";
 import WorkspaceSettingsPage from "./pages/Workspace/WorkspaceSettingsPage.jsx";
-import WorkspaceHighlightsPage from "./pages/Workspace/WorkspaceHighlightsPage.jsx"
+import WorkspaceHighlightsPage from "./pages/Workspace/WorkspaceHighlightsPage.jsx";
 
 function App() {
+  const location = useLocation();
+  const publicRoutes = ["/register", "/login", "/forgot-password", "/verify-otp"];
+
+  // Chỉ hiển thị AppBar nếu không phải route công khai
+  const showAppBar = !publicRoutes.includes(location.pathname.toLowerCase());
+
   return (
-    <Router>
-      <AppBar />
+    <>
+      {showAppBar && <AppBar />}
       <Box
         sx={{
-          paddingTop: (theme) => theme.trelloCustom.appBarHeight,
-          minHeight: "calc(100vh - 64px)",
+          paddingTop: (theme) =>
+            showAppBar ? theme.trelloCustom.appBarHeight : 0,
+          minHeight: "100vh",
           overflow: "auto",
         }}
       >
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/boards" element={<HomePage />} />
-          <Route path="/Register" element={<RegisterPage />} />
+          <Route path="/register" element={<RegisterPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/board" element={<Board />} />
           <Route path="/login" element={<LoginPage />} />
@@ -38,7 +45,7 @@ function App() {
           <Route path="/workspace/:workspaceId/board/:boardId" element={<Board />} />
         </Routes>
       </Box>
-    </Router>
+    </>
   );
 }
 

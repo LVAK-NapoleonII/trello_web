@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect } from "react";
+import { useLocation } from "react-router-dom"; // Thêm useLocation
 import axios from "axios";
 import { toast } from "react-toastify";
 
@@ -10,8 +11,24 @@ export const AuthProvider = ({ children }) => {
     return storedUser ? JSON.parse(storedUser) : null;
   });
   const [loading, setLoading] = useState(true);
+  const location = useLocation(); // Lấy thông tin route hiện tại
+
+  // Danh sách các route không cần xác thực
+  const publicRoutes = [
+    "/Register",
+    "/login",
+    "/forgot-password",
+    "/verify-otp",
+  ];
 
   useEffect(() => {
+    // Nếu là route công khai, bỏ qua xác thực và đặt loading thành false
+    if (publicRoutes.includes(location.pathname)) {
+      console.log("AuthContext: Public route detected, skipping token verification");
+      setLoading(false);
+      return;
+    }
+
     const verifyToken = async (retries = 3, delay = 1000) => {
       const token = localStorage.getItem("token");
       console.log("AuthContext: Verifying token:", {
@@ -44,7 +61,6 @@ export const AuthProvider = ({ children }) => {
           const userData = response.data.user;
           console.log("AuthContext: User profile fetched:", userData);
 
-          // Kiểm tra _id hoặc id
           const userId = userData._id || userData.id;
           if (!userId) {
             console.error(
@@ -56,7 +72,6 @@ export const AuthProvider = ({ children }) => {
             );
           }
 
-          // Chuẩn hóa dữ liệu: đảm bảo userData có _id
           const normalizedUserData = {
             ...userData,
             _id: userId,
@@ -104,7 +119,6 @@ export const AuthProvider = ({ children }) => {
                 userData
               );
 
-              // Kiểm tra _id hoặc id sau khi làm mới token
               const userId = userData._id || userData.id;
               if (!userId) {
                 console.error(
@@ -116,7 +130,6 @@ export const AuthProvider = ({ children }) => {
                 );
               }
 
-              // Chuẩn hóa dữ liệu
               const normalizedUserData = {
                 ...userData,
                 _id: userId,
@@ -157,11 +170,10 @@ export const AuthProvider = ({ children }) => {
     };
 
     verifyToken();
-  }, []);
+  }, [location.pathname]); // Thêm location.pathname vào dependency array
 
   const login = async (userData, token) => {
     console.log("AuthContext: Logging in user:", userData);
-    // Kiểm tra _id hoặc id
     const userId = userData._id || userData.id;
     if (!userId) {
       console.error("AuthContext: Login user data missing _id or id", userData);
@@ -169,7 +181,6 @@ export const AuthProvider = ({ children }) => {
       return;
     }
 
-    // Chuẩn hóa dữ liệu
     const normalizedUserData = {
       ...userData,
       _id: userId,
@@ -180,6 +191,7 @@ export const AuthProvider = ({ children }) => {
     localStorage.setItem("user", JSON.stringify(normalizedUserData));
     toast.success("Đăng nhập thành công!");
   };
+
   const updateUser = (updatedUserData) => {
     console.log("AuthContext: Updating user:", updatedUserData);
     const normalizedUserData = {
@@ -189,6 +201,7 @@ export const AuthProvider = ({ children }) => {
     setUser(normalizedUserData);
     localStorage.setItem("user", JSON.stringify(normalizedUserData));
   };
+
   const logout = async () => {
     console.log("AuthContext: Logging out user");
     const token = localStorage.getItem("token");
