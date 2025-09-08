@@ -119,6 +119,7 @@ function CardDetails({ card, setCards, setColumns, expanded, setExpanded, boardM
               isMemberInBoard={isMemberInBoard}
               currentUserId={currentUserId}
               isBoardOwner={isBoardOwner}
+              card={card}
             />
             <AddMemberDialog
               open={openAddMemberDialog}

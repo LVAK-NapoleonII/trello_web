@@ -14,7 +14,7 @@ import CommentIcon from '@mui/icons-material/Comment';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { useTheme } from '@mui/material/styles';
 import { useMemo } from 'react';
-import { normalizeComments } from '../../../../../../../components/utils/normalize'; // Sửa import
+import { normalizeComments } from '../../../../../../../components/utils/normalize';
 
 const CommentsSection = ({
   comments = [],
@@ -26,10 +26,34 @@ const CommentsSection = ({
   isMemberInBoard,
   currentUserId,
   isBoardOwner,
+  card,
 }) => {
   const theme = useTheme();
   const isDarkMode = theme.palette.mode === 'dark';
-
+  const isCardMember = card?.members?.some((m) => m._id.toString() === currentUserId) || false;
+  if (!isCardMember && !isBoardOwner) {
+    return (
+      <Box sx={{ mb: 3 }}>
+        <Typography
+          variant="h6"
+          sx={{
+            color: isDarkMode ? theme.palette.grey[200] : theme.palette.text.primary,
+            mb: 1,
+          }}
+        >
+          Bình luận
+        </Typography>
+        <Typography
+          sx={{
+            color: isDarkMode ? theme.palette.grey[400] : theme.palette.text.secondary,
+            mb: 2,
+          }}
+        >
+          Bạn không phải thành viên của thẻ này để xem hoặc thêm bình luận.
+        </Typography>
+      </Box>
+    );
+  }
   // Sử dụng normalizeComments trực tiếp để xử lý tất cả bình luận, bao gồm unknown user
   const visibleComments = useMemo(() => normalizeComments(comments), [comments]);
 
