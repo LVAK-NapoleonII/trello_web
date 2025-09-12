@@ -17,63 +17,105 @@ import {
   Fade,
   Grow,
   Tooltip,
+  Collapse,
 } from "@mui/material";
 import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import { toast } from "react-toastify";
 import { useTheme } from "@mui/material/styles";
 
-// Object chứa các style tái sử dụng
+// Object chứa các style tái sử dụng - Improved version
 const getStyles = (theme, isDarkMode) => ({
   container: {
-    mb: 4,
-    px: { xs: 2, sm: 3 },
-    py: 2,
+    mb: 2,
+    px: { xs: 1, sm: 2 },
+    py: 1,
   },
   sectionTitle: {
-    fontWeight: 700,
+    fontWeight: 600,
     color: isDarkMode ? theme.palette.grey[100] : theme.palette.text.primary,
-    mb: 4,
-    letterSpacing: "-0.5px",
-    fontSize: { xs: "1.5rem", sm: "1.75rem" },
+    mb: 1,
+    letterSpacing: "-0.25px",
+    fontSize: { xs: "1.1rem", sm: "1.25rem" },
   },
   checklistBox: {
-    mb: 4,
-    p: { xs: 2, sm: 3 },
+    mb: 2,
+    p: { xs: 1.5, sm: 2 },
     bgcolor: isDarkMode ? "#1e1e2f" : "#ffffff",
-    borderRadius: 3,
-    boxShadow: isDarkMode ? "0 6px 20px rgba(0, 0, 0, 0.3)" : "0 6px 20px rgba(0, 0, 0, 0.08)",
-    transition: "all 0.3s ease",
+    borderRadius: 2,
+    boxShadow: isDarkMode ? "0 4px 12px rgba(0, 0, 0, 0.25)" : "0 4px 12px rgba(0, 0, 0, 0.06)",
+    transition: "all 0.2s ease",
     "&:hover": {
-      transform: "translateY(-4px)",
-      boxShadow: isDarkMode ? "0 8px 24px rgba(0, 0, 0, 0.4)" : "0 8px 24px rgba(0, 0, 0, 0.12)",
+      transform: "translateY(-2px)",
+      boxShadow: isDarkMode ? "0 6px 16px rgba(0, 0, 0, 0.3)" : "0 6px 16px rgba(0, 0, 0, 0.08)",
     },
   },
   textField: {
     "& .MuiOutlinedInput-root": {
       bgcolor: isDarkMode ? "#2a2a3d" : "#f7f7f7",
-      borderRadius: 2,
+      borderRadius: 1.5,
       "& fieldset": { borderColor: isDarkMode ? "#555" : "#ddd" },
       "&:hover fieldset": { borderColor: theme.palette.primary.main },
       "&.Mui-focused fieldset": { borderColor: theme.palette.primary.main },
+      fontSize: "0.875rem",
     },
   },
   button: {
-    borderRadius: 2,
+    borderRadius: 1.5,
     bgcolor: theme.palette.primary.main,
     "&:hover": { bgcolor: theme.palette.primary.dark },
     textTransform: "none",
-    px: 3,
-    py: 1,
-    fontSize: "0.9rem",
+    px: 2,
+    py: 0.75,
+    fontSize: "0.8rem",
+    minHeight: "auto",
   },
   dialogPaper: {
-    borderRadius: 3,
+    borderRadius: 2,
     bgcolor: isDarkMode ? "#1e1e2f" : "#ffffff",
-    boxShadow: isDarkMode ? "0 8px 24px rgba(0, 0, 0, 0.3)" : "0 8px 24px rgba(0, 0, 0, 0.1)",
-    p: 2,
+    boxShadow: isDarkMode ? "0 6px 16px rgba(0, 0, 0, 0.25)" : "0 6px 16px rgba(0, 0, 0, 0.08)",
+    p: 1.5,
+  },
+  // New styles for improved layout
+  listItem: {
+    py: 0.75,
+    px: 1,
+    borderRadius: 1.5,
+    mb: 0.75,
+    "&:hover": { bgcolor: isDarkMode ? "#2a2a3d" : "#f7f7f7" },
+    transition: "background-color 0.15s",
+    display: "flex",
+    alignItems: "flex-start",
+    gap: 1,
+  },
+  itemActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: 0.25,
+    ml: "auto",
+    flexShrink: 0,
+  },
+  itemContent: {
+    flex: 1,
+    minWidth: 0, // Allow text truncation
+  },
+  checklistHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    mb: 1.5,
+    cursor: "pointer",
+    py: 0.5,
+  },
+  checklistActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: 0.5,
+    ml: 1,
   },
 });
 
@@ -102,11 +144,13 @@ const ChecklistsSection = ({
   const [viewItem, setViewItem] = useState({ open: false, title: "", content: "" });
   const [checklistInputs, setChecklistInputs] = useState({});
   const [visibleItems, setVisibleItems] = useState({});
+  const [isSectionCollapsed, setIsSectionCollapsed] = useState(false);
+  const [collapsedChecklists, setCollapsedChecklists] = useState({});
 
   // Lọc checklists
   const filteredChecklists = Array.isArray(checklists) ? checklists.filter((c) => !c.isDeleted) : [];
 
-  // Đồng bộ inputs và visible items
+  // Đồng bộ inputs, visible items, và trạng thái collapsed
   useEffect(() => {
     setChecklistInputs((prev) => {
       const newInputs = { ...prev };
@@ -119,9 +163,19 @@ const ChecklistsSection = ({
     setVisibleItems((prev) => {
       const newVisible = { ...prev };
       filteredChecklists.forEach((checklist) => {
-        newVisible[checklist._id] = newVisible[checklist._id] || 5;
+        newVisible[checklist._id] = newVisible[checklist._id] || 3;
       });
       return newVisible;
+    });
+
+    setCollapsedChecklists((prev) => {
+      const newCollapsed = { ...prev };
+      filteredChecklists.forEach((checklist) => {
+        if (newCollapsed[checklist._id] === undefined) {
+          newCollapsed[checklist._id] = false;
+        }
+      });
+      return newCollapsed;
     });
   }, [filteredChecklists]);
 
@@ -156,7 +210,7 @@ const ChecklistsSection = ({
       ...prev,
       [checklistId]: {
         ...prev[checklistId],
-        [field]: field === "content" ? value.slice(0, 500) : value,
+        [field]: field === "content" ? value.slice(0, 300) : value,
       },
     }));
   };
@@ -165,6 +219,17 @@ const ChecklistsSection = ({
     setChecklistInputs((prev) => ({
       ...prev,
       [checklistId]: { title: "", content: "" },
+    }));
+  };
+
+  const toggleSectionCollapse = () => {
+    setIsSectionCollapsed((prev) => !prev);
+  };
+
+  const toggleChecklistCollapse = (checklistId) => {
+    setCollapsedChecklists((prev) => ({
+      ...prev,
+      [checklistId]: !prev[checklistId],
     }));
   };
 
@@ -199,7 +264,7 @@ const ChecklistsSection = ({
       return;
     }
     try {
-      await handleUpdateChecklistItem(editItem.checklistId, editItem.itemId, {
+      await handleEditChecklistItem(editItem.checklistId, editItem.itemId, {
         title: editItem.title,
         content: editItem.content,
       });
@@ -243,364 +308,433 @@ const ChecklistsSection = ({
 
   return (
     <Box sx={styles.container}>
-      <Typography variant="h5" sx={styles.sectionTitle}>
-        Checklists
-      </Typography>
-
-      {/* Danh sách checklists */}
-      {filteredChecklists.length > 0 ? (
-        <Fade in timeout={600}>
-          <Box>
-            {filteredChecklists.map((checklist) => {
-              if (!checklist || typeof checklist !== "object") {
-                return (
-                  <Typography
-                    key={checklist?._id || Math.random()}
-                    color="error"
-                    sx={{ p: 2, bgcolor: isDarkMode ? "#3f3f3f" : "#ffebee", borderRadius: 2, mb: 2 }}
-                  >
-                    Checklist không hợp lệ
-                  </Typography>
-                );
-              }
-
-              const filteredItems = Array.isArray(checklist.items)
-                ? checklist.items.filter((item) => !item.isDeleted)
-                : [];
-              const inputs = checklistInputs[checklist._id] || { title: "", content: "" };
-              const visibleCount = visibleItems[checklist._id] || 5;
-
-              return (
-                <Grow in timeout={400} key={checklist._id}>
-                  <Box sx={styles.checklistBox}>
-                    {/* Tiêu đề checklist */}
-                    <Box sx={{ display: "flex", alignItems: "center", mb: 3 }}>
-                      {editChecklistId === checklist._id ? (
-                        <Box sx={{ display: "flex", alignItems: "center", gap: 2, flex: 1 }}>
-                          <TextField
-                            fullWidth
-                            size="small"
-                            value={editChecklistTitle}
-                            onChange={(e) => setEditChecklistTitle(e.target.value)}
-                            placeholder="Nhập tiêu đề checklist..."
-                            variant="outlined"
-                            disabled={loading.checklist}
-                            sx={styles.textField}
-                          />
-                          <Button
-                            variant="contained"
-                            size="small"
-                            onClick={() => handleSubmitEditChecklist(checklist._id)}
-                            disabled={loading.checklist || !editChecklistTitle.trim()}
-                            sx={styles.button}
-                          >
-                            Lưu
-                          </Button>
-                          <Button
-                            variant="outlined"
-                            size="small"
-                            onClick={() => {
-                              setEditChecklistId(null);
-                              setEditChecklistTitle("");
-                            }}
-                            sx={{
-                              borderRadius: 2,
-                              borderColor: isDarkMode ? "#555" : "#ddd",
-                              color: isDarkMode ? theme.palette.grey[400] : theme.palette.text.secondary,
-                              textTransform: "none",
-                            }}
-                          >
-                            Hủy
-                          </Button>
-                        </Box>
-                      ) : (
-                        <>
-                          <Typography
-                            variant="h6"
-                            sx={{
-                              flex: 1,
-                              fontWeight: 600,
-                              color: isDarkMode ? theme.palette.grey[100] : theme.palette.text.primary,
-                              fontSize: { xs: "1.1rem", sm: "1.25rem" },
-                              wordBreak: "break-word",
-                            }}
-                          >
-                            {checklist.title || "Checklist không có tiêu đề"}
-                          </Typography>
-                          <IconButton
-                            onClick={() => openEditChecklist(checklist._id, checklist.title)}
-                            size="small"
-                            sx={{ "&:hover": { bgcolor: isDarkMode ? "#3f3f3f" : "#f0f0f0" } }}
-                          >
-                            <EditOutlinedIcon fontSize="small" />
-                          </IconButton>
-                          <IconButton
-                            onClick={() => handleConfirmDelete("checklist", checklist._id)}
-                            size="small"
-                            sx={{ "&:hover": { bgcolor: isDarkMode ? "#3f3f3f" : "#f0f0f0" } }}
-                          >
-                            <DeleteOutlineIcon fontSize="small" color="error" />
-                          </IconButton>
-                        </>
-                      )}
-                    </Box>
-
-                    {/* Thanh tiến độ */}
-                    {filteredItems.length > 0 && (
-                      <Box sx={{ mb: 3 }}>
-                        <LinearProgress
-                          variant="determinate"
-                          value={getProgress(checklist.items)}
-                          sx={{
-                            height: 8,
-                            borderRadius: 4,
-                            bgcolor: isDarkMode ? "#3f3f3f" : "#e0e0e0",
-                            "& .MuiLinearProgress-bar": { bgcolor: theme.palette.success.main, borderRadius: 4 },
-                          }}
-                        />
-                        <Typography
-                          variant="caption"
-                          sx={{
-                            mt: 1,
-                            color: isDarkMode ? theme.palette.grey[400] : theme.palette.text.secondary,
-                            fontSize: "0.85rem",
-                          }}
-                        >
-                          {Math.round(getProgress(checklist.items))}% hoàn thành
-                        </Typography>
-                      </Box>
-                    )}
-
-                    {/* Danh sách items */}
-                    {filteredItems.length > 0 ? (
-                      <List dense sx={{ mb: 2 }}>
-                        {filteredItems.slice(0, visibleCount).map((item) => (
-                          <ListItem
-                            key={item._id}
-                            sx={{
-                              py: { xs: 0.5, sm: 1 },
-                              px: { xs: 1, sm: 2 },
-                              borderRadius: 2,
-                              mb: 1,
-                              "&:hover": { bgcolor: isDarkMode ? "#2a2a3d" : "#f7f7f7" },
-                              transition: "background-color 0.2s",
-                              flexDirection: "column",
-                              alignItems: "flex-start",
-                            }}
-                            secondaryAction={
-                              <Box sx={{ display: "flex", gap: { xs: 0.5, sm: 1 }, alignSelf: "flex-end" }}>
-                                <Checkbox
-                                  edge="end"
-                                  checked={item.completed || false}
-                                  onChange={() => handleToggleChecklistItem(checklist._id, item._id, !item.completed)}
-                                  disabled={loading.checklistToggle}
-                                  icon={<CheckCircleOutlineIcon />}
-                                  checkedIcon={<CheckCircleOutlineIcon color="success" />}
-                                  sx={{ p: 0.5 }}
-                                />
-                                <IconButton
-                                  onClick={() => openEditItem(checklist._id, item._id, item.title, item.content)}
-                                  size="small"
-                                  sx={{ "&:hover": { bgcolor: isDarkMode ? "#3f3f3f" : "#f0f0f0" } }}
-                                >
-                                  <EditOutlinedIcon fontSize="small" />
-                                </IconButton>
-                                <IconButton
-                                  onClick={() => handleConfirmDelete("item", checklist._id, item._id)}
-                                  size="small"
-                                  sx={{ "&:hover": { bgcolor: isDarkMode ? "#3f3f3f" : "#f0f0f0" } }}
-                                >
-                                  <DeleteOutlineIcon fontSize="small" color="error" />
-                                </IconButton>
-                              </Box>
-                            }
-                          >
-                            <Box sx={{ display: "flex", alignItems: "center", width: "100%", mb: 0.5 }}>
-                              <Typography
-                                sx={{
-                                  flex: 1,
-                                  fontWeight: 500,
-                                  fontSize: { xs: "0.85rem", sm: "0.95rem" },
-                                  color: isDarkMode ? theme.palette.grey[200] : theme.palette.text.primary,
-                                  textDecoration: item.completed ? "line-through" : "none",
-                                  cursor: "pointer",
-                                  wordBreak: "break-word",
-                                }}
-                                onClick={() => openViewItem(item.title, item.content)}
-                              >
-                                {item.title || "Item không có tiêu đề"}
-                              </Typography>
-                            </Box>
-                            <Tooltip title={item.content || "Không có nội dung"} placement="top">
-                              <Typography
-                                sx={{
-                                  fontSize: { xs: "0.75rem", sm: "0.85rem" },
-                                  color: isDarkMode ? theme.palette.grey[400] : theme.palette.text.secondary,
-                                  display: "-webkit-box",
-                                  WebkitLineClamp: 2,
-                                  WebkitBoxOrient: "vertical",
-                                  overflow: "hidden",
-                                  textOverflow: "ellipsis",
-                                  maxWidth: "90%",
-                                  cursor: "pointer",
-                                  wordBreak: "break-word",
-                                }}
-                                onClick={() => openViewItem(item.title, item.content)}
-                              >
-                                {item.content?.length > 50 ? `${item.content.slice(0, 50)}...` : item.content || "Không có nội dung"}
-                              </Typography>
-                            </Tooltip>
-                          </ListItem>
-                        ))}
-                        {filteredItems.length > visibleCount && (
-                          <Button
-                            onClick={() =>
-                              setVisibleItems((prev) => ({
-                                ...prev,
-                                [checklist._id]: prev[checklist._id] + 5,
-                              }))
-                            }
-                            sx={{
-                              mt: 2,
-                              color: theme.palette.primary.main,
-                              textTransform: "none",
-                              mx: "auto",
-                              display: "block",
-                            }}
-                          >
-                            Tải thêm
-                          </Button>
-                        )}
-                      </List>
-                    ) : (
-                      <Typography
-                        sx={{
-                          color: isDarkMode ? theme.palette.grey[400] : theme.palette.text.secondary,
-                          p: 2,
-                          fontStyle: "italic",
-                        }}
-                      >
-                        Không có item trong checklist này.
-                      </Typography>
-                    )}
-
-                    {/* Thêm item mới */}
-                    <Box sx={{ mt: 3 }}>
-                      <TextField
-                        fullWidth
-                        size="small"
-                        placeholder="Thêm tiêu đề item..."
-                        value={inputs.title || ""}
-                        onChange={(e) => handleChecklistInputChange(checklist._id, "title", e.target.value)}
-                        variant="outlined"
-                        disabled={loading.checklistItem}
-                        error={inputs.title !== "" && !inputs.title?.trim()}
-                        helperText={inputs.title !== "" && !inputs.title?.trim() ? "Tiêu đề không được để trống" : ""}
-                        sx={styles.textField}
-                      />
-                      <TextField
-                        fullWidth
-                        size="small"
-                        placeholder="Thêm nội dung item..."
-                        value={inputs.content || ""}
-                        onChange={(e) => handleChecklistInputChange(checklist._id, "content", e.target.value)}
-                        variant="outlined"
-                        multiline
-                        rows={2}
-                        disabled={loading.checklistItem}
-                        error={inputs.content !== "" && !inputs.content?.trim()}
-                        helperText={inputs.content !== "" && !inputs.content?.trim() ? "Nội dung không được để trống" : ""}
-                        inputProps={{ maxLength: 500 }}
-                        sx={{ ...styles.textField, mt: 2 }}
-                      />
-                      <Button
-                        variant="contained"
-                        size="medium"
-                        onClick={() => handleAddItem(checklist._id, inputs)}
-                        disabled={loading.checklistItem || !inputs.title?.trim() || !inputs.content?.trim()}
-                        startIcon={<AddCircleOutlineIcon />}
-                        sx={styles.button}
-                      >
-                        Thêm Item
-                      </Button>
-                    </Box>
-                  </Box>
-                </Grow>
-              );
-            })}
-          </Box>
-        </Fade>
-      ) : (
-        <Typography
-          sx={{
-            color: isDarkMode ? theme.palette.grey[400] : theme.palette.text.secondary,
-            p: 3,
-            bgcolor: isDarkMode ? "#1e1e2f" : "#f7f7f7",
-            borderRadius: 3,
-            fontStyle: "italic",
-            textAlign: "center",
-          }}
-        >
-          Chưa có checklist nào. Hãy thêm một checklist mới!
-        </Typography>
-      )}
-
-      {/* Thêm checklist mới */}
+      {/* Section Header */}
       <Box
         sx={{
           display: "flex",
           alignItems: "center",
-          gap: 2,
-          mt: 4,
-          p: { xs: 2, sm: 3 },
-          bgcolor: isDarkMode ? "#1e1e2f" : "#ffffff",
-          borderRadius: 3,
-          boxShadow: isDarkMode ? "0 6px 20px rgba(0, 0, 0, 0.3)" : "0 6px 20px rgba(0, 0, 0, 0.08)",
+          justifyContent: "space-between",
+          cursor: "pointer",
+          mb: 1,
+          p: 1,
+          borderRadius: 1.5,
+          "&:hover": {
+            bgcolor: isDarkMode ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.02)",
+          }
         }}
+        onClick={toggleSectionCollapse}
       >
-        <CheckCircleOutlineIcon sx={{ color: theme.palette.primary.main, fontSize: 28 }} />
-        <TextField
-          fullWidth
-          size="small"
-          placeholder="Thêm tiêu đề checklist..."
-          value={checklistTitle}
-          onChange={(e) => setChecklistTitle(e.target.value)}
-          variant="outlined"
-          disabled={loading.checklist}
-          error={checklistTitle !== "" && !checklistTitle?.trim()}
-          helperText={checklistTitle !== "" && !checklistTitle?.trim() ? "Tiêu đề không được để trống" : ""}
-          sx={styles.textField}
-        />
-        <Button
-          variant="contained"
-          size="medium"
-          onClick={handleAddChecklist}
-          disabled={loading.checklist || !checklistTitle.trim()}
-          startIcon={<AddCircleOutlineIcon />}
-          sx={styles.button}
-        >
-          {loading.checklist ? <CircularProgress size={20} color="inherit" /> : "Thêm Checklist"}
-        </Button>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+          <CheckCircleOutlineIcon sx={{ color: theme.palette.primary.main, fontSize: 20 }} />
+          <Typography variant="h6" sx={styles.sectionTitle}>
+            Checklists
+          </Typography>
+        </Box>
+        <IconButton size="small" sx={{ p: 0.5 }}>
+          {isSectionCollapsed ? <ExpandMoreIcon fontSize="small" /> : <ExpandLessIcon fontSize="small" />}
+        </IconButton>
       </Box>
+
+      <Collapse in={!isSectionCollapsed}>
+        {/* Danh sách checklists */}
+        {filteredChecklists.length > 0 ? (
+          <Fade in timeout={400}>
+            <Box>
+              {filteredChecklists.map((checklist) => {
+                if (!checklist || typeof checklist !== "object") {
+                  return (
+                    <Typography
+                      key={checklist?._id || Math.random()}
+                      color="error"
+                      sx={{ p: 1.5, bgcolor: isDarkMode ? "#3f3f3f" : "#ffebee", borderRadius: 1.5, mb: 1, fontSize: "0.875rem" }}
+                    >
+                      Checklist không hợp lệ
+                    </Typography>
+                  );
+                }
+
+                const filteredItems = Array.isArray(checklist.items)
+                  ? checklist.items.filter((item) => !item.isDeleted)
+                  : [];
+                const inputs = checklistInputs[checklist._id] || { title: "", content: "" };
+                const visibleCount = visibleItems[checklist._id] || 3;
+
+                return (
+                  <Grow in timeout={300} key={checklist._id}>
+                    <Box sx={styles.checklistBox}>
+                      {/* Improved Checklist Header */}
+                      <Box sx={styles.checklistHeader}>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flex: 1, minWidth: 0 }}>
+                          {editChecklistId === checklist._id ? (
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 1, flex: 1, minWidth: 0 }}>
+                              <TextField
+                                fullWidth
+                                size="small"
+                                value={editChecklistTitle}
+                                onChange={(e) => setEditChecklistTitle(e.target.value)}
+                                placeholder="Nhập tiêu đề checklist..."
+                                variant="outlined"
+                                disabled={loading.checklist}
+                                sx={styles.textField}
+                              />
+                              <Box sx={{ display: "flex", gap: 0.5, flexShrink: 0 }}>
+                                <Button
+                                  variant="contained"
+                                  size="small"
+                                  onClick={() => handleSubmitEditChecklist(checklist._id)}
+                                  disabled={loading.checklist || !editChecklistTitle.trim()}
+                                  sx={{ ...styles.button, minWidth: 60 }}
+                                >
+                                  Lưu
+                                </Button>
+                                <Button
+                                  variant="outlined"
+                                  size="small"
+                                  onClick={() => {
+                                    setEditChecklistId(null);
+                                    setEditChecklistTitle("");
+                                  }}
+                                  sx={{
+                                    borderRadius: 1.5,
+                                    borderColor: isDarkMode ? "#555" : "#ddd",
+                                    color: isDarkMode ? theme.palette.grey[400] : theme.palette.text.secondary,
+                                    textTransform: "none",
+                                    fontSize: "0.8rem",
+                                    py: 0.75,
+                                    minWidth: 50,
+                                  }}
+                                >
+                                  Hủy
+                                </Button>
+                              </Box>
+                            </Box>
+                          ) : (
+                            <>
+                              <Typography
+                                variant="subtitle1"
+                                sx={{
+                                  flex: 1,
+                                  fontWeight: 500,
+                                  color: isDarkMode ? theme.palette.grey[100] : theme.palette.text.primary,
+                                  fontSize: { xs: "0.95rem", sm: "1rem" },
+                                  wordBreak: "break-word",
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
+                                  whiteSpace: "nowrap",
+                                }}
+                                title={checklist.title || "Checklist không có tiêu đề"}
+                              >
+                                {checklist.title || "Checklist không có tiêu đề"}
+                              </Typography>
+                              <Box sx={styles.checklistActions}>
+                                <IconButton
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openEditChecklist(checklist._id, checklist.title);
+                                  }}
+                                  size="small"
+                                  sx={{
+                                    p: 0.75,
+                                    "&:hover": { bgcolor: isDarkMode ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.04)" }
+                                  }}
+                                >
+                                  <EditOutlinedIcon sx={{ fontSize: 18 }} />
+                                </IconButton>
+                                <IconButton
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleConfirmDelete("checklist", checklist._id);
+                                  }}
+                                  size="small"
+                                  sx={{
+                                    p: 0.75,
+                                    "&:hover": { bgcolor: isDarkMode ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.04)" }
+                                  }}
+                                >
+                                  <DeleteOutlineIcon sx={{ fontSize: 18 }} color="error" />
+                                </IconButton>
+                                <IconButton
+                                  onClick={() => toggleChecklistCollapse(checklist._id)}
+                                  size="small"
+                                  sx={{ p: 0.75 }}
+                                >
+                                  {collapsedChecklists[checklist._id] ?
+                                    <ExpandMoreIcon sx={{ fontSize: 18 }} /> :
+                                    <ExpandLessIcon sx={{ fontSize: 18 }} />
+                                  }
+                                </IconButton>
+                              </Box>
+                            </>
+                          )}
+                        </Box>
+                      </Box>
+
+                      <Collapse in={!collapsedChecklists[checklist._id]}>
+                        {/* Thanh tiến độ */}
+                        {filteredItems.length > 0 && (
+                          <Box sx={{ mb: 1.5 }}>
+                            <LinearProgress
+                              variant="determinate"
+                              value={getProgress(checklist.items)}
+                              sx={{
+                                height: 6,
+                                borderRadius: 3,
+                                bgcolor: isDarkMode ? "#3f3f3f" : "#e0e0e0",
+                                "& .MuiLinearProgress-bar": { bgcolor: theme.palette.success.main, borderRadius: 3 },
+                              }}
+                            />
+                            <Typography
+                              variant="caption"
+                              sx={{
+                                mt: 0.5,
+                                color: isDarkMode ? theme.palette.grey[400] : theme.palette.text.secondary,
+                                fontSize: "0.75rem",
+                              }}
+                            >
+                              {Math.round(getProgress(checklist.items))}% hoàn thành
+                            </Typography>
+                          </Box>
+                        )}
+
+                        {/* Improved Items List */}
+                        {filteredItems.length > 0 ? (
+                          <List dense sx={{ mb: 1.5, p: 0 }}>
+                            {filteredItems.slice(0, visibleCount).map((item) => (
+                              <ListItem key={item._id} sx={styles.listItem}>
+                                {/* Checkbox */}
+                                <Checkbox
+                                  checked={item.completed || false}
+                                  onChange={() => handleToggleChecklistItem(checklist._id, item._id, !item.completed)}
+                                  disabled={loading.checklistToggle}
+                                  icon={<CheckCircleOutlineIcon sx={{ fontSize: 20 }} />}
+                                  checkedIcon={<CheckCircleOutlineIcon sx={{ fontSize: 20 }} color="success" />}
+                                  sx={{ p: 0, mr: 1 }}
+                                  size="small"
+                                />
+
+                                {/* Content */}
+                                <Box sx={styles.itemContent}>
+                                  <Typography
+                                    sx={{
+                                      fontWeight: 450,
+                                      fontSize: "0.85rem",
+                                      color: isDarkMode ? theme.palette.grey[200] : theme.palette.text.primary,
+                                      textDecoration: item.completed ? "line-through" : "none",
+                                      cursor: "pointer",
+                                      wordBreak: "break-word",
+                                      mb: 0.25,
+                                      overflow: "hidden",
+                                      textOverflow: "ellipsis",
+                                      display: "-webkit-box",
+                                      WebkitLineClamp: 1,
+                                      WebkitBoxOrient: "vertical",
+                                    }}
+                                    onClick={() => openViewItem(item.title, item.content)}
+                                    title={item.title || "Item không có tiêu đề"}
+                                  >
+                                    {item.title || "Item không có tiêu đề"}
+                                  </Typography>
+                                  <Typography
+                                    sx={{
+                                      fontSize: "0.75rem",
+                                      color: isDarkMode ? theme.palette.grey[400] : theme.palette.text.secondary,
+                                      display: "-webkit-box",
+                                      WebkitLineClamp: 1,
+                                      WebkitBoxOrient: "vertical",
+                                      overflow: "hidden",
+                                      textOverflow: "ellipsis",
+                                      cursor: "pointer",
+                                      wordBreak: "break-word",
+                                    }}
+                                    onClick={() => openViewItem(item.title, item.content)}
+                                    title={item.content || "Không có nội dung"}
+                                  >
+                                    {item.content?.length > 40 ? `${item.content.slice(0, 40)}...` : item.content || "Không có nội dung"}
+                                  </Typography>
+                                </Box>
+
+                                {/* Actions */}
+                                <Box sx={styles.itemActions}>
+                                  <IconButton
+                                    onClick={() => openEditItem(checklist._id, item._id, item.title, item.content)}
+                                    size="small"
+                                    sx={{
+                                      p: 0.5,
+                                      "&:hover": { bgcolor: isDarkMode ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.04)" }
+                                    }}
+                                  >
+                                    <EditOutlinedIcon sx={{ fontSize: 16 }} />
+                                  </IconButton>
+                                  <IconButton
+                                    onClick={() => handleConfirmDelete("item", checklist._id, item._id)}
+                                    size="small"
+                                    sx={{
+                                      p: 0.5,
+                                      "&:hover": { bgcolor: isDarkMode ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.04)" }
+                                    }}
+                                  >
+                                    <DeleteOutlineIcon sx={{ fontSize: 16 }} color="error" />
+                                  </IconButton>
+                                </Box>
+                              </ListItem>
+                            ))}
+                            {filteredItems.length > visibleCount && (
+                              <Button
+                                onClick={() =>
+                                  setVisibleItems((prev) => ({
+                                    ...prev,
+                                    [checklist._id]: prev[checklist._id] + 3,
+                                  }))
+                                }
+                                sx={{
+                                  mt: 1,
+                                  color: theme.palette.primary.main,
+                                  textTransform: "none",
+                                  mx: "auto",
+                                  display: "block",
+                                  fontSize: "0.75rem",
+                                  py: 0.5,
+                                }}
+                                size="small"
+                              >
+                                Tải thêm
+                              </Button>
+                            )}
+                          </List>
+                        ) : (
+                          <Typography
+                            sx={{
+                              color: isDarkMode ? theme.palette.grey[400] : theme.palette.text.secondary,
+                              p: 1.5,
+                              fontStyle: "italic",
+                              fontSize: "0.8rem",
+                              textAlign: "center",
+                            }}
+                          >
+                            Không có item trong checklist này.
+                          </Typography>
+                        )}
+
+                        {/* Thêm item mới */}
+                        <Box sx={{ mt: 1.5 }}>
+                          <TextField
+                            fullWidth
+                            size="small"
+                            placeholder="Thêm tiêu đề item..."
+                            value={inputs.title || ""}
+                            onChange={(e) => handleChecklistInputChange(checklist._id, "title", e.target.value)}
+                            variant="outlined"
+                            disabled={loading.checklistItem}
+                            error={inputs.title !== "" && !inputs.title?.trim()}
+                            helperText={inputs.title !== "" && !inputs.title?.trim() ? "Tiêu đề không được để trống" : ""}
+                            sx={styles.textField}
+                          />
+                          <TextField
+                            fullWidth
+                            size="small"
+                            placeholder="Thêm nội dung item..."
+                            value={inputs.content || ""}
+                            onChange={(e) => handleChecklistInputChange(checklist._id, "content", e.target.value)}
+                            variant="outlined"
+                            multiline
+                            rows={1}
+                            disabled={loading.checklistItem}
+                            error={inputs.content !== "" && !inputs.content?.trim()}
+                            helperText={inputs.content !== "" && !inputs.content?.trim() ? "Nội dung không được để trống" : ""}
+                            inputProps={{ maxLength: 300 }}
+                            sx={{ ...styles.textField, mt: 1 }}
+                          />
+                          <Button
+                            variant="contained"
+                            size="small"
+                            onClick={() => handleAddItem(checklist._id, inputs)}
+                            disabled={loading.checklistItem || !inputs.title?.trim() || !inputs.content?.trim()}
+                            startIcon={<AddCircleOutlineIcon fontSize="small" />}
+                            sx={{ ...styles.button, mt: 1 }}
+                          >
+                            Thêm Item
+                          </Button>
+                        </Box>
+                      </Collapse>
+                    </Box>
+                  </Grow>
+                );
+              })}
+            </Box>
+          </Fade>
+        ) : (
+          <Typography
+            sx={{
+              color: isDarkMode ? theme.palette.grey[400] : theme.palette.text.secondary,
+              p: 2,
+              bgcolor: isDarkMode ? "#1e1e2f" : "#f7f7f7",
+              borderRadius: 2,
+              fontStyle: "italic",
+              textAlign: "center",
+              fontSize: "0.85rem",
+            }}
+          >
+            Chưa có checklist nào. Hãy thêm một checklist mới!
+          </Typography>
+        )}
+
+        {/* Thêm checklist mới */}
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: 1.5,
+            mt: 2,
+            p: { xs: 1.5, sm: 2 },
+            bgcolor: isDarkMode ? "#1e1e2f" : "#ffffff",
+            borderRadius: 2,
+            boxShadow: isDarkMode ? "0 4px 12px rgba(0, 0, 0, 0.25)" : "0 4px 12px rgba(0, 0, 0, 0.06)",
+          }}
+        >
+          <CheckCircleOutlineIcon sx={{ color: theme.palette.primary.main, fontSize: 20, flexShrink: 0 }} />
+          <TextField
+            fullWidth
+            size="small"
+            placeholder="Thêm tiêu đề checklist..."
+            value={checklistTitle}
+            onChange={(e) => setChecklistTitle(e.target.value)}
+            variant="outlined"
+            disabled={loading.checklist}
+            error={checklistTitle !== "" && !checklistTitle?.trim()}
+            helperText={checklistTitle !== "" && !checklistTitle?.trim() ? "Tiêu đề không được để trống" : ""}
+            sx={styles.textField}
+          />
+          <Button
+            variant="contained"
+            size="small"
+            onClick={handleAddChecklist}
+            disabled={loading.checklist || !checklistTitle.trim()}
+            startIcon={<AddCircleOutlineIcon fontSize="small" />}
+            sx={{ ...styles.button, flexShrink: 0 }}
+          >
+            {loading.checklist ? <CircularProgress size={16} color="inherit" /> : "Thêm"}
+          </Button>
+        </Box>
+      </Collapse>
 
       {/* Dialog xác nhận xóa */}
       <Dialog open={deleteConfirm.open} onClose={handleCloseConfirm} sx={{ "& .MuiDialog-paper": styles.dialogPaper }}>
-        <DialogTitle sx={{ fontWeight: 600, fontSize: "1.25rem" }}>Xác nhận xóa</DialogTitle>
-        <DialogContent>
-          <Typography sx={{ color: isDarkMode ? theme.palette.grey[200] : theme.palette.text.primary }}>
+        <DialogTitle sx={{ fontWeight: 500, fontSize: "1.1rem", p: 2 }}>Xác nhận xóa</DialogTitle>
+        <DialogContent sx={{ p: 2 }}>
+          <Typography sx={{ color: isDarkMode ? theme.palette.grey[200] : theme.palette.text.primary, fontSize: "0.9rem" }}>
             Bạn có chắc muốn xóa {deleteConfirm.type === "checklist" ? "checklist" : "item"} này?
           </Typography>
         </DialogContent>
-        <DialogActions>
+        <DialogActions sx={{ p: 2 }}>
           <Button
             onClick={handleCloseConfirm}
-            sx={{ color: isDarkMode ? theme.palette.grey[400] : theme.palette.text.secondary, textTransform: "none" }}
+            sx={{ color: isDarkMode ? theme.palette.grey[400] : theme.palette.text.secondary, textTransform: "none", fontSize: "0.8rem" }}
           >
             Hủy
           </Button>
           <Button
             onClick={handleDelete}
-            sx={{ color: theme.palette.error.main, textTransform: "none" }}
+            sx={{ color: theme.palette.error.main, textTransform: "none", fontSize: "0.8rem" }}
           >
             Xóa
           </Button>
@@ -613,8 +747,8 @@ const ChecklistsSection = ({
         onClose={() => setEditItem({ checklistId: null, itemId: null, title: "", content: "" })}
         sx={{ "& .MuiDialog-paper": styles.dialogPaper }}
       >
-        <DialogTitle sx={{ fontWeight: 600, fontSize: "1.25rem" }}>Chỉnh sửa Checklist Item</DialogTitle>
-        <DialogContent>
+        <DialogTitle sx={{ fontWeight: 500, fontSize: "1.1rem", p: 2 }}>Chỉnh sửa Item</DialogTitle>
+        <DialogContent sx={{ p: 2 }}>
           <TextField
             fullWidth
             size="small"
@@ -632,28 +766,28 @@ const ChecklistsSection = ({
             size="small"
             label="Nội dung"
             value={editItem.content}
-            onChange={(e) => setEditItem({ ...editItem, content: e.target.value.slice(0, 500) })}
+            onChange={(e) => setEditItem({ ...editItem, content: e.target.value.slice(0, 300) })}
             variant="outlined"
             multiline
-            rows={4}
+            rows={2}
             disabled={loading.checklistItem}
             error={editItem.content !== "" && !editItem.content?.trim()}
             helperText={editItem.content !== "" && !editItem.content?.trim() ? "Nội dung không được để trống" : ""}
-            inputProps={{ maxLength: 500 }}
-            sx={{ ...styles.textField, mt: 2 }}
+            inputProps={{ maxLength: 300 }}
+            sx={{ ...styles.textField, mt: 1 }}
           />
         </DialogContent>
-        <DialogActions>
+        <DialogActions sx={{ p: 2 }}>
           <Button
             onClick={() => setEditItem({ checklistId: null, itemId: null, title: "", content: "" })}
-            sx={{ color: isDarkMode ? theme.palette.grey[400] : theme.palette.text.secondary, textTransform: "none" }}
+            sx={{ color: isDarkMode ? theme.palette.grey[400] : theme.palette.text.secondary, textTransform: "none", fontSize: "0.8rem" }}
           >
             Hủy
           </Button>
           <Button
             onClick={handleSubmitEditItem}
             disabled={loading.checklistItem || !editItem.title.trim() || !editItem.content.trim()}
-            sx={{ color: theme.palette.primary.main, textTransform: "none" }}
+            sx={{ color: theme.palette.primary.main, textTransform: "none", fontSize: "0.8rem" }}
           >
             Lưu
           </Button>
@@ -667,20 +801,20 @@ const ChecklistsSection = ({
         sx={{
           "& .MuiDialog-paper": {
             ...styles.dialogPaper,
-            maxWidth: { xs: "90%", sm: 600 },
-            maxHeight: "80vh",
+            maxWidth: { xs: "85%", sm: 500 },
+            maxHeight: "70vh",
             width: "100%",
           },
         }}
       >
-        <DialogTitle sx={{ fontWeight: 600, fontSize: "1.25rem" }}>Chi tiết Checklist Item</DialogTitle>
-        <DialogContent sx={{ maxHeight: 400, overflowY: "auto", overflowX: "hidden" }}>
+        <DialogTitle sx={{ fontWeight: 500, fontSize: "1.1rem", p: 2 }}>Chi tiết Item</DialogTitle>
+        <DialogContent sx={{ maxHeight: 300, overflowY: "auto", overflowX: "hidden", p: 2 }}>
           <Typography
             sx={{
-              fontWeight: 500,
-              fontSize: "1rem",
+              fontWeight: 450,
+              fontSize: "0.9rem",
               color: isDarkMode ? theme.palette.grey[200] : theme.palette.text.primary,
-              mb: 2,
+              mb: 1,
               wordBreak: "break-word",
             }}
           >
@@ -688,24 +822,24 @@ const ChecklistsSection = ({
           </Typography>
           <Typography
             sx={{
-              fontSize: "0.9rem",
+              fontSize: "0.8rem",
               color: isDarkMode ? theme.palette.grey[400] : theme.palette.text.secondary,
               whiteSpace: "pre-wrap",
               wordBreak: "break-word",
-              "&::-webkit-scrollbar": { width: "6px" },
+              "&::-webkit-scrollbar": { width: "4px" },
               "&::-webkit-scrollbar-thumb": {
                 backgroundColor: isDarkMode ? "#555" : "#ccc",
-                borderRadius: "3px",
+                borderRadius: "2px",
               },
             }}
           >
             {viewItem.content || "Không có nội dung"}
           </Typography>
         </DialogContent>
-        <DialogActions>
+        <DialogActions sx={{ p: 2 }}>
           <Button
             onClick={closeViewItem}
-            sx={{ color: isDarkMode ? theme.palette.grey[400] : theme.palette.text.secondary, textTransform: "none" }}
+            sx={{ color: isDarkMode ? theme.palette.grey[400] : theme.palette.text.secondary, textTransform: "none", fontSize: "0.8rem" }}
           >
             Đóng
           </Button>

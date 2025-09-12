@@ -1,5 +1,5 @@
 import { createTheme } from '@mui/material/styles';
-// import { teal, deepOrange,cyan,orange } from '@mui/material/colors';
+import { teal, deepOrange,cyan,orange } from '@mui/material/colors';
 import {experimental_extendTheme as extendTheme} from '@mui/material/styles';
 
 const APP_BAR_HEIGHT = "58px";
