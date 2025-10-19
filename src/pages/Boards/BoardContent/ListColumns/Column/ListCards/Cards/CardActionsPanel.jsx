@@ -1,4 +1,4 @@
-import { useState, useContext } from "react";
+import { useState, useContext, useMemo } from "react";
 import { CardActions, Chip, IconButton, Tooltip } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
@@ -35,7 +35,6 @@ function CardActionsPanel({
 
   const isMemberInBoard = (memberId) => {
     if (!memberId || !boardMembers?.length) {
-      console.log("isMemberInBoard: Invalid input", { memberId, boardMembers });
       return false;
     }
     const boardMember = boardMembers.find(
@@ -44,14 +43,31 @@ function CardActionsPanel({
         memberId.toString()
     );
     if (!boardMember) {
-      console.log(`isMemberInBoard: No matching member found for ${memberId}`);
       return false;
     }
-    const isActive =
-      boardMember.isActive !== undefined ? boardMember.isActive : true;
-    console.log(`isMemberInBoard: Member ${memberId}, isActive: ${isActive}`);
-    return isActive;
+    return boardMember.isActive !== undefined ? boardMember.isActive : true;
   };
+
+  const activeMembersCount = useMemo(() => {
+    return (card?.members || []).filter((member) =>
+      isMemberInBoard(member._id)
+    ).length;
+  }, [card?.members, boardMembers]);
+
+  const membersTooltip = useMemo(() => {
+    return (card?.members || [])
+      .map((member) => ({
+        ...normalizeUser(member),
+      }))
+      .map(
+        (member) =>
+          `${member.fullName} (${isMemberInBoard(member._id)
+            ? "Còn trong bảng"
+            : "Không còn trong bảng"
+          })`
+      )
+      .join(", ");
+  }, [card?.members, boardMembers]);
 
   const handleDeleteCard = async () => {
     if (!window.confirm("Bạn có chắc chắn muốn xóa thẻ này?")) return;
@@ -132,8 +148,7 @@ function CardActionsPanel({
     } catch (err) {
       console.error("Error toggling card completion:", err);
       toast.error(
-        `Có lỗi khi cập nhật trạng thái hoàn thành: ${err.response?.data?.message || err.message
-        }`
+        `Có lỗi khi cập nhật trạng thái hoàn thành: ${err.response?.data?.message || err.message}`
       );
     } finally {
       setLoading((prev) => ({ ...prev, toggleComplete: false }));
@@ -150,23 +165,6 @@ function CardActionsPanel({
       card?.completed
     );
   };
-
-  const activeMembersCount = (card?.members || []).filter((member) =>
-    isMemberInBoard(member._id)
-  ).length;
-
-  const membersTooltip = (card?.members || [])
-    .map((member) => ({
-      ...normalizeUser(member),
-    }))
-    .map(
-      (member) =>
-        `${member.fullName} (${isMemberInBoard(member._id)
-          ? "Còn trong bảng"
-          : "Không còn trong bảng"
-        })`
-    )
-    .join(", ");
 
   if (!shouldShowCardActions()) return null;
 

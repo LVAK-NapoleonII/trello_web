@@ -1,4 +1,4 @@
-import { useState, useEffect, useContext, useCallback } from "react";
+import { useState, useEffect, useContext, useCallback, useMemo } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Card } from "@mui/material";
@@ -141,29 +141,16 @@ function CardContainer({
   );
 
   useEffect(() => {
-    if (!socket || !socketReady || !boardId) {
-      console.warn(
-        "CardContainer: Socket not available, not ready, or no boardId",
-        { socket: !!socket, socketReady, boardId }
-      );
-      return;
-    }
-
-    if (typeof boardId !== 'string' || boardId.trim() === '') {
-      console.error("CardContainer: Invalid boardId format", { boardId });
+    if (!socket || !socketReady || !boardId || typeof boardId !== 'string' || boardId.trim() === '') {
+      console.warn("CardContainer: Socket not available, not ready, or invalid boardId", { socket: !!socket, socketReady, boardId });
       return;
     }
 
     socket.emit("join-board", { boardId });
-    console.log("CardContainer: Joined board room:", boardId);
 
     const socketHandlers = {
       "card-deleted": ({ listId, cardId }) => {
         if (cardId === card._id) {
-          console.log("CardContainer: Received card-deleted:", {
-            listId,
-            cardId,
-          });
           setCards((prevCards) => prevCards.filter((c) => c._id !== cardId));
           setColumns((prevColumns) =>
             prevColumns.map((col) =>
@@ -184,12 +171,6 @@ function CardContainer({
         newPosition,
       }) => {
         if (movedCard._id === card._id) {
-          console.log("CardContainer: Received card-moved:", {
-            movedCard,
-            oldListId,
-            newListId,
-            newPosition,
-          });
           setColumns((prevColumns) => {
             let updatedColumns = [...prevColumns];
             updatedColumns = updatedColumns.map((col) =>
@@ -232,10 +213,6 @@ function CardContainer({
 
       "card-updated": ({ cardId, card: updatedCard }) => {
         if (cardId === card._id) {
-          console.log("CardContainer: Received card-updated:", {
-            cardId,
-            updatedCard,
-          });
           updateCardState(cardId, {
             ...updatedCard,
             checklists: normalizeChecklists(updatedCard.checklists),
@@ -255,14 +232,9 @@ function CardContainer({
 
       "card-completion-toggled": ({ cardId, completed }) => {
         if (cardId === card._id) {
-          console.log("CardContainer: Received card-completion-toggled:", {
-            cardId,
-            completed,
-          });
           updateCardState(cardId, { completed });
           toast.info(
-            `Thẻ đã được ${completed ? "đánh dấu hoàn thành" : "bỏ hoàn thành"
-            }.`
+            `Thẻ đã được ${completed ? "đánh dấu hoàn thành" : "bỏ hoàn thành"}.`
           );
         }
       },
@@ -274,7 +246,6 @@ function CardContainer({
 
     return () => {
       socket.emit("leave-board", { boardId });
-      console.log("CardContainer: Left board room:", boardId);
       Object.keys(socketHandlers).forEach((event) => {
         socket.off(event, socketHandlers[event]);
       });

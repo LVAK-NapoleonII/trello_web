@@ -35,6 +35,50 @@ function BoardBar({ board, setBoard }) {
     }
   };
 
+  const handleTransferOwnership = async (newOwnerId) => {
+    if (!window.confirm("Bạn có chắc chắn muốn chuyển quyền sở hữu bảng này?")) {
+      return;
+    }
+    try {
+      setLoading(true);
+      const token = localStorage.getItem("token");
+      if (!token) throw new Error("Không tìm thấy token!");
+      if (!board?._id) throw new Error("Không tìm thấy board ID!");
+
+      log("BoardBar: Transferring ownership:", { boardId: board._id, newOwnerId });
+
+      const response = await axios.put(
+        `http://localhost:5000/api/boards/${board._id}/transfer`,
+        { newOwnerId },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      log("BoardBar: Transfer response:", response.data);
+
+      if (typeof setBoard === "function") {
+        setBoard(response.data.board);
+      }
+
+      if (socket && socketReady) {
+        socket.emit("board-updated", {
+          board: response.data.board,
+          message: `Quyền sở hữu bảng "${board.title}" đã được chuyển.`,
+        });
+      }
+
+      toast.success("Chuyển quyền sở hữu thành công!");
+      handleCloseManageMembersDialog();
+    } catch (err) {
+      log("BoardBar: Error transferring ownership:", err.response?.data || err);
+      toast.error(
+        err.response?.data?.message ||
+        "Có lỗi xảy ra khi chuyển quyền sở hữu."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Handle user-status-changed event
   useEffect(() => {
     if (!socket || !socketReady) return;
@@ -575,6 +619,7 @@ function BoardBar({ board, setBoard }) {
         handleCloseManageMembersDialog={handleCloseManageMembersDialog}
         handleRemoveMember={handleRemoveMember}
         handleLeaveBoard={handleLeaveBoard}
+        handleTransferOwnership={handleTransferOwnership}
       />
     </>
   );

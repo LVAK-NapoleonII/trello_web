@@ -1,6 +1,5 @@
 /**
- * Created by trungquandev.com's author on March 28, 2021
- * Updated by trungquandev.com's author on Jun 28, 2023
+ *
  * ---
  * Order an array of objects based on another array & return new Ordered Array
  * The original array will not be modified.

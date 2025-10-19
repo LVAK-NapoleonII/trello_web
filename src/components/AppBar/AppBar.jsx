@@ -117,21 +117,28 @@ const AppBar = () => {
     event.stopPropagation();
     try {
       const token = localStorage.getItem("token");
-      if (!token) throw new Error("Vui lòng đăng nhập!");
+      if (!token) {
+        throw new Error("Vui lòng đăng nhập!");
+      }
 
-      await axios.put(
+      // Gửi yêu cầu với notificationId đúng
+      const response = await axios.put(
         `http://localhost:5000/api/notifications/${notificationId}/read`,
-        {},
+        {}, // Body rỗng vì không cần gửi dữ liệu
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
+      // Cập nhật state
       setNotifications((prev) =>
         prev.map((n) => (n._id === notificationId ? { ...n, isRead: true } : n))
       );
       setUnreadCount((prev) => Math.max(0, prev - 1));
-      toast.success("Đã đánh dấu thông báo là đã đọc!");
+      toast.success(response.data.message || "Đã đánh dấu thông báo là đã đọc!");
     } catch (error) {
-      console.error("[handleMarkAsRead] Lỗi:", error.message);
+      console.error("[handleMarkAsRead] Lỗi:", {
+        message: error.message,
+        response: error.response?.data,
+      });
       handleApiError(error, navigate, "Không thể đánh dấu thông báo!");
     }
   };

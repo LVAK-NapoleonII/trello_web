@@ -13,7 +13,7 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  TextField
+  TextField,
 } from "@mui/material";
 import {
   AddCard as AddCardIcon,
@@ -21,7 +21,7 @@ import {
   DragHandle as DragHandleIcon,
   ExpandMore as ExpandMoreIcon,
   ExpandLess as ExpandLessIcon,
-  Pix as PixIcon
+  Pix as PixIcon,
 } from "@mui/icons-material";
 import { CSS } from "@dnd-kit/utilities";
 import { useSortable } from "@dnd-kit/sortable";
@@ -31,7 +31,7 @@ import axios from "axios";
 import { toast } from "react-toastify";
 import { SocketContext } from "../../../../../context/SocketContext";
 import ListCards from "./ListCards/ListCards";
-
+import CreateCardDialog from "./ListCards/Cards/CreateCardDialog"
 // Constants
 const COLUMN_HEADER_HEIGHT = "56px";
 const COLUMN_FOOTER_HEIGHT = "56px";
@@ -44,6 +44,7 @@ function Column({
   initialExpanded = true,
   boardMembers,
   setBoardMembers,
+  predictedPosition,
 }) {
   const { socket, socketReady } = useContext(SocketContext);
   const theme = useTheme();
@@ -55,11 +56,8 @@ function Column({
   const [openEditTitleDialog, setOpenEditTitleDialog] = useState(false);
   const [openCreateCardDialog, setOpenCreateCardDialog] = useState(false);
   const [newTitle, setNewTitle] = useState(column.title);
-  const [newCardTitle, setNewCardTitle] = useState("");
-  const [newCardDescription, setNewCardDescription] = useState("");
   const [refreshCards, setRefreshCards] = useState(false);
   const [loading, setLoading] = useState({
-    createCard: false,
     editTitle: false,
     deleteColumn: false,
   });
@@ -88,9 +86,6 @@ function Column({
     transition: transition || "transform 0.2s ease, opacity 0.2s ease",
     height: "100%",
     opacity: isDragging ? 0.8 : 1,
-    transform: isDragging
-      ? `${CSS.Translate.toString(transform)} scale(1.05)`
-      : CSS.Translate.toString(transform),
     zIndex: isDragging ? 10 : 1,
   };
 
@@ -100,27 +95,30 @@ function Column({
     ml: 2,
     borderRadius: "12px",
     bgcolor: isOver
-      ? isDarkMode ? "rgba(255,255,255,0.05)" : theme.palette.grey[100]
-      : isDarkMode ? "#2a2a3d" : "#f4f5f7",
+      ? isDarkMode
+        ? "rgba(255,255,255,0.05)"
+        : theme.palette.grey[100]
+      : isDarkMode
+        ? "#2a2a3d"
+        : "#f4f5f7",
     height: isExpanded ? "fit-content" : COLUMN_HEADER_HEIGHT,
     maxHeight: isExpanded ? `calc(100vh - 100px)` : COLUMN_HEADER_HEIGHT,
     boxShadow: isDarkMode ? "0 4px 12px rgba(0,0,0,0.4)" : theme.shadows[3],
     display: "flex",
     flexDirection: "column",
-    transition: "height 0.3s ease, transform 0.2s ease, box-shadow 0.2s ease",
+    transition: "height 0.3s ease, box-shadow 0.2s ease",
     "&:hover": {
-      transform: isDragging ? "none" : "translateY(-4px)",
       boxShadow: isDarkMode ? "0 6px 16px rgba(0,0,0,0.5)" : theme.shadows[5],
     },
     overflow: "hidden",
   });
 
   // Utility functions
-  const getToken = () => {
+  const getToken = useCallback(() => {
     const token = localStorage.getItem("token");
     if (!token) throw new Error("No token found");
     return token;
-  };
+  }, []);
 
   const normalizeCard = useCallback(
     (card) => ({
@@ -153,7 +151,8 @@ function Column({
           ...n,
           createdBy: {
             _id: n.createdBy?._id || "unknown",
-            fullName: n.createdBy?.fullName || n.createdBy?.email || "Unknown User",
+            fullName:
+              n.createdBy?.fullName || n.createdBy?.email || "Unknown User",
             avatar: n.createdBy?.avatar || "",
             email: n.createdBy?.email || "",
           },
@@ -180,8 +179,11 @@ function Column({
   );
 
   // Event handlers
-  const handleMenuOpen = (event) => setAnchorEl(event.currentTarget);
-  const handleMenuClose = () => setAnchorEl(null);
+  const handleMenuOpen = useCallback(
+    (event) => setAnchorEl(event.currentTarget),
+    []
+  );
+  const handleMenuClose = useCallback(() => setAnchorEl(null), []);
 
   const handleToggleExpand = useCallback(() => {
     const newExpanded = !isExpanded;
@@ -193,14 +195,7 @@ function Column({
     );
   }, [isExpanded, setColumns, column._id]);
 
-  const resetDialogStates = () => {
-    setNewTitle(column.title);
-    setNewCardTitle("");
-    setNewCardDescription("");
-  };
-
-  // API functions
-  const handleDeleteColumn = async () => {
+  const handleDeleteColumn = useCallback(async () => {
     if (!window.confirm("Bạn có chắc chắn muốn xóa cột này?")) return;
 
     setLoading((prev) => ({ ...prev, deleteColumn: true }));
@@ -210,7 +205,9 @@ function Column({
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      setColumns((prevColumns) => prevColumns.filter((c) => c._id !== column._id));
+      setColumns((prevColumns) =>
+        prevColumns.filter((c) => c._id !== column._id)
+      );
 
       if (socket && socketReady) {
         socket.emit("list-deleted", { boardId, listId: column._id });
@@ -222,9 +219,9 @@ function Column({
     } finally {
       setLoading((prev) => ({ ...prev, deleteColumn: false }));
     }
-  };
+  }, [socket, socketReady, boardId, column._id, setColumns, getToken]);
 
-  const handleEditTitle = async () => {
+  const handleEditTitle = useCallback(async () => {
     if (!newTitle.trim()) {
       toast.error("Tiêu đề cột không được để trống!");
       return;
@@ -257,60 +254,7 @@ function Column({
     } finally {
       setLoading((prev) => ({ ...prev, editTitle: false }));
     }
-  };
-
-  const handleCreateCard = async () => {
-    if (!newCardTitle.trim()) {
-      toast.error("Tiêu đề thẻ không được để trống!");
-      return;
-    }
-    if (!boardId || !column._id) {
-      toast.error("Không tìm thấy boardId hoặc listId!");
-      return;
-    }
-
-    setLoading((prev) => ({ ...prev, createCard: true }));
-    try {
-      const token = getToken();
-      const response = await axios.post(
-        `${API_BASE_URL}/cards`,
-        {
-          title: newCardTitle,
-          description: newCardDescription,
-          list: column._id,
-          board: boardId,
-        },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-
-      const newCard = normalizeCard(response.data);
-      setColumns((prevColumns) =>
-        prevColumns.map((col) =>
-          col._id === column._id
-            ? { ...col, cards: [...(col.cards || []), newCard] }
-            : col
-        )
-      );
-
-      if (socket && socketReady) {
-        socket.emit("card-created", {
-          boardId,
-          listId: column._id,
-          card: newCard,
-        });
-      }
-
-      toast.success("Tạo thẻ thành công!");
-      setOpenCreateCardDialog(false);
-      resetDialogStates();
-      setRefreshCards((prev) => !prev);
-    } catch (err) {
-      console.error("Error creating card:", err);
-      toast.error("Lỗi khi tạo thẻ!");
-    } finally {
-      setLoading((prev) => ({ ...prev, createCard: false }));
-    }
-  };
+  }, [socket, socketReady, boardId, column._id, newTitle, setColumns, getToken]);
 
   // Socket effects
   useEffect(() => {
@@ -352,7 +296,9 @@ function Column({
 
     const handleListDeleted = ({ listId }) => {
       if (listId !== column._id) return;
-      setColumns((prevColumns) => prevColumns.filter((col) => col._id !== listId));
+      setColumns((prevColumns) =>
+        prevColumns.filter((col) => col._id !== listId)
+      );
       toast.info("Cột đã được xóa.");
     };
 
@@ -374,7 +320,7 @@ function Column({
       open={openEditTitleDialog}
       onClose={() => {
         setOpenEditTitleDialog(false);
-        resetDialogStates();
+        setNewTitle(column.title);
       }}
       maxWidth="sm"
       fullWidth
@@ -400,7 +346,7 @@ function Column({
         <Button
           onClick={() => {
             setOpenEditTitleDialog(false);
-            resetDialogStates();
+            setNewTitle(column.title);
           }}
         >
           Hủy bỏ
@@ -411,63 +357,6 @@ function Column({
           variant="contained"
         >
           {loading.editTitle ? "Đang lưu..." : "Lưu"}
-        </Button>
-      </DialogActions>
-    </Dialog>
-  );
-
-  const CreateCardDialog = () => (
-    <Dialog
-      open={openCreateCardDialog}
-      onClose={() => {
-        setOpenCreateCardDialog(false);
-        resetDialogStates();
-      }}
-      maxWidth="sm"
-      fullWidth
-    >
-      <DialogTitle>Tạo thẻ mới</DialogTitle>
-      <DialogContent>
-        <TextField
-          autoFocus
-          margin="dense"
-          label="Tiêu đề thẻ"
-          fullWidth
-          variant="outlined"
-          value={newCardTitle}
-          onChange={(e) => setNewCardTitle(e.target.value)}
-          onKeyPress={(e) => {
-            if (e.key === "Enter" && newCardTitle.trim()) {
-              handleCreateCard();
-            }
-          }}
-        />
-        <TextField
-          margin="dense"
-          label="Mô tả (tùy chọn)"
-          fullWidth
-          variant="outlined"
-          multiline
-          rows={3}
-          value={newCardDescription}
-          onChange={(e) => setNewCardDescription(e.target.value)}
-        />
-      </DialogContent>
-      <DialogActions>
-        <Button
-          onClick={() => {
-            setOpenCreateCardDialog(false);
-            resetDialogStates();
-          }}
-        >
-          Hủy bỏ
-        </Button>
-        <Button
-          onClick={handleCreateCard}
-          disabled={!newCardTitle.trim() || loading.createCard}
-          variant="contained"
-        >
-          {loading.createCard ? "Đang tạo..." : "Tạo thẻ"}
         </Button>
       </DialogActions>
     </Dialog>
@@ -485,7 +374,9 @@ function Column({
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
-              borderBottom: isExpanded ? `1px solid ${theme.palette.divider}` : "none",
+              borderBottom: isExpanded
+                ? `1px solid ${theme.palette.divider}`
+                : "none",
               flexShrink: 0,
             }}
           >
@@ -504,18 +395,31 @@ function Column({
               <Tooltip title={isExpanded ? "Thu gọn cột" : "Mở rộng cột"}>
                 <span>
                   {isExpanded ? (
-                    <ExpandMoreIcon onClick={handleToggleExpand} sx={{ cursor: "pointer" }} />
+                    <ExpandMoreIcon
+                      onClick={handleToggleExpand}
+                      sx={{ cursor: "pointer" }}
+                    />
                   ) : (
-                    <ExpandLessIcon onClick={handleToggleExpand} sx={{ cursor: "pointer" }} />
+                    <ExpandLessIcon
+                      onClick={handleToggleExpand}
+                      sx={{ cursor: "pointer" }}
+                    />
                   )}
                 </span>
               </Tooltip>
               <Tooltip title="Tùy chọn khác">
                 <span>
-                  <PixIcon onClick={handleMenuOpen} sx={{ cursor: "pointer" }} />
+                  <PixIcon
+                    onClick={handleMenuOpen}
+                    sx={{ cursor: "pointer" }}
+                  />
                 </span>
               </Tooltip>
-              <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={handleMenuClose}>
+              <Menu
+                anchorEl={anchorEl}
+                open={Boolean(anchorEl)}
+                onClose={handleMenuClose}
+              >
                 <MenuItem onClick={() => setOpenCreateCardDialog(true)}>
                   <ListItemIcon>
                     <AddCardIcon fontSize="small" />
@@ -550,6 +454,7 @@ function Column({
                   boardMembers={boardMembers}
                   setBoardMembers={setBoardMembers}
                   boardId={boardId}
+                  predictedPosition={predictedPosition}
                 />
               </Box>
 
@@ -572,7 +477,7 @@ function Column({
                   variant="contained"
                   size="small"
                 >
-                  {loading.createCard ? "Đang tạo..." : "Thêm thẻ mới"}
+                  Thêm thẻ mới
                 </Button>
                 <Tooltip title="Kéo để di chuyển cột">
                   <DragHandleIcon sx={{ cursor: "grab" }} className="drag-handle" />
@@ -584,7 +489,15 @@ function Column({
       </div>
 
       <EditTitleDialog />
-      <CreateCardDialog />
+      <CreateCardDialog
+        open={openCreateCardDialog}
+        onClose={() => setOpenCreateCardDialog(false)}
+        columnId={column._id}
+        boardId={boardId}
+        setColumns={setColumns}
+        socket={socket}
+        socketReady={socketReady}
+      />
     </>
   );
 }

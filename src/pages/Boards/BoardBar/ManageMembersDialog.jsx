@@ -20,6 +20,8 @@ import {
 import GroupIcon from "@mui/icons-material/Group";
 import DeleteIcon from "@mui/icons-material/Delete";
 import ExitToAppIcon from "@mui/icons-material/ExitToApp";
+import TransferIcon from "@mui/icons-material/AssignmentInd";
+
 
 function ManageMembersDialog({
   open,
@@ -31,6 +33,7 @@ function ManageMembersDialog({
   handleCloseManageMembersDialog,
   handleRemoveMember,
   handleLeaveBoard,
+  handleTransferOwnership,
 }) {
   const theme = useTheme();
   const isDarkMode = theme.palette.mode === "dark";
@@ -158,21 +161,38 @@ function ManageMembersDialog({
                   />
                   <ListItemSecondaryAction>
                     {isOwner && member.user?._id !== board?.owner?._id && (
-                      <Tooltip title="Remove from board">
-                        <IconButton
-                          edge="end"
-                          onClick={() => handleRemoveMember(member.user?._id)}
-                          sx={{
-                            color: theme.palette.error.main,
-                            "&:hover": {
-                              bgcolor: theme.palette.error.light + "20",
-                            },
-                          }}
-                          disabled={loading}
-                        >
-                          <DeleteIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
+                      <>
+                        <Tooltip title="Remove from board">
+                          <IconButton
+                            edge="end"
+                            onClick={() => handleRemoveMember(member.user?._id)}
+                            sx={{
+                              color: theme.palette.error.main,
+                              "&:hover": {
+                                bgcolor: theme.palette.error.light + "20",
+                              },
+                            }}
+                            disabled={loading}
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Transfer ownership">
+                          <IconButton
+                            edge="end"
+                            onClick={() => handleTransferOwnership(member.user?._id)} // Hàm mới
+                            sx={{
+                              color: theme.palette.primary.main,
+                              "&:hover": {
+                                bgcolor: theme.palette.primary.light + "20",
+                              },
+                            }}
+                            disabled={loading}
+                          >
+                            <TransferIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </>
                     )}
                   </ListItemSecondaryAction>
                 </ListItem>

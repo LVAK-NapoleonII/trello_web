@@ -8,7 +8,6 @@ import {
   Button,
   InputAdornment,
   Box,
-  Typography,
 } from "@mui/material";
 import axios from "axios";
 import { toast } from "react-toastify";
@@ -89,12 +88,6 @@ function EditCardDialog({ open, onClose, card, setCards, setColumns }) {
 
       if (socket && socketReady) {
         socket.emit("card-updated", { cardId: card._id, card: response.data });
-        console.log("Emitted card-updated:", {
-          cardId: card._id,
-          card: response.data,
-        });
-      } else {
-        console.warn("Socket chưa sẵn sàng, bỏ qua emit");
       }
 
       toast.success("Cập nhật thẻ thành công!");
@@ -289,9 +282,8 @@ function EditCardDialog({ open, onClose, card, setCards, setColumns }) {
                     width: 20,
                     height: 20,
                     bgcolor: isValidHexColor(cover) ? cover : "#ccc",
-                    border: `1px solid ${
-                      isDarkMode ? theme.palette.grey[600] : "#ccc"
-                    }`,
+                    border: `1px solid ${isDarkMode ? theme.palette.grey[600] : "#ccc"
+                      }`,
                     borderRadius: 1,
                   }}
                 />
