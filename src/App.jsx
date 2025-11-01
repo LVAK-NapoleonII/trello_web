@@ -11,6 +11,7 @@ import VerifyOTPPage from "./pages/Auth/VerifyOTPPage";
 import WorkspaceMembersPage from "./pages/Workspace/WorkspaceMembersPage.jsx";
 import WorkspaceSettingsPage from "./pages/Workspace/WorkspaceSettingsPage.jsx";
 import WorkspaceHighlightsPage from "./pages/Workspace/WorkspaceHighlightsPage.jsx";
+import { AdminDashboard } from "./admin/dashboard/AdminDashboard.jsx"
 
 function App() {
   const location = useLocation();
@@ -43,6 +44,7 @@ function App() {
           <Route path="/workspace/:workspaceId/highlights" element={<WorkspaceHighlightsPage />} />
           <Route path="/workspace/:workspaceId/settings" element={<WorkspaceSettingsPage />} />
           <Route path="/workspace/:workspaceId/board/:boardId" element={<Board />} />
+          <Route path="/admin/*" element={<AdminDashboard />} />
         </Routes>
       </Box>
     </>

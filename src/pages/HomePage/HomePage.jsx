@@ -474,6 +474,7 @@ const HomePage = () => {
                 py: 1.5,
                 fontWeight: 600,
                 transition: "all 0.2s ease",
+                marginTop: "20px"
               }}
               onClick={() => handleJoinWorkspace(workspace._id)}
               disabled={isJoined || isJoining}
