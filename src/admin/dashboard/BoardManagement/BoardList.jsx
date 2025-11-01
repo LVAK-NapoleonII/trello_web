@@ -104,7 +104,7 @@ export const BoardList = () => {
                 <Box display="flex" justifyContent="center" p={5}>
                     <CircularProgress />
                 </Box>
-            ) : boards.length === 0 ? (
+            ) : boards?.length === 0 ? (
                 <Alert severity="info">Không có board nào</Alert>
             ) : (
                 <>
@@ -121,7 +121,7 @@ export const BoardList = () => {
                                 </TableRow>
                             </TableHead>
                             <TableBody>
-                                {boards.map((board) => (
+                                {boards?.map((board) => (
                                     <TableRow key={board._id} hover>
                                         <TableCell>
                                             <Box display="flex" alignItems="center" gap={1}>
@@ -151,7 +151,7 @@ export const BoardList = () => {
 
                                         <TableCell>
                                             <Chip
-                                                label={`${board.members?.length || 0} thành viên`}
+                                                label={`${board?.members?.length || 0} thành viên`}
                                                 size="small"
                                                 color="secondary"
                                             />
@@ -201,8 +201,8 @@ export const BoardList = () => {
 
                     <Box display="flex" justifyContent="center" mt={3}>
                         <Pagination
-                            count={pagination.pages || 1}
-                            page={pagination.page || 1}
+                            count={pagination?.pages || 1}
+                            page={pagination?.page || 1}
                             onChange={(_, page) => handleFilterChange('page', page)}
                             color="primary"
                         />

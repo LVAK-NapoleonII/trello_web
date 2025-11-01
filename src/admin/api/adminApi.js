@@ -2,7 +2,7 @@
 import axios from 'axios';
 
 const API = axios.create({
-  baseURL: '/api/admin',
+  baseURL: '/admin',
   headers: { 'Content-Type': 'application/json' }
 });
 

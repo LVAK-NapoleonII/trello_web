@@ -147,7 +147,7 @@ export const InactiveUserList = () => {
                 <Box display="flex" justifyContent="center" p={5}>
                     <CircularProgress />
                 </Box>
-            ) : users.length === 0 ? (
+            ) : !users || users.length === 0 ? (
                 <Alert severity="success">Không có người dùng không hoạt động trong {days} ngày</Alert>
             ) : (
                 <>
@@ -204,7 +204,7 @@ export const InactiveUserList = () => {
 
                     <Box display="flex" justifyContent="center" mt={3}>
                         <Pagination
-                            count={Math.ceil(users.length / 20)}
+                            count={Math.ceil(users?.length / 20)}
                             page={1}
                             color="primary"
                             disabled

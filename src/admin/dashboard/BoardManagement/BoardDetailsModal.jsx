@@ -113,7 +113,7 @@ export const BoardDetailsModal = ({ boardId, open, onClose }) => {
                                     <Box textAlign="center" p={2} bgcolor="primary.50" borderRadius={2}>
                                         <ListAlt color="primary" />
                                         <Typography variant="h5" fontWeight="bold">
-                                            {stats.lists || 0}
+                                            {board?.listOrderIds?.length || 0}
                                         </Typography>
                                         <Typography variant="caption">Danh sách</Typography>
                                     </Box>
@@ -122,7 +122,7 @@ export const BoardDetailsModal = ({ boardId, open, onClose }) => {
                                     <Box textAlign="center" p={2} bgcolor="warning.50" borderRadius={2}>
                                         <History color="warning" />
                                         <Typography variant="h5" fontWeight="bold">
-                                            {stats.activities || 0}
+                                            {stats?.activities || 0}
                                         </Typography>
                                         <Typography variant="caption">Hoạt động</Typography>
                                     </Box>

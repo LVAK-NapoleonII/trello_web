@@ -102,7 +102,7 @@ export const WorkspaceList = () => {
                 <Box display="flex" justifyContent="center" p={5}>
                     <CircularProgress />
                 </Box>
-            ) : workspaces.length === 0 ? (
+            ) : workspaces?.length === 0 ? (
                 <Alert severity="info">Không có workspace nào</Alert>
             ) : (
                 <>
@@ -119,12 +119,12 @@ export const WorkspaceList = () => {
                                 </TableRow>
                             </TableHead>
                             <TableBody>
-                                {workspaces.map((ws) => (
-                                    <TableRow key={ws._id} hover>
+                                {workspaces?.map((ws) => (
+                                    <TableRow key={ws?._id} hover>
                                         <TableCell>
                                             <Box display="flex" alignItems="center" gap={1}>
                                                 <Workspaces fontSize="small" color="info" />
-                                                <Typography fontWeight="medium">{ws.name}</Typography>
+                                                <Typography fontWeight="medium">{ws?.name}</Typography>
                                             </Box>
                                         </TableCell>
 
@@ -132,14 +132,14 @@ export const WorkspaceList = () => {
                                             <Box display="flex" alignItems="center" gap={1}>
                                                 <Person fontSize="small" />
                                                 <Typography variant="body2">
-                                                    {ws.owner?.fullName || 'Unknown'}
+                                                    {ws?.owner?.fullName || 'Unknown'}
                                                 </Typography>
                                             </Box>
                                         </TableCell>
 
                                         <TableCell>
                                             <Chip
-                                                label={`${ws.members?.length || 0} thành viên`}
+                                                label={`${ws?.members?.length || 0} thành viên`}
                                                 size="small"
                                                 color="secondary"
                                             />
@@ -148,7 +148,7 @@ export const WorkspaceList = () => {
                                         <TableCell>
                                             <Chip
                                                 icon={<Dashboard fontSize="small" />}
-                                                label={ws.boards || 0}
+                                                label={ws?.boards || 0}
                                                 size="small"
                                                 color="primary"
                                                 variant="outlined"
@@ -156,7 +156,7 @@ export const WorkspaceList = () => {
                                         </TableCell>
 
                                         <TableCell>
-                                            {ws.isDeleted ? (
+                                            {ws?.isDeleted ? (
                                                 <Chip label="Đã xóa" color="error" size="small" />
                                             ) : (
                                                 <Chip label="Hoạt động" color="success" size="small" />
@@ -170,7 +170,7 @@ export const WorkspaceList = () => {
                                                 </IconButton>
                                             </Tooltip>
 
-                                            {ws.isDeleted ? (
+                                            {ws?.isDeleted ? (
                                                 <Tooltip title="Khôi phục">
                                                     <IconButton onClick={() => handleRestore(ws._id)} color="success">
                                                         <Restore />
@@ -179,12 +179,12 @@ export const WorkspaceList = () => {
                                             ) : (
                                                 <>
                                                     <Tooltip title="Xóa (soft)">
-                                                        <IconButton onClick={() => handleDelete(ws._id, false)} color="warning">
+                                                        <IconButton onClick={() => handleDelete(ws?._id, false)} color="warning">
                                                             <Delete />
                                                         </IconButton>
                                                     </Tooltip>
                                                     <Tooltip title="Xóa vĩnh viễn">
-                                                        <IconButton onClick={() => handleDelete(ws._id, true)} color="error">
+                                                        <IconButton onClick={() => handleDelete(ws?._id, true)} color="error">
                                                             <Delete />
                                                         </IconButton>
                                                     </Tooltip>
@@ -199,8 +199,8 @@ export const WorkspaceList = () => {
 
                     <Box display="flex" justifyContent="center" mt={3}>
                         <Pagination
-                            count={pagination.pages || 1}
-                            page={pagination.page || 1}
+                            count={pagination?.pages || 1}
+                            page={pagination?.page || 1}
                             onChange={(_, page) => handleFilterChange('page', page)}
                             color="primary"
                         />

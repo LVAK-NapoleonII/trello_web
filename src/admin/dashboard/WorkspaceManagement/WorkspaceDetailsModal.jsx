@@ -85,7 +85,7 @@ export const WorkspaceDetailsModal = ({ workspaceId, open, onClose }) => {
                         <Grid item xs={12}>
                             <Typography variant="subtitle2" color="text.secondary">Thành viên</Typography>
                             <Box display="flex" gap={1} flexWrap="wrap">
-                                {workspace.members?.slice(0, 6).map((m, i) => (
+                                {workspace?.members?.slice(0, 6).map((m, i) => (
                                     <Chip
                                         key={i}
                                         label={m.fullName || 'Unknown'}
@@ -93,7 +93,7 @@ export const WorkspaceDetailsModal = ({ workspaceId, open, onClose }) => {
                                         variant="outlined"
                                     />
                                 ))}
-                                {workspace.members?.length > 6 && (
+                                {workspace?.members?.length > 6 && (
                                     <Chip label={`+${workspace.members.length - 6}`} size="small" />
                                 )}
                             </Box>

@@ -1,5 +1,3 @@
-// src/admin/dashboard/ActivityLogs/ActivityLogTable.jsx
-
 import { useState, useEffect } from 'react';
 import {
     Paper,
@@ -95,11 +93,12 @@ export const ActivityLogTable = () => {
                 ...(filters.type && { type: filters.type })
             };
             const res = await adminApi.getActivityLogs(params);
-            setLogs(res.data.activities);
-            setPagination(res.data.pagination);
+            setLogs(res.data.activities || []);
+            setPagination(res.data.pagination || {});
         } catch (err) {
             console.error('Lỗi tải logs:', err);
             alert('Không thể tải lịch sử hoạt động');
+            setLogs([]);
         } finally {
             setLoading(false);
         }
@@ -146,7 +145,7 @@ export const ActivityLogTable = () => {
                 <Box display="flex" justifyContent="center" p={5}>
                     <CircularProgress />
                 </Box>
-            ) : logs.length === 0 ? (
+            ) : !logs || logs.length === 0 ? (
                 <Alert severity="info">Không có hoạt động nào</Alert>
             ) : (
                 <>
@@ -171,13 +170,13 @@ export const ActivityLogTable = () => {
 
                                         <TableCell>
                                             <Box display="flex" alignItems="center" gap={1}>
-                                                {categoryIcons[log.action.category]}
+                                                {categoryIcons[log?.action?.category] || <Person />}
                                                 <Box>
                                                     <Typography fontWeight="medium">
-                                                        {log.user?.fullName || 'Unknown'}
+                                                        {log?.user?.fullName || 'Unknown'}
                                                     </Typography>
                                                     <Typography variant="caption" color="text.secondary">
-                                                        {log.user?.email || ''}
+                                                        {log?.user?.email || ''}
                                                     </Typography>
                                                 </Box>
                                             </Box>
@@ -185,13 +184,13 @@ export const ActivityLogTable = () => {
 
                                         <TableCell>
                                             <Chip
-                                                icon={getActionIcon(log.action.type)}
-                                                label={getActionLabel(log.action.type)}
+                                                icon={getActionIcon(log?.action?.type)}
+                                                label={getActionLabel(log?.action?.type)}
                                                 size="small"
                                                 color={
-                                                    log.action.type.includes('delete') || log.action.type === 'banned'
+                                                    log?.action?.type?.includes('delete') || log?.action?.type === 'banned'
                                                         ? 'error'
-                                                        : log.action.type.includes('restore') || log.action.type === 'unbanned'
+                                                        : log?.action?.type?.includes('restore') || log?.action?.type === 'unbanned'
                                                             ? 'success'
                                                             : 'primary'
                                                 }
@@ -201,7 +200,7 @@ export const ActivityLogTable = () => {
 
                                         <TableCell>
                                             <Typography variant="body2">
-                                                {log.details}
+                                                {log?.details || 'Không có mô tả'}
                                             </Typography>
                                         </TableCell>
                                     </TableRow>
@@ -212,8 +211,8 @@ export const ActivityLogTable = () => {
 
                     <Box display="flex" justifyContent="center" mt={3}>
                         <Pagination
-                            count={pagination.pages || 1}
-                            page={pagination.page || 1}
+                            count={pagination?.pages || 1}
+                            page={pagination?.page || 1}
                             onChange={(_, page) => handleFilterChange('page', page)}
                             color="primary"
                         />

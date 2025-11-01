@@ -221,6 +221,12 @@ const Profiles = forwardRef((props, ref) => {
           <ListItemText primary="Edit Profile" primaryTypographyProps={{ fontWeight: 500 }} />
         </MenuItem>
         <MenuItem
+          onClick={() => { navigate("/admin"); handleClose(); }}
+          sx={menuItemStyles}
+        >
+          <ListItemText primary="Manages" primaryTypographyProps={{ fontWeight: 500 }} />
+        </MenuItem>
+        <MenuItem
           onClick={handleLogout}
           sx={menuItemStyles}
         >

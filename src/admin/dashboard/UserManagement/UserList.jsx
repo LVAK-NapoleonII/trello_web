@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import {
     Table, TableBody, TableCell, TableHead, TableRow, Paper,
     TextField, Select, MenuItem, FormControl, InputLabel,
-    Button, Chip, Pagination, Box, CircularProgress, Alert
+    Button, Chip, Pagination, Box, CircularProgress, Alert, Typography
 } from '@mui/material';
 import { adminApi } from '../../api/adminApi';
 import { UserActions } from './UserActions';
@@ -19,10 +19,12 @@ export const UserList = () => {
         setLoading(true);
         try {
             const res = await adminApi.getUsers(filters);
-            setUsers(res.data.users);
-            setPagination(res.data.pagination);
+            setUsers(res.data.users || []);
+            setPagination(res.data.pagination || {});
         } catch (err) {
+            console.error('Lỗi tải users:', err);
             alert('Lỗi tải người dùng');
+            setUsers([]);
         } finally {
             setLoading(false);
         }
@@ -36,6 +38,10 @@ export const UserList = () => {
 
     return (
         <Paper sx={{ p: 2 }}>
+            <Typography variant="h5" fontWeight="bold" mb={2}>
+                Quản lý người dùng
+            </Typography>
+
             <Box display="flex" gap={2} mb={2} flexWrap="wrap">
                 <TextField
                     label="Tìm kiếm"
@@ -46,7 +52,7 @@ export const UserList = () => {
                 />
                 <FormControl size="small" sx={{ minWidth: 150 }}>
                     <InputLabel>Trạng thái</InputLabel>
-                    <Select value={filters.status} onChange={e => handleFilterChange('status', e.target.value)}>
+                    <Select value={filters.status} onChange={e => handleFilterChange('status', e.target.value)} label="Trạng thái">
                         <MenuItem value="all">Tất cả</MenuItem>
                         <MenuItem value="online">Online</MenuItem>
                         <MenuItem value="inactive">Không hoạt động</MenuItem>
@@ -56,7 +62,7 @@ export const UserList = () => {
 
             {loading ? (
                 <Box display="flex" justifyContent="center" p={4}><CircularProgress /></Box>
-            ) : users.length === 0 ? (
+            ) : !users || users.length === 0 ? (
                 <Alert severity="info">Không có người dùng nào</Alert>
             ) : (
                 <>
@@ -73,8 +79,8 @@ export const UserList = () => {
                         <TableBody>
                             {users.map(user => (
                                 <TableRow key={user._id} hover>
-                                    <TableCell>{user.fullName}</TableCell>
-                                    <TableCell>{user.email}</TableCell>
+                                    <TableCell>{user.fullName || 'N/A'}</TableCell>
+                                    <TableCell>{user.email || 'N/A'}</TableCell>
                                     <TableCell>
                                         <Chip
                                             label={user.isOnline ? 'Online' : 'Offline'}
@@ -99,8 +105,8 @@ export const UserList = () => {
 
                     <Box display="flex" justifyContent="center" mt={2}>
                         <Pagination
-                            count={pagination.pages}
-                            page={pagination.page}
+                            count={pagination?.pages || 0}
+                            page={pagination?.page || 1}
                             onChange={(_, p) => handleFilterChange('page', p)}
                         />
                     </Box>
