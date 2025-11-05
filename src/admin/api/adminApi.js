@@ -2,9 +2,10 @@
 import axios from 'axios';
 
 const API = axios.create({
-  baseURL: '/admin',
+  baseURL: 'http://localhost:5000/api/admin',
   headers: { 'Content-Type': 'application/json' }
 });
+
 
 API.interceptors.request.use(config => {
   const token = localStorage.getItem('token');
