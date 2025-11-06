@@ -24,7 +24,7 @@ function BoardBar({ board, setBoard }) {
   const [searchResults, setSearchResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [loadingUser, setLoadingUser] = useState(true);
-  const [selectedUserId, setSelectedUserId] = useState(null);
+  const [selectedUserIds, setSelectedUserIds] = useState([]);
   const [anchorEl, setAnchorEl] = useState(null);
   const [selectedMember, setSelectedMember] = useState(null);
   const navigate = useNavigate();
@@ -318,10 +318,11 @@ function BoardBar({ board, setBoard }) {
     [board, setSearchResults, setLoading]
   );
 
-  const debouncedSearchUsers = useCallback(
-    debounce((query) => {
-      searchUsers(query);
-    }, 300),
+  const debouncedSearchUsers = useMemo(
+    () =>
+      debounce((query) => {
+        searchUsers(query);
+      }, 300),
     [searchUsers]
   );
 
@@ -335,86 +336,89 @@ function BoardBar({ board, setBoard }) {
   }, [searchQuery, debouncedSearchUsers, board?._id]);
 
   const handleInviteMember = async () => {
-    if (!selectedUserId && !searchQuery.trim()) {
+    if (selectedUserIds.length === 0 && !searchQuery.trim()) {
       toast.error("Vui lòng chọn một người dùng hoặc nhập email!");
       return;
     }
+
     try {
       setLoading(true);
       const token = localStorage.getItem("token");
-      const payload = selectedUserId
-        ? { userId: selectedUserId }
+
+      const payload = selectedUserIds.length > 0
+        ? { userIds: selectedUserIds }
         : { email: searchQuery.trim() };
-      log("BoardBar: Inviting member:", { boardId: board?._id, payload });
+
       const response = await axios.post(
         `http://localhost:5000/api/boards/${board?._id}/invite`,
         payload,
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      log("BoardBar: Invite response:", response.data);
+
       if (typeof setBoard === "function") {
         setBoard(response.data.board);
       }
-      if (selectedUserId && socket && socketReady) {
-        socket.emit("member-invited", {
-          board: response.data.board,
-          invitedUser: response.data.board.members.find(
-            (m) => m.user._id === selectedUserId
-          ).user,
-        });
+
+      if (socket && socketReady) {
+        socket.emit("member-invited", { board: response.data.board });
       }
-      toast.success(response.data.message);
+
+      toast.success("Mời thành viên thành công!");
+
+      // Reset
       setSearchQuery("");
-      setSelectedUserId(null);
+      setSelectedUserIds([]);
       setSearchResults([]);
       fetchBoard();
+
     } catch (err) {
-      log("BoardBar: Error inviting member:", {
-        message: err.message,
-        response: err.response?.data,
-        status: err.response?.status,
-      });
-      toast.error(
-        err.response?.data?.message || "Có lỗi xảy ra khi mời thành viên."
-      );
+      toast.error(err.response?.data?.message || "Lỗi khi mời thành viên.");
     } finally {
       setLoading(false);
     }
   };
 
   const handleRemoveMember = async (userId) => {
-    if (
-      !window.confirm("Bạn có chắc chắn muốn xóa thành viên này khỏi bảng?")
-    ) {
+
+    if (!userId || !mongoose.Types.ObjectId.isValid?.(userId)) {
+      toast.error("ID người dùng không hợp lệ!");
+      console.error("Invalid userId:", userId);
       return;
     }
+
+    if (!window.confirm("Bạn có chắc chắn muốn xóa thành viên này khỏi bảng?")) {
+      return;
+    }
+
     try {
       setLoading(true);
       const token = localStorage.getItem("token");
-      log("BoardBar: Removing member:", { boardId: board?._id, userId });
+
       const response = await axios.delete(
         `http://localhost:5000/api/boards/${board?._id}/members/${userId}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      log("BoardBar: Remove response:", response.data);
+
+      // Cập nhật board
       if (typeof setBoard === "function") {
         setBoard(response.data.board);
       }
+
+      // Socket
       if (socket && socketReady) {
         socket.emit("member-deactivated", {
           board: response.data.board,
           deactivatedUserId: userId,
         });
-        socket.emit("refresh-sidebar", { userId });
       }
+
       toast.success("Đã xóa thành viên thành công!");
       handleCloseMenu();
       fetchBoard();
+
     } catch (err) {
-      log("BoardBar: Error removing member:", err);
-      toast.error(
-        err.response?.data?.message || "Có lỗi xảy ra khi xóa thành viên."
-      );
+      console.error("Remove member error:", err.response?.data);
+      toast.error(err.response?.data?.message || "Lỗi khi xóa thành viên!");
     } finally {
       setLoading(false);
     }
@@ -458,11 +462,11 @@ function BoardBar({ board, setBoard }) {
     }
   };
 
-  useEffect(() => {
-    if (board?._id) {
-      searchUsers(searchQuery);
-    }
-  }, [searchQuery, searchUsers, board?._id]);
+  // useEffect(() => {
+  //   if (board?._id) {
+  //     searchUsers(searchQuery);
+  //   }
+  // }, [searchQuery, searchUsers, board?._id]);
 
   const handleOpenInviteDialog = () => {
     if (!board?._id) {
@@ -476,7 +480,7 @@ function BoardBar({ board, setBoard }) {
     setOpenInviteDialog(false);
     setSearchQuery("");
     setSearchResults([]);
-    setSelectedUserId(null);
+    setSelectedUserIds([]);
   };
 
   const handleOpenManageMembersDialog = () => {
@@ -488,12 +492,13 @@ function BoardBar({ board, setBoard }) {
   };
 
   const handleOpenMenu = (event, member) => {
-    if (event.currentTarget) {
-      setAnchorEl(event.currentTarget);
-      setSelectedMember(member);
-    } else {
-      log("BoardBar: Invalid anchorEl in handleOpenMenu");
+    if (!member?.user?._id) {
+      console.warn("Không thể mở menu: member không hợp lệ", member);
+      toast.error("Không thể mở menu cho thành viên này!");
+      return;
     }
+    setAnchorEl(event.currentTarget);
+    setSelectedMember(member);
   };
 
   const handleCloseMenu = () => {
@@ -602,8 +607,8 @@ function BoardBar({ board, setBoard }) {
         searchResults={searchResults}
         pastMembersAndInvited={pastMembersAndInvited}
         loading={loading}
-        selectedUserId={selectedUserId}
-        setSelectedUserId={setSelectedUserId}
+        selectedUserIds={selectedUserIds}
+        setSelectedUserIds={setSelectedUserIds}
         onlineUsers={onlineUsers}
         handleCloseInviteDialog={handleCloseInviteDialog}
         handleInviteMember={handleInviteMember}

@@ -204,6 +204,7 @@ function MembersSection({
                         bgcolor: 'action.selected',
                         borderColor: 'primary.main',
                       },
+                      marginTop: "15px"
                     }}
                   >
                     <Avatar
@@ -218,8 +219,8 @@ function MembersSection({
                     >
                       {(member.fullName || 'U').charAt(0).toUpperCase()}
                     </Avatar>
-
-                    <Typography
+                    { /*tên user */}
+                    {/* <Typography
                       variant="body2"
                       sx={{
                         textDecoration: isActive ? 'none' : 'line-through',
@@ -231,7 +232,7 @@ function MembersSection({
                       }}
                     >
                       {member.fullName || 'Không xác định'}
-                    </Typography>
+                    </Typography> */}
 
                     {isBoardOwner && (
                       <IconButton

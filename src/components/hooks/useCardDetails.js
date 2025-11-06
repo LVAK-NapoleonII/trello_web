@@ -118,48 +118,28 @@ export const useCardDetails = (card, setCards, setColumns, boardMembers) => {
   }, [card._id]);
 
   // Cập nhật state card
-  const updateCardState = useCallback(
-    (cardId, updatedFields) => {
-      const normalizedChecklists = normalizeChecklists(updatedFields.checklists ?? card.checklists);
-      const normalizedMembers = updatedFields.members?.map(normalizeUser) || card.members;
-      const normalizedComments = normalizeComments(updatedFields.comments ?? card.comments);
-      const normalizedNotes = normalizeNotes(updatedFields.notes ?? card.notes);
-
-      setCards((prev) =>
-        prev.map((c) =>
+ const updateCardState = useCallback(
+  (cardId, updatedFields) => {
+    setColumns((prev) =>
+      prev.map((col) => ({
+        ...col,
+        cards: col.cards.map((c) =>
           c._id === cardId
             ? {
                 ...c,
                 ...updatedFields,
-                members: normalizedMembers,
-                comments: normalizedComments,
-                notes: normalizedNotes,
-                checklists: normalizedChecklists,
+                members: updatedFields.members?.map(normalizeUser) || c.members,
+                comments: normalizeComments(updatedFields.comments ?? c.comments),
+                notes: normalizeNotes(updatedFields.notes ?? c.notes),
+                checklists: normalizeChecklists(updatedFields.checklists ?? c.checklists),
               }
             : c
-        )
-      );
-
-      setColumns((prev) =>
-        prev.map((col) => ({
-          ...col,
-          cards: col.cards.map((c) =>
-            c._id === cardId
-              ? {
-                  ...c,
-                  ...updatedFields,
-                  members: normalizedMembers,
-                  comments: normalizedComments,
-                  notes: normalizedNotes,
-                  checklists: normalizedChecklists,
-                }
-              : c
-          ),
-        }))
-      );
-    },
-    [setCards, setColumns, card.checklists, card.members, card.comments, card.notes]
-  );
+        ),
+      }))
+    );
+  },
+  [setColumns]
+);
 
   // Refresh card từ server
   const refreshCard = useCallback(async () => {

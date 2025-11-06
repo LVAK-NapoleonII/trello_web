@@ -13,7 +13,7 @@ import { useTheme } from "@mui/material/styles";
 
 function ListCards({
   listId,
-  refresh,
+  cards,
   setColumns,
   boardMembers,
   setBoardMembers,
@@ -23,116 +23,32 @@ function ListCards({
   const { socket, socketReady } = useContext(SocketContext);
   const theme = useTheme();
   const isDarkMode = theme.palette.mode === "dark";
-  const [cards, setCards] = useState([]);
 
   const { setNodeRef, isOver } = useDroppable({
     id: `list-${listId}`,
     data: { type: "List", listId },
   });
 
-  const fetchCards = useCallback(async () => {
-    try {
-      const token = localStorage.getItem("token");
-      if (!token) {
-        throw new Error("Không tìm thấy token! Vui lòng đăng nhập lại.");
-      }
-
-      const response = await axios.get(
-        `http://localhost:5000/api/cards/list/${listId}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-
-      let uniqueCards = response.data.filter(
-        (card, index, self) =>
-          self.findIndex((c) => c._id === card._id) === index
-      );
-
-      uniqueCards = uniqueCards.sort((a, b) => a.position - b.position);
-
-      setCards(uniqueCards);
-      setColumns((prevColumns) =>
-        prevColumns.map((col) =>
-          col._id === listId
-            ? {
-              ...col,
-              cards: uniqueCards,
-              cardOrderIds: uniqueCards.map((c) => c._id),
-            }
-            : col
-        )
-      );
-    } catch (err) {
-      console.error("ListCards: Error fetching cards:", err);
-      toast.error(
-        `Lỗi khi tải danh sách thẻ: ${err.response?.data?.message || err.message}`
-      );
-    }
-  }, [listId, setColumns]);
-
-  useEffect(() => {
-    if (!listId) return;
-    fetchCards();
-  }, [listId, refresh, fetchCards]);
-
   useEffect(() => {
     if (!socket || !socketReady || !boardId) return;
 
     socket.emit("join-board", { boardId });
 
-    // ✅ FIX: Cập nhật đúng thứ tự từ backend
+
     const handleCardOrderUpdated = ({ listId: updatedListId, cardOrder }) => {
       if (updatedListId !== listId) return;
 
-      if (!Array.isArray(cardOrder)) {
-        console.error("ListCards: Invalid cardOrder:", cardOrder);
-        fetchCards();
-        return;
-      }
+      if (!Array.isArray(cardOrder)) return;
 
-      console.log("ListCards: Received card-order-updated:", {
-        listId: updatedListId,
-        cardOrder,
-      });
-
-      // ✅ QUAN TRỌNG: Kiểm tra xem có card nào bị thiếu không
-      setCards((prevCards) => {
-        const missingIds = cardOrder.filter(
-          (id) => !prevCards.some((card) => card._id === id)
-        );
-
-        if (missingIds.length > 0) {
-          console.warn("ListCards: Missing cards, refetching:", missingIds);
-          fetchCards();
-          return prevCards;
-        }
-
-        // ✅ Sắp xếp lại cards theo cardOrder từ backend
-        const reorderedCards = cardOrder
-          .map((id) => prevCards.find((card) => card._id === id))
-          .filter((card) => card !== undefined)
-          .map((card, index) => ({
-            ...card,
-            position: index // Cập nhật position theo index mới
-          }));
-
-        console.log("ListCards: Reordered cards:", {
-          oldOrder: prevCards.map(c => c._id),
-          newOrder: reorderedCards.map(c => c._id),
-        });
-
-        return reorderedCards;
-      });
-
-      // ✅ Cập nhật columns state
-      setColumns((prevColumns) =>
-        prevColumns.map((col) =>
+      setColumns((prev) =>
+        prev.map((col) =>
           col._id === listId
             ? {
               ...col,
               cardOrderIds: cardOrder,
               cards: cardOrder
-                .map((id) => col.cards.find((card) => card._id === id))
-                .filter((card) => card !== undefined)
+                .map((id) => col.cards.find((c) => c._id === id))
+                .filter(Boolean)
                 .map((card, index) => ({ ...card, position: index })),
             }
             : col
@@ -140,106 +56,50 @@ function ListCards({
       );
     };
 
-    // ✅ FIX: Xử lý card-moved chính xác
+
     const handleCardMoved = ({ card, oldListId, newListId, newPosition }) => {
-      console.log("ListCards: Received card-moved:", {
-        cardId: card._id,
-        oldListId,
-        newListId,
-        newPosition,
-        currentListId: listId,
-      });
+      setColumns((prev) => {
+        let newCols = [...prev];
 
-      // Xóa khỏi list cũ
-      if (oldListId === listId) {
-        setCards((prevCards) => {
-          const filtered = prevCards.filter((c) => c._id !== card._id);
-          console.log("ListCards: Removed card from old list:", {
-            cardId: card._id,
-            remainingCards: filtered.map(c => c._id),
-          });
-          return filtered;
-        });
-
-        setColumns((prevColumns) =>
-          prevColumns.map((col) =>
-            col._id === listId
+        // XÓA KHỎI LIST CŨ
+        if (oldListId) {
+          newCols = newCols.map((col) =>
+            col._id === oldListId
               ? {
                 ...col,
                 cards: col.cards.filter((c) => c._id !== card._id),
-                cardOrderIds: col.cards
-                  .filter((c) => c._id !== card._id)
-                  .map((c) => c._id),
+                cardOrderIds: col.cards.filter((c) => c._id !== card._id).map((c) => c._id),
               }
               : col
-          )
-        );
-      }
+          );
+        }
 
-      // Thêm vào list mới
-      if (newListId === listId) {
-        setCards((prevCards) => {
-          // Loại bỏ duplicate nếu có
-          const filtered = prevCards.filter((c) => c._id !== card._id);
+        // THÊM VÀO LIST MỚI
+        if (newListId === listId) {
+          const target = newCols.find((col) => col._id === newListId);
+          if (target) {
+            const filtered = target.cards.filter((c) => c._id !== card._id);
+            const pos = Math.min(newPosition, filtered.length);
+            const newCards = [...filtered];
+            newCards.splice(pos, 0, { ...card, list: newListId, position: pos });
 
-          // ✅ QUAN TRỌNG: Insert vào đúng vị trí
-          const newCards = [...filtered];
-          const safePosition = Math.min(newPosition, newCards.length);
-          newCards.splice(safePosition, 0, {
-            ...card,
-            list: newListId,
-            position: safePosition
-          });
+            newCols = newCols.map((col) =>
+              col._id === newListId
+                ? { ...col, cards: newCards, cardOrderIds: newCards.map((c) => c._id) }
+                : col
+            );
+          }
+        }
 
-          console.log("ListCards: Added card to new list:", {
-            cardId: card._id,
-            position: safePosition,
-            newOrder: newCards.map(c => c._id),
-          });
-
-          return newCards;
-        });
-
-        setColumns((prevColumns) =>
-          prevColumns.map((col) => {
-            if (col._id === newListId) {
-              // Loại bỏ duplicate
-              const filtered = col.cards.filter((c) => c._id !== card._id);
-
-              // Insert vào đúng vị trí
-              const newCards = [...filtered];
-              const safePosition = Math.min(newPosition, newCards.length);
-              newCards.splice(safePosition, 0, {
-                ...card,
-                list: newListId,
-                position: safePosition
-              });
-
-              return {
-                ...col,
-                cards: newCards,
-                cardOrderIds: newCards.map((c) => c._id),
-              };
-            }
-            return col;
-          })
-        );
-      }
+        return newCols;
+      });
     };
 
     const handleCardCreated = ({ listId: updatedListId, card }) => {
       if (updatedListId !== listId) return;
 
-      setCards((prevCards) => {
-        if (prevCards.some((c) => c._id === card._id)) {
-          console.log("ListCards: Card already exists, skipping:", card._id);
-          return prevCards;
-        }
-        return [...prevCards, { ...card, position: prevCards.length }];
-      });
-
-      setColumns((prevColumns) =>
-        prevColumns.map((col) =>
+      setColumns((prev) =>
+        prev.map((col) =>
           col._id === listId
             ? {
               ...col,
@@ -254,7 +114,6 @@ function ListCards({
         )
       );
     };
-
     socket.on("card-order-updated", handleCardOrderUpdated);
     socket.on("card-moved", handleCardMoved);
     socket.on("card-created", handleCardCreated);
@@ -265,14 +124,15 @@ function ListCards({
       socket.off("card-created", handleCardCreated);
       socket.emit("leave-board", { boardId });
     };
-  }, [socket, socketReady, listId, boardId, setColumns, fetchCards]);
+  }, [socket, socketReady, listId, boardId]);
 
-  const sortableItems = useMemo(() => {
-    const uniqueCards = cards?.filter(
-      (card, index, self) => self.findIndex((c) => c._id === card._id) === index
-    );
-    return uniqueCards?.map((c) => c._id) || [];
+  const uniqueCards = useMemo(() => {
+    if (!Array.isArray(cards)) return [];
+    const seen = new Set();
+    return cards.filter((card) => card?._id && !seen.has(card._id) && seen.add(card._id));
   }, [cards]);
+
+  const sortableItems = useMemo(() => uniqueCards.map((c) => c._id), [uniqueCards]);
 
   const renderPlaceholder = (index) => {
     if (
@@ -330,14 +190,13 @@ function ListCards({
   const renderCards = useCallback(() => {
     const result = [];
 
-    cards.forEach((card, index) => {
+    uniqueCards.forEach((card, index) => {
       result.push(renderPlaceholder(index));
 
       result.push(
         <Cards
           key={card._id}
-          card={{ ...card, type: "Card" }}
-          setCards={setCards}
+          card={card}
           setColumns={setColumns}
           boardMembers={boardMembers}
           setBoardMembers={setBoardMembers}
@@ -351,16 +210,14 @@ function ListCards({
 
     return result;
   }, [
-    cards,
+    uniqueCards,
     predictedPosition,
     listId,
     isDarkMode,
     boardMembers,
     setBoardMembers,
     boardId,
-    setCards,
     setColumns,
-    renderPlaceholder,
   ]);
 
   return (
@@ -392,22 +249,15 @@ function ListCards({
         },
       }}
     >
-      <SortableContext
-        items={sortableItems}
-        strategy={verticalListSortingStrategy}
-      >
-        {cards?.length > 0 || predictedPosition?.listId === listId ? (
+      <SortableContext items={sortableItems} strategy={verticalListSortingStrategy}>
+        {uniqueCards.length > 0 || predictedPosition?.listId === listId ? (
           renderCards()
         ) : (
           <Box
             sx={{
               p: 2,
-              color: isDarkMode
-                ? theme.palette.grey[400]
-                : theme.palette.text.secondary,
-              bgcolor: isDarkMode
-                ? "rgba(255,255,255,0.05)"
-                : theme.palette.grey[100],
+              color: isDarkMode ? theme.palette.grey[400] : theme.palette.text.secondary,
+              bgcolor: isDarkMode ? "rgba(255,255,255,0.05)" : theme.palette.grey[100],
               borderRadius: "8px",
               textAlign: "center",
               fontWeight: 500,

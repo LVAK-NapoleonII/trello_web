@@ -26,7 +26,7 @@ function Cards({
   } = useSortable({
     id: card._id,
     data: { type: "Card", card },
-    // ✅ QUAN TRỌNG: Bật animation để card theo chuột
+
     animateLayoutChanges: undefined, // Hoặc xóa dòng này
   });
 
@@ -36,7 +36,7 @@ function Cards({
     opacity: isDragging ? 0.5 : 1, // Tăng opacity để thấy rõ
     cursor: isDragging ? "grabbing" : "grab",
     zIndex: isDragging ? 1000 : "auto",
-    // ✅ Đảm bảo card được render đúng
+
     touchAction: "none",
   };
 

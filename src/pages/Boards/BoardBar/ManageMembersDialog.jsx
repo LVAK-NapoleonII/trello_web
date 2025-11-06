@@ -22,7 +22,6 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import ExitToAppIcon from "@mui/icons-material/ExitToApp";
 import TransferIcon from "@mui/icons-material/AssignmentInd";
 
-
 function ManageMembersDialog({
   open,
   board,
@@ -109,12 +108,13 @@ function ManageMembersDialog({
             }}
           >
             {activeMembers.map((member) => {
+              const userId = member.user?._id;
               const isOnline =
                 onlineUsers &&
-                (onlineUsers.has(member.user?._id) || member.user?.isOnline);
+                (onlineUsers.has(userId) || member.user?.isOnline);
               return (
                 <ListItem
-                  key={member.user?._id}
+                  key={`member-${userId}`} // ĐÃ SỬA: key duy nhất
                   sx={{
                     borderRadius: 10,
                     mb: 0.5,
@@ -145,7 +145,7 @@ function ManageMembersDialog({
                     primary={`${member.user?.fullName || member.user?.email} ${isOnline ? "(Online)" : "(Offline)"
                       }`}
                     secondary={
-                      member.user?._id === board?.owner?._id
+                      userId === board?.owner?._id
                         ? "Chủ phòng"
                         : "Thành viên"
                     }
@@ -160,12 +160,12 @@ function ManageMembersDialog({
                     }}
                   />
                   <ListItemSecondaryAction>
-                    {isOwner && member.user?._id !== board?.owner?._id && (
+                    {isOwner && userId !== board?.owner?._id && (
                       <>
                         <Tooltip title="Remove from board">
                           <IconButton
                             edge="end"
-                            onClick={() => handleRemoveMember(member.user?._id)}
+                            onClick={() => handleRemoveMember(userId)}
                             sx={{
                               color: theme.palette.error.main,
                               "&:hover": {
@@ -180,7 +180,7 @@ function ManageMembersDialog({
                         <Tooltip title="Transfer ownership">
                           <IconButton
                             edge="end"
-                            onClick={() => handleTransferOwnership(member.user?._id)} // Hàm mới
+                            onClick={() => handleTransferOwnership(userId)}
                             sx={{
                               color: theme.palette.primary.main,
                               "&:hover": {

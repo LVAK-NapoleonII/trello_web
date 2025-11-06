@@ -11,7 +11,7 @@ import NoteAddIcon from "@mui/icons-material/NoteAdd";
 import Button from "@mui/material/Button";
 import {
   DndContext,
-  closestCorners, // Có thể thử closestCenter cho thẻ nếu muốn
+  closestCorners,
   PointerSensor,
   TouchSensor,
   MouseSensor,
@@ -471,37 +471,39 @@ function ListColumns({ boardId: propBoardId }) {
     const { active } = event;
     const dragData = active.data.current;
 
-    console.log("ListColumns: Drag event data:", {
-      activeId: active.id,
-      dragData: JSON.stringify(dragData, null, 2),
+    console.log("ListColumns: Drag started:", {
+      id: active.id,
+      type: dragData.type,
+      hasColumn: !!dragData.column,
     });
 
     if (!dragData) {
-      console.error("ListColumns: No data in active drag item", active);
+      console.error("ListColumns: No drag data", active);
       return;
     }
 
-    const dragItem = {
-      id: active.id,
-      type: dragData.type,
-      data: dragData,
-    };
-
-    if (dragData.type === "Column" && !dragData.column) {
-      console.error("ListColumns: Column data missing for drag item", active);
-      return;
+    if (dragData.type === "Column") {
+      if (!dragData.column) {
+        console.error("ListColumns: Column data missing!", active);
+        return;
+      }
+      // Gán đúng để DragOverlay dùng
+      setActiveDragItem({
+        id: active.id,
+        type: "Column",
+        data: dragData, // chứa column
+      });
+    } else if (dragData.type === "Card") {
+      setActiveDragItem({
+        id: active.id,
+        type: "Card",
+        data: dragData,
+      });
     }
 
-    setActiveDragItem(dragItem);
     setDragStartPosition({
       x: event.activatorEvent.clientX,
       y: event.activatorEvent.clientY,
-    });
-
-    console.log("ListColumns: Drag started:", {
-      type: dragData.type,
-      id: active.id,
-      column: dragData.column,
     });
 
     document.body.classList.add("is-dragging");

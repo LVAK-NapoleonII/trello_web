@@ -1,3 +1,4 @@
+// components/MemberMenu.jsx
 import {
   Menu,
   MenuItem,
@@ -15,6 +16,7 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
 import PersonIcon from "@mui/icons-material/Person";
 import FiberManualRecordIcon from "@mui/icons-material/FiberManualRecord";
+import { toast } from "react-toastify";
 
 function MemberMenu({
   anchorEl,
@@ -31,10 +33,21 @@ function MemberMenu({
   const isOnline =
     selectedMember &&
     onlineUsers &&
-    (onlineUsers.has(selectedMember.user?._id) ||
-      selectedMember.user?.isOnline);
+    (onlineUsers.has(selectedMember.user?._id) || selectedMember.user?.isOnline);
 
   const isSelectedMemberOwner = selectedMember?.user?._id === board?.owner?._id;
+
+  const handleRemoveClick = () => {
+    const userId = selectedMember?.user?._id?.toString();
+    if (!userId || userId === "undefined") {
+      console.warn("Invalid userId in MemberMenu:", selectedMember);
+      toast.error("Không thể xóa: ID người dùng không hợp lệ!");
+      handleCloseMenu();
+      return;
+    }
+    handleRemoveMember(userId);
+    handleCloseMenu();
+  };
 
   return (
     <Menu
@@ -49,40 +62,17 @@ function MemberMenu({
           minWidth: 280,
           maxWidth: 320,
           borderRadius: 12,
-          background: isDarkMode
-            ? "rgba(255, 255, 255, 0.08)"
-            : "rgba(255, 255, 255, 0.6)",
+          background: isDarkMode ? "rgba(255, 255, 255, 0.08)" : "rgba(255, 255, 255, 0.6)",
           backdropFilter: "blur(12px)",
           border: `1px solid ${isDarkMode ? "rgba(255, 255, 255, 0.15)" : "rgba(0, 0, 0, 0.1)"}`,
           boxShadow: `0 8px 32px ${isDarkMode ? "rgba(0, 0, 0, 0.3)" : "rgba(0, 0, 0, 0.15)"}`,
-          "& .MuiMenuItem-root": {
-            borderRadius: 8,
-            mx: 1,
-            my: 0.5,
-            transition: "all 0.3s ease",
-          },
+          "& .MuiMenuItem-root": { borderRadius: 8, mx: 1, my: 0.5 },
         },
       }}
     >
-      <MenuItem
-        disabled
-        sx={{
-          opacity: "1 !important",
-          cursor: "default",
-          "&.Mui-disabled": {
-            opacity: "1 !important",
-          },
-        }}
-      >
-        <Box
-          sx={{
-            display: "flex",
-            alignItems: "center",
-            gap: 2,
-            width: "100%",
-            py: 1.5,
-          }}
-        >
+      {/* === HEADER === */}
+      <MenuItem disabled sx={{ opacity: "1 !important", cursor: "default" }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 2, width: "100%", py: 1.5 }}>
           <Box sx={{ position: "relative" }}>
             <Avatar
               src={
@@ -95,13 +85,7 @@ function MemberMenu({
               sx={{
                 width: 48,
                 height: 48,
-                border: `3px solid ${isOnline
-                  ? theme.palette.success.main
-                  : theme.palette.grey[500]
-                  }`,
-                background: !selectedMember?.user?.avatar
-                  ? `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`
-                  : undefined,
+                border: `3px solid ${isOnline ? theme.palette.success.main : theme.palette.grey[500]}`,
               }}
             />
             <Box
@@ -112,87 +96,39 @@ function MemberMenu({
                 width: 12,
                 height: 12,
                 borderRadius: "50%",
-                bgcolor: isOnline
-                  ? theme.palette.success.main
-                  : theme.palette.grey[500],
+                bgcolor: isOnline ? theme.palette.success.main : theme.palette.grey[500],
                 border: `2px solid ${theme.palette.background.paper}`,
-                boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
               }}
             />
           </Box>
 
           <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Typography
-              variant="subtitle1"
-              fontWeight={600}
-              color={theme.palette.text.primary}
-              noWrap
-              sx={{ mb: 0.5 }}
-            >
+            <Typography variant="subtitle1" fontWeight={600} noWrap>
               {selectedMember?.user?.fullName || selectedMember?.user?.email}
             </Typography>
 
-            <Box
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                gap: 1,
-                flexWrap: "wrap",
-              }}
-            >
-              <Box
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 0.5,
-                }}
-              >
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: 0.5 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
                 <FiberManualRecordIcon
-                  sx={{
-                    fontSize: 8,
-                    color: isOnline
-                      ? theme.palette.success.main
-                      : theme.palette.grey[500],
-                  }}
+                  sx={{ fontSize: 8, color: isOnline ? "success.main" : "grey.500" }}
                 />
-                <Typography
-                  variant="caption"
-                  color={theme.palette.text.secondary}
-                >
+                <Typography variant="caption" color="text.secondary">
                   {isOnline ? "Online" : "Offline"}
                 </Typography>
               </Box>
 
               <Chip
-                icon={
-                  isSelectedMemberOwner ? (
-                    <AdminPanelSettingsIcon />
-                  ) : (
-                    <PersonIcon />
-                  )
-                }
+                icon={isSelectedMemberOwner ? <AdminPanelSettingsIcon /> : <PersonIcon />}
                 label={isSelectedMemberOwner ? "Chủ phòng" : "Thành viên"}
                 size="small"
                 color={isSelectedMemberOwner ? "primary" : "default"}
                 variant="outlined"
-                sx={{
-                  fontSize: "0.7rem",
-                  height: 20,
-                  "& .MuiChip-icon": {
-                    fontSize: 12,
-                  },
-                  borderRadius: 6,
-                }}
+                sx={{ fontSize: "0.7rem", height: 20 }}
               />
             </Box>
 
             {selectedMember?.user?.fullName && selectedMember?.user?.email && (
-              <Typography
-                variant="caption"
-                color={theme.palette.text.secondary}
-                noWrap
-                sx={{ display: "block", mt: 0.5 }}
-              >
+              <Typography variant="caption" color="text.secondary" noWrap sx={{ mt: 0.5 }}>
                 {selectedMember.user.email}
               </Typography>
             )}
@@ -200,29 +136,23 @@ function MemberMenu({
         </Box>
       </MenuItem>
 
-      <Divider sx={{ mx: 2, my: 1, opacity: 0.5 }} />
+      <Divider sx={{ mx: 2, my: 1 }} />
 
+      {/* === REMOVE BUTTON === */}
       {isOwner && !isSelectedMemberOwner && (
         <MenuItem
-          onClick={() => handleRemoveMember(selectedMember?.user?._id)}
+          onClick={handleRemoveClick}
           sx={{
-            color: theme.palette.error.main,
+            color: "error.main",
             "&:hover": {
-              bgcolor: theme.palette.error.light + "20",
-              color: theme.palette.error.dark,
-              "& .MuiListItemIcon-root": {
-                color: theme.palette.error.dark,
-              },
-              transform: "translateY(-1px)",
+              bgcolor: "error.light",
+              color: "error.contrastText",
+              "& .MuiListItemIcon-root": { color: "error.contrastText" },
             },
-            transition: "all 0.3s ease",
           }}
         >
           <ListItemIcon>
-            <DeleteIcon
-              fontSize="small"
-              sx={{ color: theme.palette.error.main }}
-            />
+            <DeleteIcon fontSize="small" />
           </ListItemIcon>
           <ListItemText>
             <Typography variant="body2" fontWeight={500}>
@@ -232,16 +162,13 @@ function MemberMenu({
         </MenuItem>
       )}
 
+      {/* === DISABLED MESSAGE === */}
       {(!isOwner || isSelectedMemberOwner) && (
         <MenuItem disabled sx={{ justifyContent: "center" }}>
-          <Typography
-            variant="caption"
-            color={theme.palette.text.secondary}
-            sx={{ fontStyle: "italic" }}
-          >
+          <Typography variant="caption" color="text.secondary" sx={{ fontStyle: "italic" }}>
             {isSelectedMemberOwner
-              ? "Chủ phòng không thể rời đi"
-              : "Chỉ chủ phòng mới xóa thành viên"}
+              ? "Chủ phòng không thể bị xóa"
+              : "Chỉ chủ phòng mới có thể xóa thành viên"}
           </Typography>
         </MenuItem>
       )}

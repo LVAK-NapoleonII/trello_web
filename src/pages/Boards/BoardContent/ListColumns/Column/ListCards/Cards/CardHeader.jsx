@@ -38,11 +38,11 @@ function CardHeader({ card, setCards, setColumns, setExpanded }) {
           prevColumns.map((col) =>
             col._id === card.list
               ? {
-                  ...col,
-                  cards: col.cards.map((c) =>
-                    c._id === cardId ? { ...c, completed } : c
-                  ),
-                }
+                ...col,
+                cards: col.cards.map((c) =>
+                  c._id === cardId ? { ...c, completed } : c
+                ),
+              }
               : col
           )
         );
@@ -68,11 +68,11 @@ function CardHeader({ card, setCards, setColumns, setExpanded }) {
           prevColumns.map((col) =>
             col._id === card.list
               ? {
-                  ...col,
-                  cards: col.cards.map((c) =>
-                    c._id === cardId ? { ...c, ...updatedCard } : c
-                  ),
-                }
+                ...col,
+                cards: col.cards.map((c) =>
+                  c._id === cardId ? { ...c, ...updatedCard } : c
+                ),
+              }
               : col
           )
         );
@@ -118,13 +118,13 @@ function CardHeader({ card, setCards, setColumns, setExpanded }) {
         prevColumns.map((col) =>
           col._id === card.list
             ? {
-                ...col,
-                cards: col.cards.map((c) =>
-                  c._id === card._id
-                    ? { ...c, completed: response.data.card.completed }
-                    : c
-                ),
-              }
+              ...col,
+              cards: col.cards.map((c) =>
+                c._id === card._id
+                  ? { ...c, completed: response.data.card.completed }
+                  : c
+              ),
+            }
             : col
         )
       );
@@ -139,8 +139,7 @@ function CardHeader({ card, setCards, setColumns, setExpanded }) {
       console.error("Error updating card completion:", err);
       setIsCompleted(previousState);
       toast.error(
-        `Có lỗi khi cập nhật trạng thái hoàn thành: ${
-          err.response?.data?.message || err.message
+        `Có lỗi khi cập nhật trạng thái hoàn thành: ${err.response?.data?.message || err.message
         }`
       );
     }

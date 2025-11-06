@@ -45,6 +45,7 @@ function Column({
   boardMembers,
   setBoardMembers,
   predictedPosition,
+  fetchCards
 }) {
   const { socket, socketReady } = useContext(SocketContext);
   const theme = useTheme();
@@ -72,7 +73,7 @@ function Column({
     isDragging,
   } = useSortable({
     id: column._id,
-    data: { ...column, type: "Column", isExpanded },
+    data: { column: column, listId: column._id, type: "Column", isExpanded },
   });
 
   const { isOver, setNodeRef: setDroppableNodeRef } = useDroppable({
@@ -449,11 +450,13 @@ function Column({
               <Box sx={{ flex: 1, overflowY: "auto", px: 1, py: 2 }}>
                 <ListCards
                   listId={column._id}
-                  refresh={refreshCards}
+                  cards={column.cards || []}
+                  socket={socket}
+                  socketReady={socketReady}
+                  boardId={boardId}
                   setColumns={setColumns}
                   boardMembers={boardMembers}
                   setBoardMembers={setBoardMembers}
-                  boardId={boardId}
                   predictedPosition={predictedPosition}
                 />
               </Box>

@@ -14,7 +14,6 @@ import { Stack } from "@mui/system";
 
 function CardActionsPanel({
   card,
-  setCards,
   setColumns,
   boardMembers,
   boardId,
@@ -80,7 +79,6 @@ function CardActionsPanel({
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      setCards((prevCards) => prevCards.filter((c) => c._id !== card._id));
       setColumns((prevColumns) =>
         prevColumns.map((col) => ({
           ...col,
@@ -116,14 +114,6 @@ function CardActionsPanel({
         `http://localhost:5000/api/cards/${card._id}/complete`,
         {},
         { headers: { Authorization: `Bearer ${token}` } }
-      );
-
-      setCards((prevCards) =>
-        prevCards.map((c) =>
-          c._id === card._id
-            ? { ...c, completed: response.data.card.completed }
-            : c
-        )
       );
 
       setColumns((prevColumns) =>
@@ -299,7 +289,6 @@ function CardActionsPanel({
         open={openEditDialog}
         onClose={() => setOpenEditDialog(false)}
         card={card}
-        setCards={setCards}
         setColumns={setColumns}
       />
     </CardActions>

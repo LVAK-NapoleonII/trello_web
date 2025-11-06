@@ -19,22 +19,24 @@ export const normalizeChecklists = (checklists) => {
     }));
 };
 
-// Hàm chuẩn hóa user
+
 export const normalizeUser = (user) => {
+  // Nếu user không tồn tại hoặc không phải object
   if (!user || typeof user !== 'object') {
     return {
-      _id: null,
+      _id: 'unknown-user', 
       fullName: 'Người dùng không xác định',
       email: '',
       avatar: 'https://api.dicebear.com/9.x/initials/svg?seed=Unknown'
     };
   }
 
-  const userId = user._id || user.id || null;
-  const userName = (user.fullName || user.name || (userId ? 'Người dùng' : 'Người dùng không xác định')).trim();
+  // Lấy ID an toàn
+  const userId = user._id || user.id || 'unknown-user';
+  const userName = (user.fullName || user.name || 'Người dùng không xác định').trim();
 
   return {
-    _id: userId ? userId.toString() : null,
+    _id: userId.toString(), 
     fullName: userName,
     email: typeof user.email === 'string' ? user.email : '',
     avatar: typeof user.avatar === 'string' && user.avatar 
@@ -43,25 +45,39 @@ export const normalizeUser = (user) => {
   };
 };
 
-// Hàm chuẩn hóa comments
 export const normalizeComments = (comments) => {
   if (!Array.isArray(comments)) return [];
-  return comments.map((comment) => ({
-    _id: comment._id || comment.id,
-    text: comment.text || "",
-    user: normalizeUser(comment.user || {}),
-    createdAt: comment.createdAt ? new Date(comment.createdAt) : new Date(),
-    isDeleted: comment.isDeleted || false,
-  }));
+  
+  return comments
+    .filter(comment => !comment.isDeleted)
+    .map((comment) => {
+      const normalizedUser = normalizeUser(comment.user);
+      
+      return {
+        _id: comment._id || comment.id || `temp-comment-${Date.now()}-${Math.random()}`,
+        text: comment.text || comment.content || "", 
+        user: normalizedUser,
+        createdAt: comment.createdAt ? new Date(comment.createdAt) : new Date(),
+        isDeleted: comment.isDeleted || false,
+      };
+    });
 };
-// Hàm chuẩn hóa notes
+
+
 export const normalizeNotes = (notes) => {
   if (!Array.isArray(notes)) return [];
-  return notes.map((note) => ({
-    _id: note._id || note.id,
-    content: note.content || "",
-    createdBy: normalizeUser(note.createdBy || {}),
-    createdAt: note.createdAt ? new Date(note.createdAt) : new Date(),
-    isDeleted: note.isDeleted || false,
-  }));
+  
+  return notes
+    .filter(note => !note.isDeleted) 
+    .map((note) => {
+      const normalizedCreator = normalizeUser(note.createdBy);
+      
+      return {
+        _id: note._id || note.id || `temp-note-${Date.now()}-${Math.random()}`,
+        content: note.content || note.text || "", 
+        createdBy: normalizedCreator,
+        createdAt: note.createdAt ? new Date(note.createdAt) : new Date(),
+        isDeleted: note.isDeleted || false,
+      };
+    });
 };
