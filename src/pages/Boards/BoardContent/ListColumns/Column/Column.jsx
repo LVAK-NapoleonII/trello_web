@@ -9,11 +9,6 @@ import {
   Divider,
   Tooltip,
   Box,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
 } from "@mui/material";
 import {
   AddCard as AddCardIcon,
@@ -31,7 +26,9 @@ import axios from "axios";
 import { toast } from "react-toastify";
 import { SocketContext } from "../../../../../context/SocketContext";
 import ListCards from "./ListCards/ListCards";
-import CreateCardDialog from "./ListCards/Cards/CreateCardDialog"
+import CreateCardDialog from "./ListCards/Cards/CreateCardDialog";
+import EditColumnTitleDialog from "./EditColumnTitleDialog"; // ← IMPORT
+
 // Constants
 const COLUMN_HEADER_HEIGHT = "56px";
 const COLUMN_FOOTER_HEIGHT = "56px";
@@ -45,13 +42,13 @@ function Column({
   boardMembers,
   setBoardMembers,
   predictedPosition,
-  fetchCards
+  fetchCards,
 }) {
   const { socket, socketReady } = useContext(SocketContext);
   const theme = useTheme();
   const isDarkMode = theme.palette.mode === "dark";
 
-  // State management
+  // State
   const [isExpanded, setIsExpanded] = useState(initialExpanded);
   const [anchorEl, setAnchorEl] = useState(null);
   const [openEditTitleDialog, setOpenEditTitleDialog] = useState(false);
@@ -63,7 +60,7 @@ function Column({
     deleteColumn: false,
   });
 
-  // DnD setup
+  // DnD
   const {
     attributes,
     listeners,
@@ -73,7 +70,7 @@ function Column({
     isDragging,
   } = useSortable({
     id: column._id,
-    data: { column: column, listId: column._id, type: "Column", isExpanded },
+    data: { column, listId: column._id, type: "Column", isExpanded },
   });
 
   const { isOver, setNodeRef: setDroppableNodeRef } = useDroppable({
@@ -108,13 +105,10 @@ function Column({
     display: "flex",
     flexDirection: "column",
     transition: "height 0.3s ease, box-shadow 0.2s ease",
-    "&:hover": {
-      boxShadow: isDarkMode ? "0 6px 16px rgba(0,0,0,0.5)" : theme.shadows[5],
-    },
     overflow: "hidden",
   });
 
-  // Utility functions
+  // Utility
   const getToken = useCallback(() => {
     const token = localStorage.getItem("token");
     if (!token) throw new Error("No token found");
@@ -152,8 +146,7 @@ function Column({
           ...n,
           createdBy: {
             _id: n.createdBy?._id || "unknown",
-            fullName:
-              n.createdBy?.fullName || n.createdBy?.email || "Unknown User",
+            fullName: n.createdBy?.fullName || n.createdBy?.email || "Unknown User",
             avatar: n.createdBy?.avatar || "",
             email: n.createdBy?.email || "",
           },
@@ -179,22 +172,61 @@ function Column({
     [boardId, column._id]
   );
 
-  // Event handlers
-  const handleMenuOpen = useCallback(
-    (event) => setAnchorEl(event.currentTarget),
-    []
-  );
+  // === HANDLERS ===
+  const handleMenuOpen = useCallback((e) => setAnchorEl(e.currentTarget), []);
   const handleMenuClose = useCallback(() => setAnchorEl(null), []);
 
   const handleToggleExpand = useCallback(() => {
     const newExpanded = !isExpanded;
     setIsExpanded(newExpanded);
-    setColumns((prevColumns) =>
-      prevColumns.map((col) =>
+    setColumns((prev) =>
+      prev.map((col) =>
         col._id === column._id ? { ...col, isExpanded: newExpanded } : col
       )
     );
   }, [isExpanded, setColumns, column._id]);
+
+  const handleOpenEdit = useCallback(() => {
+    setNewTitle(column.title);
+    setOpenEditTitleDialog(true);
+  }, [column.title]);
+
+  const handleCloseEdit = useCallback(() => {
+    setOpenEditTitleDialog(false);
+  }, []);
+
+  const handleSaveTitle = useCallback(async () => {
+    if (!newTitle.trim()) {
+      toast.error("Tiêu đề cột không được để trống!");
+      return;
+    }
+
+    setLoading((prev) => ({ ...prev, editTitle: true }));
+    try {
+      const token = getToken();
+      const { data } = await axios.put(
+        `${API_BASE_URL}/lists/${column._id}`,
+        { title: newTitle },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      setColumns((prev) =>
+        prev.map((c) => (c._id === column._id ? { ...c, title: newTitle } : c))
+      );
+
+      if (socket && socketReady) {
+        socket.emit("list-updated", { boardId, list: data });
+      }
+
+      toast.success("Cập nhật tiêu đề cột thành công!");
+      handleCloseEdit();
+    } catch (err) {
+      console.error("Error updating column title:", err);
+      toast.error("Lỗi khi cập nhật tiêu đề cột!");
+    } finally {
+      setLoading((prev) => ({ ...prev, editTitle: false }));
+    }
+  }, [newTitle, column._id, boardId, socket, socketReady, setColumns, getToken, handleCloseEdit]);
 
   const handleDeleteColumn = useCallback(async () => {
     if (!window.confirm("Bạn có chắc chắn muốn xóa cột này?")) return;
@@ -206,9 +238,7 @@ function Column({
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      setColumns((prevColumns) =>
-        prevColumns.filter((c) => c._id !== column._id)
-      );
+      setColumns((prev) => prev.filter((c) => c._id !== column._id));
 
       if (socket && socketReady) {
         socket.emit("list-deleted", { boardId, listId: column._id });
@@ -222,42 +252,7 @@ function Column({
     }
   }, [socket, socketReady, boardId, column._id, setColumns, getToken]);
 
-  const handleEditTitle = useCallback(async () => {
-    if (!newTitle.trim()) {
-      toast.error("Tiêu đề cột không được để trống!");
-      return;
-    }
-
-    setLoading((prev) => ({ ...prev, editTitle: true }));
-    try {
-      const token = getToken();
-      const response = await axios.put(
-        `${API_BASE_URL}/lists/${column._id}`,
-        { title: newTitle },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-
-      setColumns((prevColumns) =>
-        prevColumns.map((col) =>
-          col._id === column._id ? { ...col, title: newTitle } : col
-        )
-      );
-
-      if (socket && socketReady) {
-        socket.emit("list-updated", { boardId, list: response.data });
-      }
-
-      toast.success("Cập nhật tiêu đề cột thành công!");
-      setOpenEditTitleDialog(false);
-    } catch (err) {
-      console.error("Error updating column title:", err);
-      toast.error("Lỗi khi cập nhật tiêu đề cột!");
-    } finally {
-      setLoading((prev) => ({ ...prev, editTitle: false }));
-    }
-  }, [socket, socketReady, boardId, column._id, newTitle, setColumns, getToken]);
-
-  // Socket effects
+  // === SOCKET EFFECTS ===
   useEffect(() => {
     if (!socket || !socketReady || !boardId) return;
 
@@ -265,8 +260,8 @@ function Column({
 
     const handleCardCreated = ({ listId, card }) => {
       if (listId !== column._id) return;
-      setColumns((prevColumns) =>
-        prevColumns.map((col) =>
+      setColumns((prev) =>
+        prev.map((col) =>
           col._id === listId
             ? { ...col, cards: [...(col.cards || []), normalizeCard(card)] }
             : col
@@ -278,16 +273,10 @@ function Column({
 
     const handleListUpdated = ({ list }) => {
       if (list._id !== column._id) return;
-      setColumns((prevColumns) =>
-        prevColumns.map((col) =>
+      setColumns((prev) =>
+        prev.map((col) =>
           col._id === list._id
-            ? {
-              ...col,
-              title: list.title,
-              cards: Array.isArray(list.cards)
-                ? list.cards.map(normalizeCard)
-                : col.cards,
-            }
+            ? { ...col, title: list.title, cards: list.cards?.map(normalizeCard) || col.cards }
             : col
         )
       );
@@ -297,9 +286,7 @@ function Column({
 
     const handleListDeleted = ({ listId }) => {
       if (listId !== column._id) return;
-      setColumns((prevColumns) =>
-        prevColumns.filter((col) => col._id !== listId)
-      );
+      setColumns((prev) => prev.filter((col) => col._id !== listId));
       toast.info("Cột đã được xóa.");
     };
 
@@ -315,59 +302,13 @@ function Column({
     };
   }, [socket, socketReady, boardId, column._id, setColumns, normalizeCard]);
 
-  // Dialog components
-  const EditTitleDialog = () => (
-    <Dialog
-      open={openEditTitleDialog}
-      onClose={() => {
-        setOpenEditTitleDialog(false);
-        setNewTitle(column.title);
-      }}
-      maxWidth="sm"
-      fullWidth
-    >
-      <DialogTitle>Sửa tiêu đề cột</DialogTitle>
-      <DialogContent>
-        <TextField
-          autoFocus
-          margin="dense"
-          label="Tiêu đề cột"
-          fullWidth
-          variant="outlined"
-          value={newTitle}
-          onChange={(e) => setNewTitle(e.target.value)}
-          onKeyPress={(e) => {
-            if (e.key === "Enter" && newTitle.trim()) {
-              handleEditTitle();
-            }
-          }}
-        />
-      </DialogContent>
-      <DialogActions>
-        <Button
-          onClick={() => {
-            setOpenEditTitleDialog(false);
-            setNewTitle(column.title);
-          }}
-        >
-          Hủy bỏ
-        </Button>
-        <Button
-          onClick={handleEditTitle}
-          disabled={!newTitle.trim() || loading.editTitle}
-          variant="contained"
-        >
-          {loading.editTitle ? "Đang lưu..." : "Lưu"}
-        </Button>
-      </DialogActions>
-    </Dialog>
-  );
-
+  // === RENDER ===
   return (
     <>
+      {/* CỘT CHÍNH */}
       <div ref={setNodeRef} style={dndKitColumnStyles} {...attributes}>
         <Box ref={setDroppableNodeRef} {...listeners} sx={getColumnStyles()}>
-          {/* Header */}
+          {/* HEADER */}
           <Box
             sx={{
               height: COLUMN_HEADER_HEIGHT,
@@ -375,76 +316,55 @@ function Column({
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
-              borderBottom: isExpanded
-                ? `1px solid ${theme.palette.divider}`
-                : "none",
+              borderBottom: isExpanded ? `1px solid ${theme.palette.divider}` : "none",
               flexShrink: 0,
             }}
           >
             <Typography
               variant="h6"
-              onClick={() => setOpenEditTitleDialog(true)}
+              onClick={handleOpenEdit}
               sx={{
                 fontWeight: 600,
                 cursor: "pointer",
                 "&:hover": { textDecoration: "underline" },
               }}
             >
-              {column?.title}
+              {column.title}
             </Typography>
             <Box>
-              <Tooltip title={isExpanded ? "Thu gọn cột" : "Mở rộng cột"}>
+              <Tooltip title={isExpanded ? "Thu gọn" : "Mở rộng"}>
                 <span>
                   {isExpanded ? (
-                    <ExpandMoreIcon
-                      onClick={handleToggleExpand}
-                      sx={{ cursor: "pointer" }}
-                    />
+                    <ExpandMoreIcon onClick={handleToggleExpand} sx={{ cursor: "pointer" }} />
                   ) : (
-                    <ExpandLessIcon
-                      onClick={handleToggleExpand}
-                      sx={{ cursor: "pointer" }}
-                    />
+                    <ExpandLessIcon onClick={handleToggleExpand} sx={{ cursor: "pointer" }} />
                   )}
                 </span>
               </Tooltip>
-              <Tooltip title="Tùy chọn khác">
+              <Tooltip title="Tùy chọn">
                 <span>
-                  <PixIcon
-                    onClick={handleMenuOpen}
-                    sx={{ cursor: "pointer" }}
-                  />
+                  <PixIcon onClick={handleMenuOpen} sx={{ cursor: "pointer" }} />
                 </span>
               </Tooltip>
-              <Menu
-                anchorEl={anchorEl}
-                open={Boolean(anchorEl)}
-                onClose={handleMenuClose}
-              >
+              <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={handleMenuClose}>
                 <MenuItem onClick={() => setOpenCreateCardDialog(true)}>
-                  <ListItemIcon>
-                    <AddCardIcon fontSize="small" />
-                  </ListItemIcon>
+                  <ListItemIcon><AddCardIcon fontSize="small" /></ListItemIcon>
                   <ListItemText>Thêm thẻ mới</ListItemText>
                 </MenuItem>
-                <MenuItem onClick={() => setOpenEditTitleDialog(true)}>
-                  <ListItemIcon>
-                    <AddCardIcon fontSize="small" />
-                  </ListItemIcon>
+                <MenuItem onClick={handleOpenEdit}>
+                  <ListItemIcon><AddCardIcon fontSize="small" /></ListItemIcon>
                   <ListItemText>Sửa tiêu đề cột</ListItemText>
                 </MenuItem>
                 <Divider />
                 <MenuItem onClick={handleDeleteColumn}>
-                  <ListItemIcon>
-                    <DeleteForeverIcon fontSize="small" color="error" />
-                  </ListItemIcon>
+                  <ListItemIcon><DeleteForeverIcon fontSize="small" color="error" /></ListItemIcon>
                   <ListItemText>Xóa cột này</ListItemText>
                 </MenuItem>
               </Menu>
             </Box>
           </Box>
 
-          {/* Content */}
+          {/* NỘI DUNG */}
           {isExpanded && (
             <>
               <Box sx={{ flex: 1, overflowY: "auto", px: 1, py: 2 }}>
@@ -461,7 +381,7 @@ function Column({
                 />
               </Box>
 
-              {/* Footer */}
+              {/* FOOTER */}
               <Box
                 sx={{
                   height: COLUMN_FOOTER_HEIGHT,
@@ -476,7 +396,6 @@ function Column({
                 <Button
                   startIcon={<AddCardIcon />}
                   onClick={() => setOpenCreateCardDialog(true)}
-                  disabled={loading.createCard}
                   variant="contained"
                   size="small"
                 >
@@ -491,7 +410,16 @@ function Column({
         </Box>
       </div>
 
-      <EditTitleDialog />
+      {/* DIALOG TÁCH RIÊNG – KHÔNG RE-RENDER CỘT */}
+      <EditColumnTitleDialog
+        open={openEditTitleDialog}
+        onClose={handleCloseEdit}
+        title={newTitle}
+        onTitleChange={setNewTitle}
+        onSave={handleSaveTitle}
+        loading={loading.editTitle}
+      />
+
       <CreateCardDialog
         open={openCreateCardDialog}
         onClose={() => setOpenCreateCardDialog(false)}

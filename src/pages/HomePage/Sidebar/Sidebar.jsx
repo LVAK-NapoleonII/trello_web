@@ -440,7 +440,6 @@ const Sidebar = ({
           <Collapse in={isExpanded} timeout="auto" unmountOnExit>
             <List component="div" disablePadding sx={{ pl: 3, mt: 0.5 }}>
               {[
-                { text: "Highlights", icon: <StarIcon />, path: "highlights" },
                 { text: "Members", icon: <PeopleIcon />, path: "members" },
                 { text: "Settings", icon: <SettingsIcon />, path: "settings" },
               ].map((item) => (

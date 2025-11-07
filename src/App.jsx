@@ -10,7 +10,6 @@ import ForgotPassword from "./pages/Auth/ForgotPassword";
 import VerifyOTPPage from "./pages/Auth/VerifyOTPPage";
 import WorkspaceMembersPage from "./pages/Workspace/WorkspaceMembersPage.jsx";
 import WorkspaceSettingsPage from "./pages/Workspace/WorkspaceSettingsPage.jsx";
-import WorkspaceHighlightsPage from "./pages/Workspace/WorkspaceHighlightsPage.jsx";
 import { AdminDashboard } from "./admin/dashboard/AdminDashboard.jsx"
 
 function App() {
@@ -41,7 +40,6 @@ function App() {
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/verify-otp" element={<VerifyOTPPage />} />
           <Route path="/workspace/:workspaceId/members" element={<WorkspaceMembersPage />} />
-          <Route path="/workspace/:workspaceId/highlights" element={<WorkspaceHighlightsPage />} />
           <Route path="/workspace/:workspaceId/settings" element={<WorkspaceSettingsPage />} />
           <Route path="/workspace/:workspaceId/board/:boardId" element={<Board />} />
           <Route path="/admin/*" element={<AdminDashboard />} />

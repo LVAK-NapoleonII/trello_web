@@ -2,7 +2,6 @@ import { useState, useEffect, useContext, useCallback, useMemo } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Card } from "@mui/material";
-import CardCover from "./CardCover";
 import CardHeader from "./CardHeader";
 import CardDetails from "./CardDetails";
 import CardActionsPanel from "./CardActionsPanel";
@@ -265,7 +264,6 @@ function CardContainer({
       {...attributes}
       {...listeners}
     >
-      {card.cover && <CardCover cover={card.cover} />}
       <CardHeader
         card={card}
         setCards={setCards}

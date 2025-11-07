@@ -41,8 +41,6 @@ import { SocketContext } from "../../context/SocketContext";
 import ModeSelect from "../AppBar/Menus/ModeSelect/ModeSelect";
 import WorkSpace from "./Menus/WorkSpace";
 import WorkspaceHistory from "./Menus/WorkspaceHistory";
-import Starred from "./Menus/Starred";
-import Templates from "./Menus/Templates";
 import Profiles from "./Menus/Profiles";
 
 const CustomIconButton = forwardRef(({ onClick, children, ...props }, ref) => (
@@ -377,8 +375,6 @@ const AppBar = () => {
           </Box>
           <WorkSpace onCreateWorkspace={handleOpenModal} />
           <WorkspaceHistory />
-          <Starred />
-          <Templates />
           <Button
             variant="outlined"
             startIcon={<AddToPhotosIcon />}
@@ -404,42 +400,7 @@ const AppBar = () => {
           </Button>
         </Box>
         <Box sx={{ display: "flex", alignItems: "center", gap: { xs: 1, sm: 2 } }}>
-          <TextField
-            id="outlined-search"
-            label="Tìm kiếm..."
-            type="text"
-            size="small"
-            value={searchValue}
-            onChange={(e) => setSearchValue(e.target.value)}
-            InputProps={{
-              startAdornment: (
-                <Tooltip title="Tìm kiếm">
-                  <SearchIcon sx={{ fontSize: "1.2rem", color: "white" }} />
-                </Tooltip>
-              ),
-              endAdornment: searchValue && (
-                <Tooltip title="Xóa tìm kiếm">
-                  <CustomIconButton onClick={() => setSearchValue("")}>
-                    <ClearIcon sx={{ fontSize: "1.2rem", color: "white" }} />
-                  </CustomIconButton>
-                </Tooltip>
-              ),
-            }}
-            sx={{
-              minWidth: { xs: "100px", sm: "140px" },
-              maxWidth: "180px",
-              "& label": { color: "white" },
-              "& input": { color: "white" },
-              "& label.Mui-focused": { color: "white" },
-              "& .MuiOutlinedInput-root": {
-                borderRadius: 8,
-                bgcolor: "rgba(255, 255, 255, 0.1)",
-                "& fieldset": { borderColor: "rgba(255, 255, 255, 0.3)" },
-                "&:hover fieldset": { borderColor: "white" },
-                "&.Mui-focused fieldset": { borderColor: "white" },
-              },
-            }}
-          />
+
           <ModeSelect />
           <Tooltip title="Thông báo">
             <CustomIconButton onClick={handleOpenNotifications}>

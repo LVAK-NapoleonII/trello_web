@@ -527,11 +527,21 @@ function BoardBar({ board, setBoard }) {
       });
       return false;
     }
-    const ownerId = board.owner._id
-      ? board.owner._id.toString()
-      : board.owner.toString();
-    log("BoardBar: isOwner check:", { userId, ownerId });
-    return userId === ownerId;
+    let ownerId = null;
+    if (typeof board.owner === "string") {
+      ownerId = board.owner;
+    } else if (board.owner?._id) {
+      ownerId = board.owner._id.toString();
+    }
+
+    if (!ownerId) {
+      log("BoardBar: ownerId không hợp lệ", board.owner);
+      return false;
+    }
+
+    const result = userId === ownerId;
+    log("BoardBar: isOwner check:", { userId, ownerId, result });
+    return result;
   }, [loadingUser, userId, board?.owner]);
 
   if (!board || !board._id) {
