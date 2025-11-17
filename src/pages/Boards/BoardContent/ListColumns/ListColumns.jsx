@@ -602,10 +602,10 @@ function ListColumns({ boardId: propBoardId }) {
         const oldIndex = columns.findIndex((c) => c._id === active.id);
         const newIndex = columns.findIndex((c) => c._id === over.id);
 
-        if (oldIndex === newIndex) return; // Không thay đổi vị trí
+        if (oldIndex === newIndex) return;
 
         const newColumns = arrayMove(columns, oldIndex, newIndex);
-        setColumns(newColumns); // Cập nhật UI ngay lập tức
+        setColumns(newColumns);
 
         try {
           const token = localStorage.getItem("token");
@@ -623,7 +623,7 @@ function ListColumns({ boardId: propBoardId }) {
         } catch (err) {
           console.error("ListColumns: Error updating column order:", err);
           toast.error("Lỗi khi cập nhật thứ tự cột!");
-          fetchColumns(); // Rollback nếu có lỗi
+          fetchColumns();
         }
         return;
       }
@@ -636,7 +636,7 @@ function ListColumns({ boardId: propBoardId }) {
         const activeColumnId = active.data.current?.card?.list;
         let overColumnId;
 
-        // Xác định cột đích (overColumnId)
+        // Xác định cột đích
         if (over.data.current?.type === "Card") {
           overColumnId = over.data.current?.card?.list;
         } else if (
@@ -649,43 +649,32 @@ function ListColumns({ boardId: propBoardId }) {
           return;
         }
 
-        const activeColumnIndex = columns.findIndex(
-          (c) => c._id === activeColumnId
-        );
-        const overColumnIndex = columns.findIndex(
-          (c) => c._id === overColumnId
-        );
+        const activeColumnIndex = columns.findIndex((c) => c._id === activeColumnId);
+        const overColumnIndex = columns.findIndex((c) => c._id === overColumnId);
 
         if (activeColumnIndex === -1 || overColumnIndex === -1) {
           console.error("ListColumns: Source or destination column not found!");
           return;
         }
 
-        const activeCard = columns[activeColumnIndex].cards.find(
-          (c) => c._id === activeCardId
-        );
+        const activeCard = columns[activeColumnIndex].cards.find((c) => c._id === activeCardId);
         if (!activeCard) {
           console.error("ListColumns: Source card not found!");
           return;
         }
 
-        // Tạo bản sao của `columns` để thay đổi
+        // Bản sao state để thay đổi
         const newColumnsState = [...columns];
         const sourceColumn = newColumnsState[activeColumnIndex];
         const destinationColumn = newColumnsState[overColumnIndex];
 
-        // Loại bỏ thẻ khỏi cột nguồn
-        sourceColumn.cards = sourceColumn.cards.filter(
-          (c) => c._id !== activeCardId
-        );
+        // Xóa khỏi cột nguồn
+        sourceColumn.cards = sourceColumn.cards.filter((c) => c._id !== activeCardId);
 
-        // Xác định vị trí chèn vào cột đích
-        let newCardIndex = 0; // Mặc định chèn đầu nếu không có over.id
+        // Tính vị trí chèn vào cột đích
+        let newCardIndex = 0;
         if (over.data.current?.type === "Card") {
-          const overCardIndex = destinationColumn.cards.findIndex(
-            (c) => c._id === over.id
-          );
-          // Sử dụng `predictedPosition.index` nếu có và hợp lệ để đồng bộ với UI preview
+          const overCardIndex = destinationColumn.cards.findIndex((c) => c._id === over.id);
           if (
             predictedPosition &&
             predictedPosition.listId === overColumnId &&
@@ -693,102 +682,124 @@ function ListColumns({ boardId: propBoardId }) {
           ) {
             newCardIndex = predictedPosition.index;
           } else {
-            // Fallback nếu predictedPosition không khả dụng
             const overItemTop = over.rect?.top || 0;
             const overItemHeight = over.rect?.height || 0;
             const overItemMiddle = overItemTop + overItemHeight / 2;
             const draggedItemY = active.rect.current.translated?.top || event.activatorEvent.clientY;
             newCardIndex = draggedItemY > overItemMiddle ? overCardIndex + 1 : overCardIndex;
           }
-        } else if (over.data.current?.type === "Column" || over.data.current?.type === "List") {
-          // Thả vào một cột trống hoặc vào cuối cột
+        } else {
           newCardIndex = destinationColumn.cards.length;
         }
 
-
-        // Đảm bảo index hợp lệ
         newCardIndex = Math.max(0, Math.min(newCardIndex, destinationColumn.cards.length));
 
-        // Thêm thẻ vào cột đích
+        // Thêm vào cột đích
         const updatedCard = { ...activeCard, list: overColumnId };
         destinationColumn.cards.splice(newCardIndex, 0, updatedCard);
 
-        // Loại bỏ trùng lặp và cập nhật lại `position` cho tất cả thẻ trong cả hai cột liên quan
+        // Cập nhật position cho cả 2 cột
         sourceColumn.cards = sourceColumn.cards
-          .filter(
-            (cardItem, index, self) =>
-              self.findIndex((c) => c._id === cardItem._id) === index
-          )
-          .map((cardItem, index) => ({
-            ...cardItem,
-            position: index,
-          }));
+          .filter((c, i, self) => self.findIndex((x) => x._id === c._id) === i)
+          .map((c, i) => ({ ...c, position: i }));
 
         destinationColumn.cards = destinationColumn.cards
-          .filter(
-            (cardItem, index, self) =>
-              self.findIndex((c) => c._id === cardItem._id) === index
-          )
-          .map((cardItem, index) => ({
-            ...cardItem,
-            position: index,
-          }));
+          .filter((c, i, self) => self.findIndex((x) => x._id === c._id) === i)
+          .map((c, i) => ({ ...c, position: i }));
 
-        setColumns(newColumnsState); // Cập nhật UI ngay lập tức
+        setColumns(newColumnsState);
 
-        // Gửi yêu cầu API và cập nhật Socket
-        (async () => {
-          try {
-            const token = localStorage.getItem("token");
-            if (!token) throw new Error("No token found");
+        // Gửi API + Socket
+        try {
+          const token = localStorage.getItem("token");
+          if (!token) throw new Error("No token found");
 
-            if (activeColumnId === overColumnId) {
-              // Kéo trong cùng cột
-              const cardOrder = destinationColumn.cards.map((card) => card._id);
-              await axios.put(
-                `http://localhost:5000/api/lists/card-order/${activeColumnId}`,
-                { cardOrder },
-                { headers: { Authorization: `Bearer ${token}` } }
-              );
-              if (socket && socketReady) {
-                socket.emit("card-order-updated", {
-                  listId: activeColumnId,
-                  cardOrder,
-                });
-              }
-              toast.success("Cập nhật thứ tự thẻ thành công!");
-            } else {
-              // Kéo sang cột khác
-              await axios.put(
-                `http://localhost:5000/api/cards/${activeCardId}/move`,
-                {
-                  newListId: overColumnId,
-                  newBoardId: boardId,
-                  newPosition: newCardIndex,
-                },
-                { headers: { Authorization: `Bearer ${token}` } }
-              );
-
-              if (socket && socketReady) {
-                socket.emit("card-moved", {
-                  card: updatedCard,
-                  oldListId: activeColumnId,
-                  newListId: overColumnId,
-                  newPosition: newCardIndex,
-                });
-              }
-
-              toast.success("Di chuyển thẻ thành công!");
+          if (activeColumnId === overColumnId) {
+            // === KÉO TRONG CÙNG CỘT ===
+            const currentList = columns.find((c) => c._id === activeColumnId);
+            if (!currentList || currentList.version === undefined) {
+              toast.error("Không thể lấy version của cột!");
+              fetchColumns();
+              return;
             }
-          } catch (err) {
-            console.error("ListColumns: Error moving card:", err);
-            toast.error("Lỗi khi di chuyển thẻ!");
-            fetchColumns(); // Rollback nếu có lỗi
+
+            const currentVersion = currentList.version;
+            const cardOrder = destinationColumn.cards.map((c) => c._id);
+
+            const response = await axios.put(
+              `http://localhost:5000/api/lists/card-order/${activeColumnId}`,
+              { cardOrder, version: currentVersion },
+              { headers: { Authorization: `Bearer ${token}` } }
+            );
+
+            const newVersion = response.data.version;
+
+            // Cập nhật version trong state
+            setColumns((prev) =>
+              prev.map((col) =>
+                col._id === activeColumnId ? { ...col, version: newVersion } : col
+              )
+            );
+
+            if (socket && socketReady) {
+              socket.emit("card-order-updated", {
+                listId: activeColumnId,
+                cardOrder,
+                version: newVersion,
+              });
+            }
+
+            toast.success("Cập nhật thứ tự thẻ thành công!");
+          } else {
+            // === KÉO SANG CỘT KHÁC ===
+            await axios.put(
+              `http://localhost:5000/api/cards/${activeCardId}/move`,
+              {
+                newListId: overColumnId,
+                newBoardId: boardId,
+                newPosition: newCardIndex,
+                version: activeCard.version,
+              },
+              { headers: { Authorization: `Bearer ${token}` } }
+            );
+
+            if (socket && socketReady) {
+              socket.emit("card-moved", {
+                card: updatedCard,
+                oldListId: activeColumnId,
+                newListId: overColumnId,
+                newPosition: newCardIndex,
+              });
+            }
+
+            toast.success("Di chuyển thẻ thành công!");
           }
-        })();
+        } catch (err) {
+          console.error("ListColumns: Error moving card:", err);
+
+          if (err.response?.status === 409) {
+            toast.warn("Dữ liệu đã được thay đổi bởi người khác. Đang tải lại...");
+            fetchColumns();
+            return;
+          }
+
+          if (err.response?.status === 500) {
+            toast.error("Lỗi server. Vui lòng thử lại!");
+          } else {
+            toast.error("Lỗi khi di chuyển thẻ!");
+          }
+          fetchColumns();
+        }
       }
     },
-    [columns, boardId, socket, socketReady, fetchColumns, predictedPosition] // Thêm predictedPosition vào dependency array
+    [
+      columns,
+      boardId,
+      socket,
+      socketReady,
+      fetchColumns,
+      predictedPosition,
+    ]
   );
 
   const columnIds = useMemo(() => columns.map((c) => c._id), [columns]);

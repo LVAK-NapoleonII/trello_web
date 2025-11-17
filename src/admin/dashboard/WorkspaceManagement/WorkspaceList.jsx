@@ -1,30 +1,10 @@
 import { useState, useEffect } from 'react';
 import {
-    Paper,
-    Table,
-    TableBody,
-    TableCell,
-    TableContainer,
-    TableHead,
-    TableRow,
-    Box,
-    TextField,
-    Chip,
-    Pagination,
-    CircularProgress,
-    Alert,
-    Typography,
-    IconButton,
-    Tooltip
+    Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
+    Box, TextField, Chip, Pagination, CircularProgress, Alert, Typography,
+    IconButton, Tooltip
 } from '@mui/material';
-import {
-    Visibility,
-    Delete,
-    Restore,
-    Workspaces,
-    Person,
-    Dashboard
-} from '@mui/icons-material';
+import { Visibility, Delete, Restore, Workspaces, Person, Dashboard } from '@mui/icons-material';
 import { adminApi } from '../../api/adminApi';
 import { WorkspaceDetailsModal } from './WorkspaceDetailsModal';
 
@@ -73,6 +53,7 @@ export const WorkspaceList = () => {
     };
 
     const handleRestore = async (wsId) => {
+        if (!window.confirm('Khôi phục workspace này?')) return;
         try {
             await adminApi.restoreWorkspace(wsId);
             loadWorkspaces();
@@ -85,10 +66,8 @@ export const WorkspaceList = () => {
         <Paper sx={{ p: 3, borderRadius: 2, boxShadow: 3 }}>
             <Box display="flex" alignItems="center" justifyContent="space-between" mb={3}>
                 <Typography variant="h5" fontWeight="bold" display="flex" alignItems="center" gap={1}>
-                    <Workspaces />
-                    Quản lý Workspace
+                    <Workspaces /> Quản lý Workspace
                 </Typography>
-
                 <TextField
                     label="Tìm kiếm theo tên"
                     size="small"
@@ -119,32 +98,42 @@ export const WorkspaceList = () => {
                                 </TableRow>
                             </TableHead>
                             <TableBody>
-                                {workspaces?.map((ws) => (
-                                    <TableRow key={ws?._id} hover>
+                                {workspaces.map((ws) => (
+                                    <TableRow
+                                        key={ws?._id}
+                                        hover
+                                        sx={{
+                                            opacity: ws?.isDeleted ? 0.6 : 1,
+                                            bgcolor: ws?.isDeleted ? 'action.disabledBackground' : 'inherit'
+                                        }}
+                                    >
                                         <TableCell>
                                             <Box display="flex" alignItems="center" gap={1}>
-                                                <Workspaces fontSize="small" color="info" />
-                                                <Typography fontWeight="medium">{ws?.name}</Typography>
+                                                <Workspaces fontSize="small" color={ws?.isDeleted ? 'disabled' : 'info'} />
+                                                <Typography
+                                                    fontWeight="medium"
+                                                    color={ws?.isDeleted ? 'text.disabled' : 'inherit'}
+                                                >
+                                                    {ws?.name}
+                                                </Typography>
                                             </Box>
                                         </TableCell>
-
                                         <TableCell>
                                             <Box display="flex" alignItems="center" gap={1}>
-                                                <Person fontSize="small" />
-                                                <Typography variant="body2">
+                                                <Person fontSize="small" color={ws?.isDeleted ? 'disabled' : 'inherit'} />
+                                                <Typography variant="body2" color={ws?.isDeleted ? 'text.disabled' : 'inherit'}>
                                                     {ws?.owner?.fullName || 'Unknown'}
                                                 </Typography>
                                             </Box>
                                         </TableCell>
-
                                         <TableCell>
                                             <Chip
                                                 label={`${ws?.members?.length || 0} thành viên`}
                                                 size="small"
                                                 color="secondary"
+                                                sx={{ opacity: ws?.isDeleted ? 0.7 : 1 }}
                                             />
                                         </TableCell>
-
                                         <TableCell>
                                             <Chip
                                                 icon={<Dashboard fontSize="small" />}
@@ -152,9 +141,9 @@ export const WorkspaceList = () => {
                                                 size="small"
                                                 color="primary"
                                                 variant="outlined"
+                                                sx={{ opacity: ws?.isDeleted ? 0.7 : 1 }}
                                             />
                                         </TableCell>
-
                                         <TableCell>
                                             {ws?.isDeleted ? (
                                                 <Chip label="Đã xóa" color="error" size="small" />
@@ -162,14 +151,15 @@ export const WorkspaceList = () => {
                                                 <Chip label="Hoạt động" color="success" size="small" />
                                             )}
                                         </TableCell>
-
                                         <TableCell align="right">
                                             <Tooltip title="Xem chi tiết">
-                                                <IconButton onClick={() => setSelectedWorkspace(ws)}>
+                                                <IconButton
+                                                    onClick={() => setSelectedWorkspace(ws)}
+                                                    disabled={ws?.isDeleted}
+                                                >
                                                     <Visibility />
                                                 </IconButton>
                                             </Tooltip>
-
                                             {ws?.isDeleted ? (
                                                 <Tooltip title="Khôi phục">
                                                     <IconButton onClick={() => handleRestore(ws._id)} color="success">
@@ -208,7 +198,6 @@ export const WorkspaceList = () => {
                 </>
             )}
 
-            {/* Modal chi tiết */}
             {selectedWorkspace && (
                 <WorkspaceDetailsModal
                     workspaceId={selectedWorkspace._id}

@@ -126,7 +126,13 @@ const BoardItem = ({ board, onUpdate, onDelete }) => {
 
       const response = await axios.put(
         `http://localhost:5000/api/boards/${board._id}`,
-        { title: editTitle.trim(), description: editDescription.trim(), visibility: editVisibility, background: editBackground },
+        {
+          title: editTitle.trim(),
+          description: editDescription.trim(),
+          visibility: editVisibility,
+          background: editBackground,
+          version: board.version
+        },
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
@@ -135,7 +141,28 @@ const BoardItem = ({ board, onUpdate, onDelete }) => {
       handleCloseEditDialog();
       toast.success("Cập nhật bảng thành công!");
     } catch (error) {
-      console.error("[BoardItem] Lỗi cập nhật:", error.message);
+      console.error("[BoardItem] Lỗi cập nhật:", error);
+
+      if (error.response?.status === 409) {
+        toast.warn("Bảng đã được chỉnh sửa bởi người khác. Đang tải lại...");
+        // Gọi callback để parent reload board
+        if (onUpdate) {
+          // Force reload từ server
+          try {
+            const token = localStorage.getItem("token");
+            const res = await axios.get(`http://localhost:5000/api/boards/${board._id}`, {
+              headers: { Authorization: `Bearer ${token}` }
+            });
+            onUpdate(res.data);
+            toast.info("Đã cập nhật dữ liệu mới nhất!");
+          } catch (reloadErr) {
+            toast.error("Không thể tải lại bảng!");
+          }
+        }
+        handleCloseEditDialog();
+        return;
+      }
+
       handleApiError(error, navigate, "Không thể cập nhật bảng!");
     } finally {
       setIsUpdating(false);
@@ -153,6 +180,7 @@ const BoardItem = ({ board, onUpdate, onDelete }) => {
 
       await axios.delete(`http://localhost:5000/api/boards/${board._id}`, {
         headers: { Authorization: `Bearer ${token}` },
+        data: { version: board.version }
       });
 
       if (socket && socketReady) socket.emit("board-deleted", { boardId: board._id });

@@ -159,6 +159,7 @@ function EditCardDialog({ open, onClose, card, setColumns }) {
           description: description.trim() || null,
           dueDate: dueDate ? new Date(dueDate).toISOString() : null,
           cover: cover ? cover.trim() : null,
+          version: card.version
         },
         { headers: { Authorization: `Bearer ${token}` } }
       );

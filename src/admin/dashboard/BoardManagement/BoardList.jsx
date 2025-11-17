@@ -1,31 +1,11 @@
-
 import { useState, useEffect } from 'react';
 import {
-    Paper,
-    Table,
-    TableBody,
-    TableCell,
-    TableContainer,
-    TableHead,
-    TableRow,
-    Box,
-    TextField,
-    Chip,
-    Pagination,
-    CircularProgress,
-    Alert,
-    Typography,
-    IconButton,
-    Tooltip
+    Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
+    Box, TextField, Chip, Pagination, CircularProgress, Alert, Typography,
+    IconButton, Tooltip
 } from '@mui/material';
 import {
-    Visibility,
-    Delete,
-    Restore,
-    MoreVert,
-    Dashboard as BoardIcon,
-    Workspaces,
-    Person
+    Visibility, Delete, Restore, Dashboard as BoardIcon, Workspaces, Person
 } from '@mui/icons-material';
 import { adminApi } from '../../api/adminApi';
 import { BoardDetailsModal } from './BoardDetailsModal';
@@ -75,6 +55,7 @@ export const BoardList = () => {
     };
 
     const handleRestore = async (boardId) => {
+        if (!window.confirm('Khôi phục board này?')) return;
         try {
             await adminApi.restoreBoard(boardId);
             loadBoards();
@@ -87,10 +68,8 @@ export const BoardList = () => {
         <Paper sx={{ p: 3, borderRadius: 2, boxShadow: 3 }}>
             <Box display="flex" alignItems="center" justifyContent="space-between" mb={3}>
                 <Typography variant="h5" fontWeight="bold" display="flex" alignItems="center" gap={1}>
-                    <BoardIcon />
-                    Quản lý Board
+                    <BoardIcon /> Quản lý Board
                 </Typography>
-
                 <TextField
                     label="Tìm kiếm theo tiêu đề"
                     size="small"
@@ -121,15 +100,26 @@ export const BoardList = () => {
                                 </TableRow>
                             </TableHead>
                             <TableBody>
-                                {boards?.map((board) => (
-                                    <TableRow key={board._id} hover>
+                                {boards.map((board) => (
+                                    <TableRow
+                                        key={board._id}
+                                        hover
+                                        sx={{
+                                            opacity: board.isDeleted ? 0.6 : 1,
+                                            bgcolor: board.isDeleted ? 'action.disabledBackground' : 'inherit'
+                                        }}
+                                    >
                                         <TableCell>
                                             <Box display="flex" alignItems="center" gap={1}>
-                                                <BoardIcon fontSize="small" color="primary" />
-                                                <Typography fontWeight="medium">{board.title}</Typography>
+                                                <BoardIcon fontSize="small" color={board.isDeleted ? 'disabled' : 'primary'} />
+                                                <Typography
+                                                    fontWeight="medium"
+                                                    color={board.isDeleted ? 'text.disabled' : 'inherit'}
+                                                >
+                                                    {board.title}
+                                                </Typography>
                                             </Box>
                                         </TableCell>
-
                                         <TableCell>
                                             <Chip
                                                 icon={<Workspaces fontSize="small" />}
@@ -137,26 +127,25 @@ export const BoardList = () => {
                                                 size="small"
                                                 color="info"
                                                 variant="outlined"
+                                                sx={{ opacity: board.isDeleted ? 0.7 : 1 }}
                                             />
                                         </TableCell>
-
                                         <TableCell>
                                             <Box display="flex" alignItems="center" gap={1}>
-                                                <Person fontSize="small" />
-                                                <Typography variant="body2">
+                                                <Person fontSize="small" color={board.isDeleted ? 'disabled' : 'inherit'} />
+                                                <Typography variant="body2" color={board.isDeleted ? 'text.disabled' : 'inherit'}>
                                                     {board.owner?.fullName || 'Unknown'}
                                                 </Typography>
                                             </Box>
                                         </TableCell>
-
                                         <TableCell>
                                             <Chip
                                                 label={`${board?.members?.length || 0} thành viên`}
                                                 size="small"
                                                 color="secondary"
+                                                sx={{ opacity: board.isDeleted ? 0.7 : 1 }}
                                             />
                                         </TableCell>
-
                                         <TableCell>
                                             {board.isDeleted ? (
                                                 <Chip label="Đã xóa" color="error" size="small" />
@@ -164,10 +153,12 @@ export const BoardList = () => {
                                                 <Chip label="Hoạt động" color="success" size="small" />
                                             )}
                                         </TableCell>
-
                                         <TableCell align="right">
                                             <Tooltip title="Xem chi tiết">
-                                                <IconButton onClick={() => setSelectedBoard(board)}>
+                                                <IconButton
+                                                    onClick={() => setSelectedBoard(board)}
+                                                    disabled={board.isDeleted}
+                                                >
                                                     <Visibility />
                                                 </IconButton>
                                             </Tooltip>
@@ -210,7 +201,6 @@ export const BoardList = () => {
                 </>
             )}
 
-            {/* Modal chi tiết */}
             {selectedBoard && (
                 <BoardDetailsModal
                     boardId={selectedBoard._id}

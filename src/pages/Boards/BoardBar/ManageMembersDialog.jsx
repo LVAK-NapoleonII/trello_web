@@ -114,7 +114,7 @@ function ManageMembersDialog({
                 (onlineUsers.has(userId) || member.user?.isOnline);
               return (
                 <ListItem
-                  key={`member-${userId}`} // ĐÃ SỬA: key duy nhất
+                  key={`member-${userId}`}
                   sx={{
                     borderRadius: 10,
                     mb: 0.5,

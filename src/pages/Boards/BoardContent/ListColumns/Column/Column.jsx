@@ -27,8 +27,7 @@ import { toast } from "react-toastify";
 import { SocketContext } from "../../../../../context/SocketContext";
 import ListCards from "./ListCards/ListCards";
 import CreateCardDialog from "./ListCards/Cards/CreateCardDialog";
-import EditColumnTitleDialog from "./EditColumnTitleDialog"; // ← IMPORT
-
+import EditColumnTitleDialog from "./EditColumnTitleDialog";
 // Constants
 const COLUMN_HEADER_HEIGHT = "56px";
 const COLUMN_FOOTER_HEIGHT = "56px";
@@ -206,7 +205,7 @@ function Column({
       const token = getToken();
       const { data } = await axios.put(
         `${API_BASE_URL}/lists/${column._id}`,
-        { title: newTitle },
+        { title: newTitle.trim(), version: column.version },
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
@@ -235,6 +234,7 @@ function Column({
     try {
       const token = getToken();
       await axios.delete(`${API_BASE_URL}/lists/${column._id}`, {
+        data: { version: column.version },
         headers: { Authorization: `Bearer ${token}` },
       });
 
