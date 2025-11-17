@@ -1,5 +1,4 @@
-// CreateCardDialog.jsx
-import { useState, useContext, useCallback } from "react";
+import { useState, useContext } from "react";
 import {
     Dialog,
     DialogTitle,
@@ -11,9 +10,29 @@ import {
 import axios from "axios";
 import { toast } from "react-toastify";
 import { SocketContext } from "../../../../../../../context/SocketContext";
-import { debounce } from "lodash";
 
 const API_BASE_URL = "http://localhost:5000/api";
+
+const normalizeCard = (card, columnId, boardId) => ({
+    _id: card._id,
+    title: card.title || "Untitled Card",
+    description: card.description || "",
+    list: card.list || columnId,
+    board: card.board || boardId,
+    members: (card.members || []).map(m => ({
+        _id: m._id,
+        fullName: m.fullName || m.email || "Unknown",
+        avatar: m.avatar || "",
+        email: m.email || "",
+    })),
+    comments: [],
+    notes: [],
+    checklists: [],
+    completed: !!card.completed,
+    dueDate: card.dueDate || null,
+    cover: card.cover || null,
+    createdAt: card.createdAt,
+});
 
 function CreateCardDialog({
     open,
@@ -21,153 +40,50 @@ function CreateCardDialog({
     columnId,
     boardId,
     setColumns,
-    socket,
-    socketReady,
 }) {
-    const [newCardTitle, setNewCardTitle] = useState("");
-    const [newCardDescription, setNewCardDescription] = useState("");
+    const { socket, socketReady } = useContext(SocketContext);
+    const [title, setTitle] = useState("");
+    const [description, setDescription] = useState("");
     const [loading, setLoading] = useState(false);
 
-    const normalizeCard = useCallback(
-        (card) => ({
-            _id: card._id || new Date().toISOString(),
-            title: card.title || "Untitled Card",
-            description: card.description || "",
-            list: card.list || columnId,
-            board: card.board || boardId,
-            members: Array.isArray(card.members)
-                ? card.members.map((m) => ({
-                    _id: m._id || "unknown",
-                    fullName: m.fullName || m.email || "Unknown User",
-                    avatar: m.avatar || "",
-                    email: m.email || "",
-                }))
-                : [],
-            comments: Array.isArray(card.comments)
-                ? card.comments.map((c) => ({
-                    ...c,
-                    user: {
-                        _id: c.user?._id || "unknown",
-                        fullName: c.user?.fullName || c.user?.email || "Unknown User",
-                        avatar: c.user?.avatar || "",
-                        email: c.user?.email || "",
-                    },
-                }))
-                : [],
-            notes: Array.isArray(card.notes)
-                ? card.notes.map((n) => ({
-                    ...n,
-                    createdBy: {
-                        _id: n.createdBy?._id || "unknown",
-                        fullName: n.createdBy?.fullName || n.createdBy?.email || "Unknown User",
-                        avatar: n.createdBy?.avatar || "",
-                        email: n.createdBy?.email || "",
-                    },
-                }))
-                : [],
-            checklists: Array.isArray(card.checklists)
-                ? card.checklists.map((cl) => ({
-                    _id: cl._id || new Date().toISOString(),
-                    title: cl.title || "Untitled Checklist",
-                    items: Array.isArray(cl.items)
-                        ? cl.items.map((item) => ({
-                            _id: item._id || new Date().toISOString(),
-                            text: item.text || "",
-                            completed: !!item.completed,
-                            createdAt: item.createdAt || new Date().toISOString(),
-                        }))
-                        : [],
-                }))
-                : [],
-            completed: !!card.completed,
-            createdAt: card.createdAt || new Date().toISOString(),
-        }),
-        [boardId, columnId]
-    );
-
-    // Debounce để hạn chế cập nhật state
-    const debouncedSetNewCardTitle = useCallback(
-        debounce((value) => setNewCardTitle(value), 300),
-        []
-    );
-    const debouncedSetNewCardDescription = useCallback(
-        debounce((value) => setNewCardDescription(value), 300),
-        []
-    );
-
-    const getToken = useCallback(() => {
-        const token = localStorage.getItem("token");
-        if (!token) throw new Error("No token found");
-        return token;
-    }, []);
-
-    const handleCreateCard = useCallback(async () => {
-        if (!newCardTitle.trim()) {
-            toast.error("Tiêu đề thẻ không được để trống!");
-            return;
-        }
-        if (!boardId || !columnId) {
-            toast.error("Không tìm thấy boardId hoặc listId!");
-            return;
-        }
+    const handleCreate = async () => {
+        if (!title.trim()) return toast.error("Tiêu đề không được trống!");
 
         setLoading(true);
         try {
-            const token = getToken();
-            const response = await axios.post(
+            const token = localStorage.getItem("token");
+            const { data } = await axios.post(
                 `${API_BASE_URL}/cards`,
-                {
-                    title: newCardTitle,
-                    description: newCardDescription,
-                    list: columnId,
-                    board: boardId,
-                },
+                { title: title.trim(), description: description.trim() || null, list: columnId, board: boardId },
                 { headers: { Authorization: `Bearer ${token}` } }
             );
 
-            const newCard = normalizeCard(response.data);
-            setColumns((prevColumns) =>
-                prevColumns.map((col) =>
-                    col._id === columnId
-                        ? { ...col, cards: [...(col.cards || []), newCard] }
-                        : col
-                )
-            );
+            const newCard = normalizeCard(data, columnId, boardId);
+
+            setColumns(prev => prev.map(col =>
+                col._id === columnId
+                    ? { ...col, cards: [...(col.cards || []), newCard] }
+                    : col
+            ));
 
             if (socket && socketReady) {
-                socket.emit("card-created", {
-                    boardId,
-                    listId: columnId,
-                    card: newCard,
-                });
+                socket.emit("card-created", { boardId, listId: columnId, card: newCard });
             }
 
             toast.success("Tạo thẻ thành công!");
-            onClose();
+            handleClose();
         } catch (err) {
-            console.error("Error creating card:", err);
-            toast.error("Lỗi khi tạo thẻ!");
+            toast.error("Lỗi tạo thẻ!");
         } finally {
             setLoading(false);
         }
-    }, [
-        newCardTitle,
-        newCardDescription,
-        columnId,
-        boardId,
-        socket,
-        socketReady,
-        setColumns,
-        normalizeCard,
-        getToken,
-        onClose,
-    ]);
+    };
 
-    const handleClose = useCallback(() => {
-        setNewCardTitle("");
-        setNewCardDescription("");
+    const handleClose = () => {
+        setTitle("");
+        setDescription("");
         onClose();
-    }, [onClose]);
+    };
 
     return (
         <Dialog
@@ -175,6 +91,8 @@ function CreateCardDialog({
             onClose={handleClose}
             maxWidth="sm"
             fullWidth
+            keepMounted={false}
+            key={columnId}
         >
             <DialogTitle>Tạo thẻ mới</DialogTitle>
             <DialogContent>
@@ -183,36 +101,32 @@ function CreateCardDialog({
                     margin="dense"
                     label="Tiêu đề thẻ"
                     fullWidth
-                    variant="outlined"
-                    value={newCardTitle}
-                    onChange={(e) => debouncedSetNewCardTitle(e.target.value)}
-                    onKeyPress={(e) => {
-                        if (e.key === "Enter" && newCardTitle.trim()) {
-                            handleCreateCard();
-                        }
-                    }}
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    onKeyPress={(e) => e.key === "Enter" && title.trim() && handleCreate()}
                     disabled={loading}
+                    variant="outlined"
                 />
                 <TextField
                     margin="dense"
                     label="Mô tả (tùy chọn)"
                     fullWidth
-                    variant="outlined"
                     multiline
                     rows={3}
-                    value={newCardDescription}
-                    onChange={(e) => debouncedSetNewCardDescription(e.target.value)}
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
                     disabled={loading}
+                    variant="outlined"
                 />
             </DialogContent>
             <DialogActions>
                 <Button onClick={handleClose} disabled={loading}>
-                    Hủy bỏ
+                    Hủy
                 </Button>
                 <Button
-                    onClick={handleCreateCard}
-                    disabled={!newCardTitle.trim() || loading}
+                    onClick={handleCreate}
                     variant="contained"
+                    disabled={!title.trim() || loading}
                 >
                     {loading ? "Đang tạo..." : "Tạo thẻ"}
                 </Button>

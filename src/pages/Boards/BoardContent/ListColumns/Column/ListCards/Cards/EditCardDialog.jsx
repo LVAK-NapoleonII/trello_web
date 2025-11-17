@@ -57,7 +57,6 @@ function EditCardDialog({ open, onClose, card, setColumns }) {
 
   const isValidHexColor = (value) => /^#[0-9A-Fa-f]{6}$/.test(value);
 
-  // ✅ SỬA: Validate linh hoạt hơn, chấp nhận mọi URL
   const isValidImageUrl = (value) => {
     return (
       /^https?:\/\/.+/i.test(value) ||

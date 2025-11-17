@@ -51,6 +51,7 @@ const listItemStyles = {
   },
 };
 
+// Custom Hook: Quản lý logic profile
 const useProfile = () => {
   const { user, logout, loading } = useAuth();
   const { socket, socketReady } = useContext(SocketContext);
@@ -64,10 +65,12 @@ const useProfile = () => {
     try {
       const token = localStorage.getItem("token");
       if (!token) throw new Error("Vui lòng đăng nhập lại!");
+
       const response = await axios.get("http://localhost:5000/api/activities", {
         headers: { Authorization: `Bearer ${token}` },
         params: { limit: 10, page: 1 },
       });
+
       setActivities(response.data.activities || []);
     } catch (err) {
       toast.error("Không thể tải hoạt động!");
@@ -86,8 +89,10 @@ const useProfile = () => {
       navigate("/login");
       return;
     }
+
     fetchActivities();
 
+    // Kết nối socket để nhận hoạt động mới
     if (!socket || !socketReady || joined) return;
 
     socket.emit("join-user", user._id);
@@ -96,7 +101,7 @@ const useProfile = () => {
     socket.on("new-activity", (activity) => {
       if (!activity.isHidden && activity.target) {
         setActivities((prev) => [activity, ...prev].slice(0, 10));
-        toast.info(activity.details || "Không có chi tiết", { autoClose: 3000 });
+        toast.info(activity.details || "Có hoạt động mới", { autoClose: 3000 });
       }
     });
 
@@ -109,43 +114,43 @@ const useProfile = () => {
   return { user, logout, loading, activities, isLoading, fetchActivities };
 };
 
+// Component chính
 function Profile() {
   const theme = useTheme();
   const isDarkMode = theme.palette.mode === "dark";
   const navigate = useNavigate();
-  const { user, logout, loading, activities, isLoading, fetchActivities } = useProfile();
+  const { user, logout, loading, activities, isLoading } = useProfile();
 
   const handleActivityClick = (activity) => {
     if (!activity.target || !activity.targetModel) {
-      toast.error("Hoạt động không hợp lệ, thiếu thông tin mục tiêu!");
+      toast.warn("Hoạt động không có mục tiêu để điều hướng.");
       return;
     }
+
+    const targetId = activity.target._id || activity.target;
+    if (!targetId) {
+      toast.warn("Thiếu ID mục tiêu.");
+      return;
+    }
+
     switch (activity.targetModel) {
       case "Board":
-        if (!activity.target._id) {
-          toast.error("Không thể điều hướng: Thiếu ID bảng!");
-          return;
-        }
-        navigate(`/boards/${activity.target._id}`);
+        navigate(`/boards/${targetId}`);
         break;
       case "Workspace":
-        if (!activity.target._id) {
-          toast.error("Không thể điều hướng: Thiếu ID không gian làm việc!");
-          return;
-        }
-        navigate(`/workspace/${activity.target._id}/boards`);
+        navigate(`/workspace/${targetId}/boards`);
         break;
       case "Card":
-        const workspaceId = activity.target.board?.workspace?._id || activity.target.board?.workspace;
         const boardId = activity.target.board?._id;
+        const workspaceId = activity.target.board?.workspace?._id;
         if (boardId && workspaceId) {
-          navigate(`/workspace/${workspaceId}/board/${boardId}`);
+          navigate(`/workspace/${workspaceId}/board/${boardId}#card-${activity.target._id}`);
         } else {
-          toast.error("Không thể điều hướng: Thiếu thông tin bảng hoặc không gian làm việc!");
+          toast.warn("Không thể mở thẻ: thiếu thông tin bảng.");
         }
         break;
       default:
-        toast.error("Loại hoạt động không được hỗ trợ!");
+        toast.info("Loại hoạt động chưa hỗ trợ điều hướng.");
     }
   };
 
@@ -153,9 +158,13 @@ function Profile() {
     try {
       const token = localStorage.getItem("token");
       if (!token) throw new Error("Vui lòng đăng nhập lại!");
-      await axios.put(`http://localhost:5000/api/activities/${activityId}/hide`, {}, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+
+      await axios.put(
+        `http://localhost:5000/api/activities/${activityId}/hide`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
       setActivities((prev) => prev.filter((a) => a._id !== activityId));
       toast.success("Đã ẩn hoạt động!");
     } catch (err) {
@@ -172,9 +181,13 @@ function Profile() {
     try {
       const token = localStorage.getItem("token");
       if (!token) throw new Error("Vui lòng đăng nhập lại!");
-      await axios.put("http://localhost:5000/api/activities/hide-all", {}, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+
+      await axios.put(
+        "http://localhost:5000/api/activities/hide-all",
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
       setActivities([]);
       toast.success("Đã ẩn tất cả hoạt động!");
     } catch (err) {
@@ -198,6 +211,7 @@ function Profile() {
     }
   };
 
+  // Loading state
   if (loading || isLoading) {
     return (
       <Box sx={{ display: "flex", justifyContent: "center", mt: 4 }}>
@@ -208,9 +222,12 @@ function Profile() {
 
   if (!user?._id) return null;
 
+  // Xử lý URL avatar (DiceBear hoặc local)
   const avatarUrl = user.avatar?.startsWith("https://api.dicebear.com")
     ? user.avatar
-    : `http://localhost:5000${user.avatar}` || "";
+    : user.avatar
+      ? `http://localhost:5000${user.avatar}`
+      : "";
 
   return (
     <Box
@@ -221,9 +238,15 @@ function Profile() {
         boxShadow: `0 8px 32px ${isDarkMode ? "rgba(0, 0, 0, 0.3)" : "rgba(0, 0, 0, 0.15)"}`,
       }}
     >
+      {/* === Thông tin người dùng === */}
       <Box sx={{ display: "flex", alignItems: "center", mb: 3 }}>
         <Avatar
-          sx={{ width: 60, height: 60, mr: 2, border: `2px solid ${theme.palette.primary.main}` }}
+          sx={{
+            width: 60,
+            height: 60,
+            mr: 2,
+            border: `2px solid ${theme.palette.primary.main}`,
+          }}
           alt={user.fullName}
           src={avatarUrl}
         />
@@ -240,7 +263,10 @@ function Profile() {
               color="primary"
               size="small"
               onClick={() => navigate("/profile/edit")}
-              sx={{ ...buttonStyles, "&:hover": { bgcolor: theme.palette.primary.light + "20" } }}
+              sx={{
+                ...buttonStyles,
+                "&:hover": { bgcolor: theme.palette.primary.light + "20" },
+              }}
             >
               Edit
             </Button>
@@ -249,7 +275,10 @@ function Profile() {
               color="error"
               size="small"
               onClick={handleLogout}
-              sx={{ ...buttonStyles, "&:hover": { bgcolor: theme.palette.error.light + "20" } }}
+              sx={{
+                ...buttonStyles,
+                "&:hover": { bgcolor: theme.palette.error.light + "20" },
+              }}
             >
               Logout
             </Button>
@@ -257,6 +286,7 @@ function Profile() {
         </Box>
       </Box>
 
+      {/* === Danh sách hoạt động === */}
       <Box sx={{ mb: 1, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <Typography variant="subtitle1" fontWeight={600}>
           Activities
@@ -264,9 +294,12 @@ function Profile() {
         {activities.length > 0 && (
           <Button
             size="small"
-            onClick={hiddenAllActivities}
+            onClick={handleHideAllActivities}
             color="error"
-            sx={{ ...buttonStyles, "&:hover": { bgcolor: theme.palette.error.light + "20" } }}
+            sx={{
+              ...buttonStyles,
+              "&:hover": { bgcolor: theme.palette.error.light + "20" },
+            }}
           >
             Clear All
           </Button>
@@ -275,57 +308,71 @@ function Profile() {
 
       <Divider sx={{ my: 1, opacity: 0.5 }} />
 
-      {
-        activities.length === 0 ? (
-          <Typography sx={{ mt: 2, textAlign: "center" }} color="text.secondary">
-            No activities
-          </Typography>
-        ) : (
-          <List
-            dense
-            sx={{
-              py: 0,
-              "&::-webkit-scrollbar": { width: 6 },
-              "&::-webkit-scrollbar-track": {
-                bgcolor: isDarkMode ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.05)",
-                borderRadius: 3,
-              },
-              "&::-webkit-scrollbar-thumb": { bgcolor: theme.palette.primary.main, borderRadius: 3 },
-            }}
-          >
-            {activities.map((activity) => (
-              <React.Fragment key={activity._id}>
-                <ListItem
-                  sx={{ ...listItemStyles, "&:hover": { bgcolor: theme.palette.action.selected } }}
-                  onClick={() => handleActivityClick(activity)}
+      {activities.length === 0 ? (
+        <Typography sx={{ mt: 2, textAlign: "center" }} color="text.secondary">
+          No activities
+        </Typography>
+      ) : (
+        <List
+          dense
+          sx={{
+            py: 0,
+            "&::-webkit-scrollbar": { width: 6 },
+            "&::-webkit-scrollbar-track": {
+              bgcolor: isDarkMode ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.05)",
+              borderRadius: 3,
+            },
+            "&::-webkit-scrollbar-thumb": {
+              bgcolor: theme.palette.primary.main,
+              borderRadius: 3,
+            },
+          }}
+        >
+          {activities.map((activity) => (
+            <React.Fragment key={activity._id}>
+              <ListItem
+                sx={{
+                  ...listItemStyles,
+                  "&:hover": { bgcolor: theme.palette.action.selected },
+                }}
+                onClick={() => handleActivityClick(activity)}
+              >
+                <ListItemText
+                  primary={activity.details || "No details"}
+                  secondary={formatDistanceToNow(new Date(activity.createdAt), {
+                    addSuffix: true,
+                    locale: vi,
+                  })}
+                  primaryTypographyProps={{
+                    variant: "body2",
+                    fontWeight: 500,
+                    sx: { maxWidth: 450 },
+                  }}
+                  secondaryTypographyProps={{
+                    variant: "caption",
+                    color: "text.secondary",
+                  }}
+                />
+                <IconButton
+                  edge="end"
+                  onClick={(e) => {
+                    e.stopPropagation(); // Ngăn click vào ListItem
+                    handleHideActivity(activity._id);
+                  }}
+                  sx={{
+                    color: theme.palette.error.main,
+                    "&:hover": { bgcolor: theme.palette.error.light + "20" },
+                  }}
                 >
-                  <ListItemText
-                    primary={activity.details || "No details"}
-                    secondary={formatDistanceToNow(new Date(activity.createdAt), {
-                      addSuffix: true,
-                      locale: vi,
-                    })}
-                    primaryTypographyProps={{ variant: "body2", fontWeight: 500, sx: { maxWidth: 450 } }}
-                    secondaryTypographyProps={{ variant: "caption", color: "text.secondary" }}
-                  />
-                  <IconButton
-                    edge="end"
-                    onClick={() => handleHideActivity(activity._id)}
-                    sx={{
-                      color: theme.palette.error.main,
-                      "&:hover": { bgcolor: theme.palette.error.light + "20" },
-                    }}
-                  >
-                    <DeleteIcon fontSize="small" />
-                  </IconButton>
-                </ListItem>
-                <Divider component="li" sx={{ my: 0.5, opacity: 0.5 }} />
-              </React.Fragment>
-            ))}
-          </List>
-        )
-      }
-    </Box >
+                  <DeleteIcon fontSize="small" />
+                </IconButton>
+              </ListItem>
+              <Divider component="li" sx={{ my: 0.5, opacity: 0.5 }} />
+            </React.Fragment>
+          ))}
+        </List>
+      )}
+    </Box>
   );
 }
 

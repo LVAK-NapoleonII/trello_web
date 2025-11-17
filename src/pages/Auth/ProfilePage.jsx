@@ -145,7 +145,7 @@ const ProfilePage = () => {
         return;
       }
       await axios.put(
-        "http://localhost:5000/api/auth/update-profile",
+        "http://localhost:5000/api/auth/profile",
         { fullName: profile.name, bio: profile.bio },
         { headers: { Authorization: `Bearer ${token}` } }
       );
