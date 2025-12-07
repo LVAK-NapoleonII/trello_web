@@ -41,6 +41,8 @@ function CardContainer({
   boardMembers,
   setBoardMembers,
   boardId,
+  currentUserId,
+  isBoardOwner,
 }) {
   const { socket, socketReady } = useContext(SocketContext);
   const [expanded, setExpanded] = useState(false);
@@ -206,7 +208,7 @@ function CardContainer({
             );
             return updatedColumns;
           });
-          toast.info("Thẻ đã được di chuyển.");
+          // toast.info("Thẻ đã được di chuyển.");
         }
       },
 
@@ -269,6 +271,8 @@ function CardContainer({
         setCards={setCards}
         setColumns={setColumns}
         setExpanded={setExpanded}
+        currentUserId={currentUserId}
+        isBoardOwner={isBoardOwner}
       />
       <CardDetails
         card={card}
@@ -285,6 +289,8 @@ function CardContainer({
         setColumns={setColumns}
         boardMembers={boardMembers}
         boardId={boardId}
+        currentUserId={currentUserId}
+        isBoardOwner={isBoardOwner}
       />
     </Card>
   );

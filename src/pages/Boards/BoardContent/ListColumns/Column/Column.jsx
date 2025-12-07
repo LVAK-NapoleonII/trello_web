@@ -42,6 +42,8 @@ function Column({
   setBoardMembers,
   predictedPosition,
   fetchCards,
+  currentUserId,
+  isBoardOwner,
 }) {
   const { socket, socketReady } = useContext(SocketContext);
   const theme = useTheme();
@@ -378,6 +380,8 @@ function Column({
                   boardMembers={boardMembers}
                   setBoardMembers={setBoardMembers}
                   predictedPosition={predictedPosition}
+                  currentUserId={currentUserId}
+                  isBoardOwner={isBoardOwner}
                 />
               </Box>
 

@@ -133,7 +133,7 @@ export const SocketProvider = ({ children }) => {
 
     newSocket.on("error", (err) => {
       log("Socket error:", { error: err.message });
-      toast.error(`Lỗi socket: ${err.message}`, { toastId: "socket-error" });
+      // toast.error(`Lỗi socket: ${err.message}`, { toastId: "socket-error" });
     });
 
     newSocket.on("disconnect", () => {

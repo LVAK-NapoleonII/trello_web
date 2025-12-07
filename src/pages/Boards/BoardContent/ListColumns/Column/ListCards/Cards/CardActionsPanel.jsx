@@ -1,11 +1,13 @@
 import { useState, useContext, useMemo } from "react";
-import { CardActions, Chip, IconButton, Tooltip } from "@mui/material";
+import { CardActions, Chip, IconButton, Tooltip, Box } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
 import Groups3Icon from "@mui/icons-material/Groups3";
 import AssistantIcon from "@mui/icons-material/Assistant";
 import AttachmentIcon from "@mui/icons-material/Attachment";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
+import LockIcon from "@mui/icons-material/Lock";
 import axios from "axios";
 import { toast } from "react-toastify";
 import EditCardDialog from "./EditCardDialog";
@@ -17,6 +19,8 @@ function CardActionsPanel({
   setColumns,
   boardMembers,
   boardId,
+  currentUserId,        // <<< THÊM PROP NÀY (rất quan trọng)
+  isBoardOwner = false, // <<< THÊM PROP NÀY (từ component cha truyền vào)
 }) {
   const { socket, socketReady } = useContext(SocketContext);
   const [openEditDialog, setOpenEditDialog] = useState(false);
@@ -24,6 +28,16 @@ function CardActionsPanel({
     delete: false,
     toggleComplete: false,
   });
+
+  // Kiểm tra người dùng hiện tại có phải là thành viên của CARD không
+  const isCardMember = useMemo(() => {
+    return card?.members?.some(
+      (m) => m._id?.toString() === currentUserId?.toString()
+    );
+  }, [card?.members, currentUserId]);
+
+  // Quyền đánh dấu hoàn thành: là thành viên card HOẶC là owner board
+  const canToggleComplete = isCardMember || isBoardOwner;
 
   const normalizeUser = (user) => ({
     _id: user?._id || "unknown",
@@ -33,37 +47,23 @@ function CardActionsPanel({
   });
 
   const isMemberInBoard = (memberId) => {
-    if (!memberId || !boardMembers?.length) {
-      return false;
-    }
+    if (!memberId || !boardMembers?.length) return false;
     const boardMember = boardMembers.find(
-      (boardMember) =>
-        (boardMember.user?._id || boardMember._id)?.toString() ===
-        memberId.toString()
+      (bm) => (bm.user?._id || bm._id)?.toString() === memberId.toString()
     );
-    if (!boardMember) {
-      return false;
-    }
-    return boardMember.isActive !== undefined ? boardMember.isActive : true;
+    return boardMember?.isActive !== false;
   };
 
   const activeMembersCount = useMemo(() => {
-    return (card?.members || []).filter((member) =>
-      isMemberInBoard(member._id)
-    ).length;
+    return (card?.members || []).filter((m) => isMemberInBoard(m._id)).length;
   }, [card?.members, boardMembers]);
 
   const membersTooltip = useMemo(() => {
     return (card?.members || [])
-      .map((member) => ({
-        ...normalizeUser(member),
-      }))
+      .map(normalizeUser)
       .map(
-        (member) =>
-          `${member.fullName} (${isMemberInBoard(member._id)
-            ? "Còn trong bảng"
-            : "Không còn trong bảng"
-          })`
+        (m) =>
+          `${m.fullName} (${isMemberInBoard(m._id) ? "Còn trong bảng" : "Không còn trong bảng"})`
       )
       .join(", ");
   }, [card?.members, boardMembers]);
@@ -72,74 +72,66 @@ function CardActionsPanel({
     if (!window.confirm("Bạn có chắc chắn muốn xóa thẻ này?")) return;
 
     setLoading((prev) => ({ ...prev, delete: true }));
-
     try {
       const token = localStorage.getItem("token");
       await axios.delete(`http://localhost:5000/api/cards/${card._id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      setColumns((prevColumns) =>
-        prevColumns.map((col) => ({
+      setColumns((prev) =>
+        prev.map((col) => ({
           ...col,
           cards: col.cards.filter((c) => c._id !== card._id),
         }))
       );
 
-      if (socket && socketReady) {
-        socket.emit("card-deleted", {
-          boardId,
-          listId: card.list,
-          cardId: card._id,
-        });
-      }
-
+      socket?.emit("card-deleted", { boardId, listId: card.list, cardId: card._id });
       toast.success("Xóa thẻ thành công!");
     } catch (err) {
-      console.error("Error deleting card:", err);
-      toast.error(
-        `Có lỗi khi xóa thẻ: ${err.response?.data?.message || err.message}`
-      );
+      toast.error(err.response?.data?.message || "Xóa thẻ thất bại");
     } finally {
       setLoading((prev) => ({ ...prev, delete: false }));
     }
   };
 
   const handleToggleComplete = async () => {
-    setLoading((prev) => ({ ...prev, toggleComplete: true }));
+    if (!canToggleComplete) {
+      toast.warn("Bạn không có quyền đánh dấu hoàn thành thẻ này!");
+      return;
+    }
 
+    setLoading((prev) => ({ ...prev, toggleComplete: true }));
     try {
       const token = localStorage.getItem("token");
-      const response = await axios.put(
+      const res = await axios.put(
         `http://localhost:5000/api/cards/${card._id}/complete`,
         {},
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      setColumns((prevColumns) =>
-        prevColumns.map((col) => ({
+      setColumns((prev) =>
+        prev.map((col) => ({
           ...col,
           cards: col.cards.map((c) =>
             c._id === card._id
-              ? { ...c, completed: response.data.card.completed }
+              ? { ...c, completed: res.data.card.completed }
               : c
           ),
         }))
       );
 
-      if (socket && socketReady) {
-        socket.emit("card-completion-toggled", {
-          cardId: card._id,
-          completed: response.data.card.completed,
-        });
-      }
+      socket?.emit("card-completion-toggled", {
+        cardId: card._id,
+        completed: res.data.card.completed,
+      });
 
-      toast.success("Cập nhật trạng thái hoàn thành thẻ thành công!");
-    } catch (err) {
-      console.error("Error toggling card completion:", err);
-      toast.error(
-        `Có lỗi khi cập nhật trạng thái hoàn thành: ${err.response?.data?.message || err.message}`
+      toast.success(
+        res.data.card.completed
+          ? "Đánh dấu hoàn thành thành công!"
+          : "Bỏ hoàn thành thành công!"
       );
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Cập nhật thất bại");
     } finally {
       setLoading((prev) => ({ ...prev, toggleComplete: false }));
     }
@@ -152,28 +144,17 @@ function CardActionsPanel({
       (card?.attachments || []).length > 0 ||
       (card?.notes || []).length > 0 ||
       (card?.checklists || []).length > 0 ||
-      card?.completed
+      card?.completed ||
+      canToggleComplete // Thêm để owner luôn thấy nút hoàn thành
     );
   };
 
   if (!shouldShowCardActions()) return null;
 
   return (
-    <CardActions
-      sx={{
-        p: 1,
-        bgcolor: (theme) => theme.palette.background.paper,
-      }}
-    >
-      <Stack
-        direction="row"
-        spacing={1}
-        sx={{
-          flexWrap: "wrap",
-          alignItems: "center",
-          gap: 1,
-        }}
-      >
+    <CardActions sx={{ p: 1, bgcolor: "background.paper" }}>
+      <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: 1 }}>
+        {/* Các Chip thông tin */}
         <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: 1 }}>
           {(card?.members || []).length > 0 && (
             <Tooltip title={membersTooltip}>
@@ -181,105 +162,74 @@ function CardActionsPanel({
                 icon={<Groups3Icon />}
                 label={`${activeMembersCount}/${(card?.members || []).length}`}
                 size="small"
-                sx={{
-                  bgcolor: (theme) =>
-                    theme.palette.mode === "light"
-                      ? theme.palette.info.light
-                      : theme.palette.info.dark,
-                  color: (theme) => theme.palette.info.contrastText,
-                }}
+                color="info"
                 onClick={(e) => e.stopPropagation()}
               />
             </Tooltip>
           )}
           {(card?.comments || []).length > 0 && (
-            <Chip
-              icon={<AssistantIcon />}
-              label={(card?.comments || []).length}
-              size="small"
-              sx={{
-                bgcolor: (theme) =>
-                  theme.palette.mode === "light"
-                    ? theme.palette.secondary.light
-                    : theme.palette.secondary.dark,
-                color: (theme) => theme.palette.secondary.contrastText,
-              }}
-              onClick={(e) => e.stopPropagation()}
-            />
+            <Chip icon={<AssistantIcon />} label={card.comments.length} size="small" color="secondary" />
           )}
           {(card?.attachments || []).length > 0 && (
-            <Chip
-              icon={<AttachmentIcon />}
-              label={(card?.attachments || []).length}
-              size="small"
-              sx={{
-                bgcolor: (theme) =>
-                  theme.palette.mode === "light"
-                    ? theme.palette.warning.light
-                    : theme.palette.warning.dark,
-                color: (theme) => theme.palette.warning.contrastText,
-              }}
-              onClick={(e) => e.stopPropagation()}
-            />
+            <Chip icon={<AttachmentIcon />} label={card.attachments.length} size="small" color="warning" />
           )}
           {(card?.checklists || []).length > 0 && (
             <Chip
               icon={<CheckCircleIcon />}
-              label={(card.checklists || []).reduce(
-                (total, cl) => total + (cl.items || []).length,
-                0
-              )}
+              label={card.checklists.reduce((t, cl) => t + (cl.items || []).length, 0)}
               size="small"
-              sx={{
-                bgcolor: (theme) =>
-                  theme.palette.mode === "light"
-                    ? theme.palette.success.light
-                    : theme.palette.success.dark,
-                color: (theme) => theme.palette.success.contrastText,
-              }}
-              onClick={(e) => e.stopPropagation()}
+              color="success"
             />
           )}
         </Stack>
 
-        <Stack direction="row" spacing={1}>
+        {/* Nút hành động */}
+        <Stack direction="row" spacing={0.5}>
+          {/* Nút đánh dấu hoàn thành - có kiểm tra quyền */}
           <Tooltip
-            title={card.completed ? "Bỏ hoàn thành" : "Đánh dấu hoàn thành"}
+            title={
+              canToggleComplete
+                ? card.completed
+                  ? "Bỏ hoàn thành"
+                  : "Đánh dấu hoàn thành"
+                : "Chỉ thành viên thẻ hoặc chủ board mới được đánh dấu hoàn thành"
+            }
           >
-            <IconButton
-              size="small"
-              onClick={handleToggleComplete}
-              disabled={loading.toggleComplete}
-              sx={{
-                color: card.completed
-                  ? (theme) => theme.palette.success.main
-                  : (theme) => theme.palette.action.active,
-              }}
-            >
-              <CheckCircleIcon fontSize="small" />
-            </IconButton>
+            <Box>
+              <IconButton
+                size="small"
+                onClick={handleToggleComplete}
+                disabled={!canToggleComplete || loading.toggleComplete}
+                sx={{
+                  color: card.completed
+                    ? "success.main"
+                    : canToggleComplete
+                      ? "action.active"
+                      : "action.disabled",
+                }}
+              >
+                {card.completed ? (
+                  <CheckCircleIcon fontSize="small" />
+                ) : canToggleComplete ? (
+                  <CheckCircleOutlineIcon fontSize="small" />
+                ) : (
+                  <LockIcon fontSize="small" />
+                )}
+              </IconButton>
+            </Box>
           </Tooltip>
+
+          {/* Nút sửa */}
           <Tooltip title="Chỉnh sửa thẻ">
-            <IconButton
-              size="small"
-              onClick={() => setOpenEditDialog(true)}
-              sx={{
-                color: (theme) => theme.palette.action.active,
-              }}
-            >
+            <IconButton size="small" onClick={() => setOpenEditDialog(true)}>
               <EditIcon fontSize="small" />
             </IconButton>
           </Tooltip>
+
+          {/* Nút xóa */}
           <Tooltip title="Xóa thẻ">
-            <IconButton
-              size="small"
-              onClick={handleDeleteCard}
-              disabled={loading.delete}
-              sx={{
-                color: (theme) => theme.palette.error.main,
-              }}
-            >
-              <DeleteIcon fontSize="small" />
+            <IconButton size="small" onClick={handleDeleteCard} disabled={loading.delete}>
+              <DeleteIcon fontSize="small" color="error" />
             </IconButton>
           </Tooltip>
         </Stack>
@@ -290,6 +240,9 @@ function CardActionsPanel({
         onClose={() => setOpenEditDialog(false)}
         card={card}
         setColumns={setColumns}
+        currentUserId={currentUserId}
+        isCardMember={isCardMember}
+        isBoardOwner={isBoardOwner}
       />
     </CardActions>
   );

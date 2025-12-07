@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useContext } from "react";
 import { toast } from "react-toastify";
 import { normalizeUser, normalizeChecklists, normalizeComments, normalizeNotes } from "../utils/normalize";
 import {
@@ -18,8 +18,10 @@ import {
   toggleChecklistItem,
   removeMember,
 } from "../services/cardService";
+import { SocketContext } from '../../context/SocketContext';
 
 export const useCardDetails = (card, setCards, setColumns, boardMembers) => {
+  const { socket, socketReady } = useContext(SocketContext);
   const [comment, setComment] = useState("");
   const [note, setNote] = useState("");
   const [checklistTitle, setChecklistTitle] = useState("");
@@ -39,23 +41,20 @@ export const useCardDetails = (card, setCards, setColumns, boardMembers) => {
   const [localBoardMembers, setLocalBoardMembers] = useState([]);
   const [pendingNotifications, setPendingNotifications] = useState([]);
 
-  // Normalize và unique boardMembers
-  useEffect(() => {
+
+  const normalizedBoardMembers = useMemo(() => {
     if (!Array.isArray(boardMembers)) {
       console.warn('boardMembers không phải mảng:', boardMembers);
-      setLocalBoardMembers([]);
-      return;
+      return [];
     }
 
     const uniqueMembers = boardMembers.reduce((acc, member) => {
       if (!member || typeof member !== 'object') {
-        console.warn('Member không hợp lệ:', member);
         return acc;
       }
 
       const memberId = member.user?._id || member._id;
       if (!memberId || typeof memberId !== 'string') {
-        console.warn('Member không có ID hợp lệ:', member);
         return acc;
       }
 
@@ -76,8 +75,13 @@ export const useCardDetails = (card, setCards, setColumns, boardMembers) => {
       return acc;
     }, []);
 
-    setLocalBoardMembers(uniqueMembers);
+    return uniqueMembers;
   }, [boardMembers]);
+
+
+  useEffect(() => {
+    setLocalBoardMembers(normalizedBoardMembers);
+  }, [normalizedBoardMembers]);
 
   // Fetch current user
   useEffect(() => {
@@ -87,7 +91,7 @@ export const useCardDetails = (card, setCards, setColumns, boardMembers) => {
         const user = await fetchCurrentUser();
         setCurrentUserId(user._id || user.id);
       } catch (err) {
-        console.error("Lỗi fetch user trong useCardDetails:", err.response?.data || err.message);
+        console.error("Lỗi fetch user:", err.response?.data || err.message);
       } finally {
         setLoading((prev) => ({ ...prev, user: false }));
       }
@@ -104,44 +108,43 @@ export const useCardDetails = (card, setCards, setColumns, boardMembers) => {
         const owner = await checkBoardOwner(card.board);
         setIsBoardOwner(currentUserId === owner._id.toString());
       } catch (err) {
-        console.error("Lỗi check owner trong useCardDetails:", err.response?.data || err.message);
+        console.error("Lỗi check owner:", err.response?.data || err.message);
       }
     };
     checkOwner();
   }, [card.board, currentUserId]);
 
-  // Fetch card data khi card được mount
+  // Fetch card data
   useEffect(() => {
     if (card._id) {
       refreshCard();
     }
   }, [card._id]);
 
-  // Cập nhật state card
- const updateCardState = useCallback(
-  (cardId, updatedFields) => {
-    setColumns((prev) =>
-      prev.map((col) => ({
-        ...col,
-        cards: col.cards.map((c) =>
-          c._id === cardId
-            ? {
+  const updateCardState = useCallback(
+    (cardId, updatedFields) => {
+      setColumns((prev) =>
+        prev.map((col) => ({
+          ...col,
+          cards: col.cards.map((c) =>
+            c._id === cardId
+              ? {
                 ...c,
                 ...updatedFields,
                 members: updatedFields.members?.map(normalizeUser) || c.members,
-                comments: normalizeComments(updatedFields.comments ?? c.comments),
-                notes: normalizeNotes(updatedFields.notes ?? c.notes),
+                // comments: normalizeComments(updatedFields.comments ?? c.comments),
+                // notes: normalizeNotes(updatedFields.notes ?? c.notes),
                 checklists: normalizeChecklists(updatedFields.checklists ?? c.checklists),
               }
-            : c
-        ),
-      }))
-    );
-  },
-  [setColumns]
-);
+              : c
+          ),
+        }))
+      );
+    },
+    [setColumns]
+  );
 
-  // Refresh card từ server
+  // Refresh card
   const refreshCard = useCallback(async () => {
     try {
       const latestCard = await fetchCard(card._id);
@@ -158,62 +161,69 @@ export const useCardDetails = (card, setCards, setColumns, boardMembers) => {
     }
   }, [card._id, updateCardState]);
 
-  // Kiểm tra member trong board
+
+  const boardMembersMap = useMemo(() => {
+    const map = new Map();
+    if (!Array.isArray(normalizedBoardMembers)) return map;
+
+    normalizedBoardMembers.forEach((m) => {
+      const mId = (m.user?._id || m._id)?.toString();
+      if (mId) {
+        map.set(mId, m.isActive ?? false);
+      }
+    });
+
+    return map;
+  }, [normalizedBoardMembers]);
+
+
   const isMemberInBoard = useCallback(
     (memberId) => {
-      if (!memberId || typeof memberId !== 'string' || memberId === 'unknown-user' || !Array.isArray(localBoardMembers) || localBoardMembers.length === 0) {
-        console.warn('isMemberInBoard: Invalid memberId or empty boardMembers', {
-          memberId,
-          localBoardMembersLength: localBoardMembers.length,
-          isUnknownUser: memberId === 'unknown-user',
-        });
+      if (
+        !memberId ||
+        typeof memberId !== 'string' ||
+        memberId === 'unknown-user' ||
+        boardMembersMap.size === 0
+      ) {
         return false;
       }
 
       const memberIdStr = memberId.toString();
-      
-      const member = localBoardMembers.find((m) => {
-        const mId = (m.user?._id || m._id)?.toString();
-        return mId === memberIdStr;
-      });
-
-      const isActive = member?.isActive ?? false;
-
-      console.log('isMemberInBoard result:', {
-        memberId: memberIdStr,
-        isActive,
-        member: member ? { id: member.user?._id || member._id, name: member.user?.fullName } : null,
-      });
-
-      return isActive;
+      return boardMembersMap.get(memberIdStr) ?? false;
     },
-    [localBoardMembers]
+    [boardMembersMap]
   );
 
-  // Xử lý thêm ghi chú
-const handleAddNote = useCallback(async () => {
-  if (!note.trim() || !currentUserId || !isMemberInBoard(currentUserId)) {
-    toast.error("Không đủ quyền hoặc nội dung ghi chú trống!");
-    return;
-  }
-  setLoading((prev) => ({ ...prev, note: true }));
-  try {
-    const newNote = await addNote(card._id, note);
-    updateCardState(card._id, {
-      notes: normalizeNotes([...(card.notes || []), newNote]),
-    });
-    setNote("");
-    toast.success("Thêm ghi chú thành công!");
-  } catch (err) {
-    console.error("Error in handleAddNote:", err.response?.data || err.message);
-    toast.error("Lỗi khi thêm ghi chú!");
-  } finally {
-    setLoading((prev) => ({ ...prev, note: false }));
-    await refreshCard();
-  }
-}, [note, currentUserId, isMemberInBoard, card._id, card.notes, updateCardState, refreshCard]);
 
-  // Xử lý ẩn ghi chú
+  const handleAddNote = useCallback(async () => {
+    if (!note.trim() || !currentUserId || !isMemberInBoard(currentUserId)) {
+      toast.error("Không đủ quyền hoặc nội dung ghi chú trống!");
+      return;
+    }
+    setLoading((prev) => ({ ...prev, note: true }));
+    try {
+      const newNote = await addNote(card._id, note);
+      updateCardState(card._id, {
+        notes: normalizeNotes([...(card.notes || []), newNote]),
+      });
+      setNote("");
+      if (socket && socketReady) {
+        socket.emit("note-added", {
+          cardId: card._id,
+          note: newNote,
+          actorId: currentUserId,
+        });
+      }
+      toast.success("Thêm ghi chú thành công!");
+    } catch (err) {
+      console.error("Error in handleAddNote:", err.response?.data || err.message);
+      toast.error("Lỗi khi thêm ghi chú!");
+    } finally {
+      setLoading((prev) => ({ ...prev, note: false }));
+      await refreshCard();
+    }
+  }, [note, currentUserId, isMemberInBoard, card._id, card.notes, updateCardState, refreshCard, socket, socketReady]);
+
   const handleHideNote = useCallback(async (noteId) => {
     if (!currentUserId || !isMemberInBoard(currentUserId)) {
       toast.error("Không đủ quyền để ẩn ghi chú!");
@@ -232,30 +242,35 @@ const handleAddNote = useCallback(async () => {
     }
   }, [currentUserId, isMemberInBoard, card._id, refreshCard]);
 
-  // Xử lý thêm bình luận
-const handleAddComment = useCallback(async () => {
-  if (!comment.trim() || !currentUserId || !isMemberInBoard(currentUserId)) {
-    toast.error("Không đủ quyền hoặc nội dung bình luận trống!");
-    return;
-  }
-  setLoading((prev) => ({ ...prev, comment: true }));
-  try {
-    const newComment = await addComment(card._id, comment);
-    updateCardState(card._id, {
-      comments: normalizeComments([...(card.comments || []), newComment]),
-    });
-    setComment("");
-    toast.success("Thêm bình luận thành công!");
-  } catch (err) {
-    console.error("Error in handleAddComment:", err.response?.data || err.message);
-    toast.error("Lỗi khi thêm bình luận!");
-  } finally {
-    setLoading((prev) => ({ ...prev, comment: false }));
-    await refreshCard();
-  }
-}, [comment, currentUserId, isMemberInBoard, card._id, card.comments, updateCardState, refreshCard]);
+  const handleAddComment = useCallback(async () => {
+    if (!comment.trim() || !currentUserId || !isMemberInBoard(currentUserId)) {
+      toast.error("Không đủ quyền hoặc nội dung bình luận trống!");
+      return;
+    }
+    setLoading((prev) => ({ ...prev, comment: true }));
+    try {
+      const newComment = await addComment(card._id, comment);
+      updateCardState(card._id, {
+        comments: normalizeComments([...(card.comments || []), newComment]),
+      });
+      setComment("");
+      if (socket && socketReady) {
+        socket.emit("comment-added", {
+          cardId: card._id,
+          comment: newComment,
+          actorId: currentUserId,
+        });
+      }
+      toast.success("Thêm bình luận thành công!");
+    } catch (err) {
+      console.error("Error in handleAddComment:", err.response?.data || err.message);
+      toast.error("Lỗi khi thêm bình luận!");
+    } finally {
+      setLoading((prev) => ({ ...prev, comment: false }));
+      await refreshCard();
+    }
+  }, [comment, currentUserId, isMemberInBoard, card._id, card.comments, updateCardState, refreshCard, socket, socketReady]);
 
-  // Xử lý ẩn bình luận
   const handleHideComment = useCallback(async (commentId) => {
     if (!currentUserId || !isMemberInBoard(currentUserId)) {
       toast.error("Không đủ quyền để ẩn bình luận!");
@@ -274,7 +289,6 @@ const handleAddComment = useCallback(async () => {
     }
   }, [currentUserId, isMemberInBoard, card._id, refreshCard]);
 
-  // Xử lý thêm danh sách kiểm tra
   const handleAddChecklist = useCallback(async () => {
     if (!checklistTitle.trim() || !currentUserId || !isMemberInBoard(currentUserId)) {
       toast.error("Không đủ quyền hoặc tiêu đề checklist trống!");
@@ -285,6 +299,13 @@ const handleAddComment = useCallback(async () => {
       const checklists = await addChecklist(card._id, checklistTitle);
       updateCardState(card._id, { checklists });
       setChecklistTitle("");
+      if (socket && socketReady) {
+        socket.emit("checklist-added", {
+          cardId: card._id,
+          checklist: checklists[checklists.length - 1],
+          actorId: currentUserId,
+        });
+      }
       toast.success("Thêm danh sách kiểm tra thành công!");
     } catch (err) {
       console.error("Error in handleAddChecklist:", err.response?.data || err.message);
@@ -293,9 +314,8 @@ const handleAddComment = useCallback(async () => {
       setLoading((prev) => ({ ...prev, checklist: false }));
       await refreshCard();
     }
-  }, [checklistTitle, currentUserId, isMemberInBoard, card._id, updateCardState, refreshCard]);
+  }, [checklistTitle, currentUserId, isMemberInBoard, card._id, updateCardState, refreshCard, socket, socketReady]);
 
-  // Xử lý cập nhật danh sách kiểm tra
   const handleUpdateChecklist = useCallback(async (checklistId, title) => {
     if (!title.trim() || !currentUserId || !isMemberInBoard(currentUserId)) {
       toast.error("Không đủ quyền hoặc tiêu đề checklist trống!");
@@ -315,7 +335,6 @@ const handleAddComment = useCallback(async () => {
     }
   }, [currentUserId, isMemberInBoard, card._id, updateCardState, refreshCard]);
 
-  // Xử lý xóa danh sách kiểm tra
   const handleDeleteChecklist = useCallback(async (checklistId) => {
     if (!currentUserId || !isMemberInBoard(currentUserId)) {
       toast.error("Không đủ quyền để xóa danh sách kiểm tra!");
@@ -335,32 +354,37 @@ const handleAddComment = useCallback(async () => {
     }
   }, [currentUserId, isMemberInBoard, card._id, updateCardState, refreshCard]);
 
-  // Xử lý thêm mục danh sách kiểm tra
   const handleAddChecklistItem = useCallback(async (checklistId, { title, content }) => {
-    console.log("handleAddChecklistItem inputs:", { checklistId, title, content, currentUserId, isMember: isMemberInBoard(currentUserId) });
-    
     if (!title?.trim() || !content?.trim()) {
-      console.error("handleAddChecklistItem: Tiêu đề hoặc nội dung checklist item trống hoặc không hợp lệ:", { title, content });
       toast.error("Tiêu đề và nội dung checklist item không được để trống!");
       return;
     }
     if (!currentUserId) {
-      console.error("handleAddChecklistItem: currentUserId không hợp lệ:", currentUserId);
       toast.error("Không tìm thấy thông tin người dùng!");
       return;
     }
     if (!isMemberInBoard(currentUserId)) {
-      console.error("handleAddChecklistItem: Người dùng không có quyền:", currentUserId);
       toast.error("Bạn không có quyền thêm mục danh sách kiểm tra!");
       return;
     }
-    
+
     setLoading((prev) => ({ ...prev, checklistItem: true }));
     try {
       const checklists = await addChecklistItem(card._id, checklistId, { title, content });
       updateCardState(card._id, { checklists });
       setChecklistItem("");
       toast.success("Thêm mục danh sách kiểm tra thành công!");
+      if (socket && socketReady) {
+        const updatedChecklist = checklists.find(cl => cl._id === checklistId);
+        const newItem = updatedChecklist?.items[updatedChecklist.items.length - 1];
+
+        socket.emit("checklist-item-added", {
+          cardId: card._id,
+          checklistId,
+          item: newItem,
+          actorId: currentUserId,
+        });
+      }
     } catch (err) {
       console.error("Error in handleAddChecklistItem:", err.response?.data || err.message);
       toast.error(err.response?.data?.message || "Lỗi khi thêm mục danh sách kiểm tra!");
@@ -368,9 +392,8 @@ const handleAddComment = useCallback(async () => {
       setLoading((prev) => ({ ...prev, checklistItem: false }));
       await refreshCard();
     }
-  }, [currentUserId, isMemberInBoard, card._id, updateCardState, refreshCard]);
+  }, [currentUserId, isMemberInBoard, card._id, updateCardState, refreshCard, socket, socketReady]);
 
-  // Xử lý cập nhật mục danh sách kiểm tra
   const handleUpdateChecklistItem = useCallback(async (checklistId, itemId, { title, content }) => {
     if (!title.trim() || !content.trim() || !currentUserId || !isMemberInBoard(currentUserId)) {
       toast.error("Không đủ quyền hoặc tiêu đề/nội dung checklist item trống!");
@@ -390,7 +413,6 @@ const handleAddComment = useCallback(async () => {
     }
   }, [currentUserId, isMemberInBoard, card._id, updateCardState, refreshCard]);
 
-  // Xử lý xóa mục danh sách kiểm tra
   const handleDeleteChecklistItem = useCallback(async (checklistId, itemId) => {
     if (!currentUserId || !isMemberInBoard(currentUserId)) {
       toast.error("Không đủ quyền để xóa mục danh sách kiểm tra!");
@@ -410,7 +432,6 @@ const handleAddComment = useCallback(async () => {
     }
   }, [currentUserId, isMemberInBoard, card._id, updateCardState, refreshCard]);
 
-  // Xử lý thay đổi trạng thái mục danh sách kiểm tra
   const handleToggleChecklistItem = useCallback(async (checklistId, itemId, completed) => {
     if (!currentUserId || !isMemberInBoard(currentUserId)) {
       toast.error("Không đủ quyền để thay đổi trạng thái mục danh sách kiểm tra!");
@@ -421,6 +442,15 @@ const handleAddComment = useCallback(async () => {
       const checklists = await toggleChecklistItem(card._id, checklistId, itemId, completed);
       updateCardState(card._id, { checklists });
       toast.success(`Mục danh sách kiểm tra đã được ${completed ? "hoàn thành" : "bỏ hoàn thành"}!`);
+      if (socket && socketReady) {
+        socket.emit("checklist-item-toggled", {
+          cardId: card._id,
+          checklistId,
+          itemId,
+          completed,
+          actorId: currentUserId,
+        });
+      }
     } catch (err) {
       console.error("Error in handleToggleChecklistItem:", err.response?.data || err.message);
       toast.error("Lỗi khi thay đổi trạng thái mục danh sách kiểm tra!");
@@ -428,9 +458,8 @@ const handleAddComment = useCallback(async () => {
       setLoading((prev) => ({ ...prev, checklistToggle: false }));
       await refreshCard();
     }
-  }, [currentUserId, isMemberInBoard, card._id, updateCardState, refreshCard]);
+  }, [currentUserId, isMemberInBoard, card._id, updateCardState, refreshCard, socket, socketReady]);
 
-  // Xử lý xóa thành viên
   const handleRemoveMember = useCallback(async (memberId) => {
     if (!currentUserId || !isMemberInBoard(currentUserId)) {
       toast.error("Không đủ quyền để xóa thành viên!");
@@ -452,8 +481,8 @@ const handleAddComment = useCallback(async () => {
 
   const memoizedMembers = useMemo(() => (card.members || []).map(normalizeUser), [card.members]);
   const memoizedBoardMembers = useMemo(
-    () => localBoardMembers.map((m) => ({ ...m, user: normalizeUser(m.user) })),
-    [localBoardMembers]
+    () => normalizedBoardMembers.map((m) => ({ ...m, user: normalizeUser(m.user) })),
+    [normalizedBoardMembers]
   );
 
   return {

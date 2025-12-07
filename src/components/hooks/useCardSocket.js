@@ -145,7 +145,7 @@ export const useCardSocket = (
         setPendingNotifications((prev) => [...prev, "Danh sách kiểm tra đã được xóa."]);
       },
       // Xử lý khi mục trong danh sách kiểm tra được thêm
-      "hecklist-item-added": ({ cardId, checklistId, item, actorId }) => {
+      "checklist-item-added": ({ cardId, checklistId, item, actorId }) => {
         if (actorId === currentUserId) return;
         updateCardState(cardId, {
           checklists: (card.checklists || []).map((c) =>

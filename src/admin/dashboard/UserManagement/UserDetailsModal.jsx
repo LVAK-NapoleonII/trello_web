@@ -1,5 +1,3 @@
-// src/admin/dashboard/UserManagement/UserDetailsModal.jsx
-
 import { useState, useEffect } from 'react';
 import {
     Dialog,
@@ -23,7 +21,8 @@ import {
     Schedule,
     Workspaces,
     Dashboard,
-    History
+    History,
+    Warning
 } from '@mui/icons-material';
 import { adminApi } from '../../api/adminApi';
 
@@ -120,6 +119,58 @@ export const UserDetailsModal = ({ userId, open, onClose }) => {
                                 <Chip label="Người dùng" color="primary" size="small" />
                             )}
                         </Grid>
+
+                        {/* Thông tin BAN (nếu bị khóa) */}
+                        {user.isBanned && (
+                            <>
+                                <Grid item xs={12}>
+                                    <Divider />
+                                </Grid>
+
+                                <Grid item xs={12}>
+                                    <Alert severity="error" icon={<Block />}>
+                                        <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
+                                            Tài khoản bị khóa
+                                        </Typography>
+                                        <Grid container spacing={1}>
+                                            <Grid item xs={12}>
+                                                <Typography variant="body2">
+                                                    <strong>Lý do:</strong> {user.banReason || 'Không rõ'}
+                                                </Typography>
+                                            </Grid>
+                                            <Grid item xs={12}>
+                                                <Typography variant="body2">
+                                                    <strong>Thời gian khóa:</strong>{' '}
+                                                    {user.bannedAt
+                                                        ? new Date(user.bannedAt).toLocaleString('vi-VN')
+                                                        : 'Không rõ'}
+                                                </Typography>
+                                            </Grid>
+                                            <Grid item xs={12}>
+                                                <Typography variant="body2">
+                                                    <strong>Hết hạn:</strong>{' '}
+                                                    {user.banExpiresAt ? (
+                                                        <Chip
+                                                            label={new Date(user.banExpiresAt).toLocaleString('vi-VN')}
+                                                            size="small"
+                                                            color="warning"
+                                                            icon={<Schedule />}
+                                                        />
+                                                    ) : (
+                                                        <Chip
+                                                            label="Vĩnh viễn"
+                                                            size="small"
+                                                            color="error"
+                                                            icon={<Warning />}
+                                                        />
+                                                    )}
+                                                </Typography>
+                                            </Grid>
+                                        </Grid>
+                                    </Alert>
+                                </Grid>
+                            </>
+                        )}
 
                         <Grid item xs={12}>
                             <Divider />

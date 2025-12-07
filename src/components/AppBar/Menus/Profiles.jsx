@@ -78,13 +78,13 @@ const useProfileMenu = () => {
     return () => socket.off("new-activity");
   }, [user, socket, socketReady]);
 
-  return { user, logout, activities, fetchActivities, navigate };
+  return { user, logout, activities, fetchActivities, navigate, setActivities };
 };
 
 const Profiles = forwardRef((props, ref) => {
   const theme = useTheme();
   const isDarkMode = theme.palette.mode === "dark";
-  const { user, logout, activities, navigate } = useProfileMenu();
+  const { user, logout, activities, navigate, setActivities } = useProfileMenu();
   const [anchorEl, setAnchorEl] = useState(null);
   const open = Boolean(anchorEl);
   if (!user) {
@@ -130,7 +130,7 @@ const Profiles = forwardRef((props, ref) => {
       setActivities((prev) => prev.filter((a) => a._id !== activityId));
       toast.success("Đã ẩn hoạt động!");
     } catch (err) {
-      toast.error("Không thể ẩn hoạt động!");
+      // toast.error("Không thể ẩn hoạt động!");
     }
   };
 
@@ -143,7 +143,7 @@ const Profiles = forwardRef((props, ref) => {
       setActivities([]);
       toast.success("Đã ẩn tất cả hoạt động!");
     } catch (err) {
-      toast.error("Không thể ẩn tất cả hoạt động!");
+      // toast.error("Không thể ẩn tất cả hoạt động!");
     }
   };
 

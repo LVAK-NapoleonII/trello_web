@@ -31,7 +31,7 @@ function BoardBar({ board, setBoard }) {
 
   const log = (message, data) => {
     if (process.env.NODE_ENV === "development") {
-      console.log(message, data);
+      // console.log(message, data);
     }
   };
 
@@ -379,8 +379,12 @@ function BoardBar({ board, setBoard }) {
   };
 
   const handleRemoveMember = async (userId) => {
+    // Kiểm tra userId hợp lệ (MongoDB ObjectId là chuỗi 24 ký tự hex)
+    const isValidObjectId = (id) => {
+      return typeof id === 'string' && /^[a-fA-F0-9]{24}$/.test(id);
+    };
 
-    if (!userId || !mongoose.Types.ObjectId.isValid?.(userId)) {
+    if (!userId || !isValidObjectId(userId)) {
       toast.error("ID người dùng không hợp lệ!");
       console.error("Invalid userId:", userId);
       return;
@@ -399,12 +403,10 @@ function BoardBar({ board, setBoard }) {
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      // Cập nhật board
       if (typeof setBoard === "function") {
         setBoard(response.data.board);
       }
 
-      // Socket
       if (socket && socketReady) {
         socket.emit("member-deactivated", {
           board: response.data.board,

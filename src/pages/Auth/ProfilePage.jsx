@@ -234,7 +234,7 @@ const ProfilePage = () => {
       toast.success("Đã ẩn hoạt động!");
     } catch (err) {
       console.error("ProfilePage: Error hiding activity:", err);
-      toast.error("Không thể ẩn hoạt động!");
+      // toast.error("Không thể ẩn hoạt động!");
       if (err.response?.status === 401) {
         console.log("ProfilePage: Unauthorized, logging out");
         localStorage.removeItem("token");
@@ -262,7 +262,7 @@ const ProfilePage = () => {
       setPage(1);
     } catch (err) {
       console.error("ProfilePage: Error hiding all activities:", err);
-      toast.error("Không thể ẩn tất cả hoạt động!");
+      // toast.error("Không thể ẩn tất cả hoạt động!");
       if (err.response?.status === 401) {
         console.log("ProfilePage: Unauthorized, logging out");
         localStorage.removeItem("token");

@@ -1,26 +1,47 @@
-// components/CardHeader.jsx
-import { useState, useEffect, useContext } from "react";
+import { useState, useEffect, useContext, useMemo } from "react";
 import {
   Box,
   Radio,
   Typography,
   IconButton,
   Chip,
+  Tooltip,
 } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
+import LockIcon from "@mui/icons-material/Lock";
 import axios from "axios";
 import { toast } from "react-toastify";
 import EditCardDialog from "./EditCardDialog";
 import CardCover from "./CardCover";
 import { SocketContext } from "../../../../../../../context/SocketContext";
 
-function CardHeader({ card, setColumns, setExpanded }) {
+function CardHeader({ card, setColumns, setExpanded, currentUserId, isBoardOwner }) {
   const { socket, socketReady } = useContext(SocketContext);
   const [isCompleted, setIsCompleted] = useState(card.completed || false);
   const [openEditDialog, setOpenEditDialog] = useState(false);
+
+  // Kiểm tra xem user hiện tại có phải là thành viên của card không
+  const isCardMember = useMemo(() => {
+    if (!currentUserId || !card?.members || !Array.isArray(card.members)) {
+      return false;
+    }
+
+    const result = card.members.some((m) => {
+      const memberId = m._id?.toString();
+      const userId = currentUserId?.toString();
+      return memberId === userId;
+    });
+    return result;
+  }, [card?.members, currentUserId, card._id]);
+
+  // Quyền đánh dấu hoàn thành = (là thành viên của card) HOẶC (là chủ board)
+  const canToggleComplete = useMemo(() => {
+    const result = isCardMember || isBoardOwner;
+    return result;
+  }, [isCardMember, isBoardOwner, card._id]);
 
   useEffect(() => {
     setIsCompleted(card.completed || false);
@@ -68,6 +89,12 @@ function CardHeader({ card, setColumns, setExpanded }) {
 
   const handleToggleComplete = async (e) => {
     e.stopPropagation();
+
+    if (!canToggleComplete) {
+      toast.warning("Chỉ thành viên của thẻ mới được phép đánh dấu hoàn thành!");
+      return;
+    }
+
     const newState = !isCompleted;
     setIsCompleted(newState);
 
@@ -87,6 +114,7 @@ function CardHeader({ card, setColumns, setExpanded }) {
         socket.emit("card-completion-toggled", {
           cardId: card._id,
           completed: data.card.completed,
+          actorId: localStorage.getItem("userId"),
         });
       }
     } catch (err) {
@@ -152,15 +180,37 @@ function CardHeader({ card, setColumns, setExpanded }) {
             setExpanded ? `1px solid ${theme.palette.divider}` : "none",
         }}
       >
-        <Radio
-          checked={isCompleted}
-          onChange={handleToggleComplete}
-          onClick={(e) => e.stopPropagation()}
-          sx={{
-            color: isCompleted ? "success.main" : "text.secondary",
-            "&.Mui-checked": { color: "success.main" },
-          }}
-        />
+        <Tooltip
+          title={canToggleComplete ? "" : "Chỉ thành viên của thẻ mới có thể đánh dấu hoàn thành"}
+          arrow
+        >
+          <span>
+            <Radio
+              checked={isCompleted}
+              onChange={handleToggleComplete}
+              onClick={(e) => e.stopPropagation()}
+              disabled={!canToggleComplete}
+              sx={{
+                color: isCompleted ? "success.main" : "text.secondary",
+                "&.Mui-checked": { color: "success.main" },
+                "&.Mui-disabled": {
+                  color: "action.disabled",
+                  opacity: 0.5,
+                },
+              }}
+            />
+          </span>
+        </Tooltip>
+
+        {!canToggleComplete && (
+          <LockIcon
+            sx={{
+              fontSize: 16,
+              color: "text.secondary",
+              opacity: 0.6,
+            }}
+          />
+        )}
 
         <Box sx={{ flex: 1 }}>
           <Typography
@@ -218,6 +268,9 @@ function CardHeader({ card, setColumns, setExpanded }) {
         onClose={() => setOpenEditDialog(false)}
         card={card}
         setColumns={setColumns}
+        currentUserId={currentUserId}
+        isCardMember={isCardMember}
+        isBoardOwner={isBoardOwner}
       />
     </>
   );

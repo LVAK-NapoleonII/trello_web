@@ -17,7 +17,7 @@ import {
   MouseSensor,
   DragOverlay,
   useSensor,
-  useSensors,
+  useSensors
 } from "@dnd-kit/core";
 import {
   SortableContext,
@@ -62,18 +62,15 @@ function ListColumns({ boardId: propBoardId }) {
   const [isLoading, setIsLoading] = useState(true);
   const [dragStartPosition, setDragStartPosition] = useState(null);
   const [ignoredSocketUpdates, setIgnoredSocketUpdates] = useState([]);
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: { distance: 8 },
-    }),
-    useSensor(MouseSensor, {
-      activationConstraint: { distance: 8 },
-    }),
-    useSensor(TouchSensor, {
-      activationConstraint: { delay: 150, tolerance: 8 },
-    })
-  );
+  const [currentUserId, setCurrentUserId] = useState(null);
+  const [boardOwnerId, setBoardOwnerId] = useState(null);
+  const isBoardOwner = useMemo(() => {
+    if (!currentUserId || !boardOwnerId) {
+      return false;
+    }
+    const result = currentUserId.toString() === boardOwnerId.toString();
+    return result;
+  }, [currentUserId, boardOwnerId]);
 
   const fetchBoardMembers = useCallback(async () => {
     try {
@@ -139,6 +136,38 @@ function ListColumns({ boardId: propBoardId }) {
     }
   }, [boardId]);
 
+  useEffect(() => {
+    const fetchUserAndBoardOwner = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const userId = localStorage.getItem("userId");
+
+        if (!userId) {
+          return;
+        }
+
+        setCurrentUserId(userId);
+
+        if (!boardId) {
+          return;
+        }
+
+        // Fetch thông tin board để lấy owner
+        const response = await axios.get(
+          `http://localhost:5000/api/boards/${boardId}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+
+        const ownerId = response.data.owner?._id || response.data.owner;
+        setBoardOwnerId(ownerId);
+      } catch (err) {
+        console.error(" Error fetching user/board info:", err);
+        toast.error("Không thể lấy thông tin board!");
+      }
+    };
+
+    fetchUserAndBoardOwner();
+  }, [boardId]);
   useEffect(() => {
     if (!boardId) {
       console.error("ListColumns: boardId is undefined or null");
@@ -208,7 +237,7 @@ function ListColumns({ boardId: propBoardId }) {
         console.log("ListColumns: Reordered columns:", reorderedColumns);
         return [...reorderedColumns];
       });
-      toast.info("Thứ tự cột đã được cập nhật!");
+      // toast.info("Thứ tự cột đã được cập nhật!");
     };
 
     const handleCardCreated = ({ boardId: updatedBoardId, listId, card }) => {
@@ -314,7 +343,7 @@ function ListColumns({ boardId: propBoardId }) {
         console.log("ListColumns: Updated columns state:", newColumns);
         return [...newColumns];
       });
-      toast.info("Một thẻ đã được di chuyển!");
+      // toast.info("Một thẻ đã được di chuyển!");
     };
 
     const handleCardOrderUpdated = ({ listId, cardOrder }) => {
@@ -342,7 +371,7 @@ function ListColumns({ boardId: propBoardId }) {
         }
         return [...newColumns];
       });
-      toast.info("Thứ tự thẻ đã được cập nhật!");
+      // toast.info("Thứ tự thẻ đã được cập nhật!");
     };
 
     const handleMemberDeactivated = (data) => {
@@ -619,7 +648,7 @@ function ListColumns({ boardId: propBoardId }) {
           if (socket && socketReady) {
             socket.emit("list-order-updated", { boardId, columnOrder });
           }
-          toast.success("Cập nhật thứ tự cột thành công!");
+          // toast.success("Cập nhật thứ tự cột thành công!");
         } catch (err) {
           console.error("ListColumns: Error updating column order:", err);
           toast.error("Lỗi khi cập nhật thứ tự cột!");
@@ -749,7 +778,7 @@ function ListColumns({ boardId: propBoardId }) {
               });
             }
 
-            toast.success("Cập nhật thứ tự thẻ thành công!");
+            // toast.success("Cập nhật thứ tự thẻ thành công!");
           } else {
             // === KÉO SANG CỘT KHÁC ===
             await axios.put(
@@ -772,7 +801,7 @@ function ListColumns({ boardId: propBoardId }) {
               });
             }
 
-            toast.success("Di chuyển thẻ thành công!");
+            // toast.success("Di chuyển thẻ thành công!");
           }
         } catch (err) {
           console.error("ListColumns: Error moving card:", err);
@@ -800,6 +829,24 @@ function ListColumns({ boardId: propBoardId }) {
       fetchColumns,
       predictedPosition,
     ]
+  );
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(MouseSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        delay: 200,
+        tolerance: 8,
+      },
+    })
   );
 
   const columnIds = useMemo(() => columns.map((c) => c._id), [columns]);
@@ -1000,6 +1047,8 @@ function ListColumns({ boardId: propBoardId }) {
                           ? predictedPosition
                           : null
                       }
+                      currentUserId={currentUserId}
+                      isBoardOwner={isBoardOwner}
                     />
                   </Box>
                 </Fade>
@@ -1392,6 +1441,8 @@ function ListColumns({ boardId: propBoardId }) {
                 boardId={boardId}
                 boardMembers={boardMembers}
                 setBoardMembers={setBoardMembers}
+                currentUserId={currentUserId}
+                isBoardOwner={isBoardOwner}
               />
             </Paper>
           )}

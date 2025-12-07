@@ -13,6 +13,8 @@ function Cards({
   boardMembers,
   setBoardMembers,
   boardId,
+  currentUserId,
+  isBoardOwner,
 }) {
   const { socket, socketReady } = useContext(SocketContext);
 
@@ -91,7 +93,7 @@ function Cards({
         return newColumns;
       });
 
-      toast.info("Thẻ đã được di chuyển.");
+      // toast.info("Thẻ đã được di chuyển.");
     };
 
     const handleCardUpdated = ({ cardId, card: updatedCard }) => {
@@ -153,6 +155,8 @@ function Cards({
         boardMembers={boardMembers}
         setBoardMembers={setBoardMembers}
         boardId={boardId}
+        currentUserId={currentUserId}
+        isBoardOwner={isBoardOwner}
       />
     </Box>
   );

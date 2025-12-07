@@ -13,18 +13,20 @@ import {
   IconButton,
   Tooltip,
   Typography,
+  Alert,
 } from "@mui/material";
 import {
   Palette as PaletteIcon,
   Image as ImageIcon,
   CloudUpload as CloudUploadIcon,
+  Lock as LockIcon,
 } from "@mui/icons-material";
 import axios from "axios";
 import { toast } from "react-toastify";
 import { SocketContext } from "../../../../../../../context/SocketContext";
 import { useTheme } from "@mui/material/styles";
 
-function EditCardDialog({ open, onClose, card, setColumns }) {
+function EditCardDialog({ open, onClose, card, setColumns, currentUserId, isCardMember, isBoardOwner }) {
   const { socket, socketReady } = useContext(SocketContext);
   const theme = useTheme();
 
@@ -40,6 +42,8 @@ function EditCardDialog({ open, onClose, card, setColumns }) {
   const [loading, setLoading] = useState(false);
   const [coverError, setCoverError] = useState(null);
 
+  // Hạn chót không được chỉnh sửa - chỉ hiển thị
+  const canEditDueDate = isBoardOwner;
   // Gợi ý màu
   const suggestedColors = [
     "#FF6900", "#FCB900", "#00D084", "#0693E3", "#EB144C",
@@ -152,15 +156,22 @@ function EditCardDialog({ open, onClose, card, setColumns }) {
       const token = localStorage.getItem("token");
       if (!token) throw new Error("Không tìm thấy token!");
 
+      // Chỉ gửi dueDate nếu là owner
+      const updateData = {
+        title: title.trim(),
+        description: description.trim() || null,
+        cover: cover ? cover.trim() : null,
+        version: card.version,
+      };
+
+      if (isBoardOwner) {
+        updateData.dueDate = dueDate || null;
+      }
+      // Nếu không phải owner → không gửi trường dueDate → backend sẽ giữ nguyên
+
       const response = await axios.put(
         `http://localhost:5000/api/cards/${card._id}`,
-        {
-          title: title.trim(),
-          description: description.trim() || null,
-          dueDate: dueDate ? new Date(dueDate).toISOString() : null,
-          cover: cover ? cover.trim() : null,
-          version: card.version
-        },
+        updateData,
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
@@ -170,7 +181,22 @@ function EditCardDialog({ open, onClose, card, setColumns }) {
         prevColumns.map((col) => ({
           ...col,
           cards: col.cards.map((c) =>
-            c._id === card._id ? { ...c, ...updatedCard } : c
+            c._id === card._id
+              ? {
+                ...c,
+                title: updatedCard.title,
+                description: updatedCard.description,
+                dueDate: updatedCard.dueDate,
+                cover: updatedCard.cover,
+                version: updatedCard.version,
+                // Giữ nguyên các field khác
+                members: c.members,
+                // comments: c.comments,
+                // notes: c.notes,
+                checklists: c.checklists,
+                completed: c.completed,
+              }
+              : c
           ),
         }))
       );
@@ -184,10 +210,26 @@ function EditCardDialog({ open, onClose, card, setColumns }) {
     } catch (err) {
       console.error("Error updating card:", err);
       const msg = err.response?.data?.message || err.message;
-      toast.error(`Lỗi: ${msg}`);
+      if (err.response?.status === 403) {
+        toast.error("Bạn không có quyền chỉnh sửa hạn chót!");
+      } else {
+        toast.error(`Lỗi: ${msg}`);
+      }
     } finally {
       setLoading(false);
     }
+  };
+
+  const formatDueDateDisplay = (dateString) => {
+    if (!dateString) return "Chưa có hạn chót";
+    const date = new Date(dateString);
+    return date.toLocaleString('vi-VN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   };
 
   return (
@@ -222,20 +264,35 @@ function EditCardDialog({ open, onClose, card, setColumns }) {
           sx={textFieldSx}
         />
 
-        <TextField
-          margin="dense"
-          label="Hạn chót"
-          type="datetime-local"
-          fullWidth
-          value={dueDate}
-          onChange={(e) => setDueDate(e.target.value)}
-          InputLabelProps={{ shrink: true }}
-          disabled={loading}
-          variant="outlined"
-          sx={textFieldSx}
-        />
+        {/* Hiển thị hạn chót (chỉ đọc) */}
+        <Box sx={{ mt: 2 }}>
+          <TextField
+            label="Hạn chót"
+            type="datetime-local"
+            fullWidth
+            value={dueDate}
+            onChange={(e) => setDueDate(e.target.value)}
+            disabled={!canEditDueDate || loading}
+            InputLabelProps={{ shrink: true }}
+            InputProps={{
+              endAdornment: !canEditDueDate && (
+                <InputAdornment position="end">
+                  <Tooltip title="Chỉ chủ board mới được chỉnh sửa">
+                    <LockIcon color="action" fontSize="small" />
+                  </Tooltip>
+                </InputAdornment>
+              ),
+            }}
+            helperText={
+              !canEditDueDate
+                ? "Chỉ chủ board mới được chỉnh sửa hạn chót"
+                : "Bạn có thể thay đổi hạn chót"
+            }
+            sx={textFieldSx}
+          />
+        </Box>
 
-        {/* BÌẢNH */}
+        {/* BÌA */}
         <Box sx={{ mt: 2 }}>
           <Tabs
             value={coverType}

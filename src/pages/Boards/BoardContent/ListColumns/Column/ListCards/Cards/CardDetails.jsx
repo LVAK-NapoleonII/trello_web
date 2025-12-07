@@ -108,6 +108,9 @@ function CardDetails({ card, setCards, setColumns, expanded, setExpanded, boardM
               handleDeleteChecklistItem={handleDeleteChecklistItem}
               handleToggleChecklistItem={handleToggleChecklistItem}
               loading={loading}
+              currentUserId={currentUserId}
+              card={card}
+              isBoardOwner={isBoardOwner}
             />
             <CommentsSection
               comments={card.comments || []}

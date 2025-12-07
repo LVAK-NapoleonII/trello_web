@@ -19,6 +19,8 @@ function ListCards({
   setBoardMembers,
   boardId,
   predictedPosition,
+  currentUserId,
+  isBoardOwner,
 }) {
   const { socket, socketReady } = useContext(SocketContext);
   const theme = useTheme();
@@ -202,6 +204,8 @@ function ListCards({
           setBoardMembers={setBoardMembers}
           boardId={boardId}
           columnId={listId}
+          currentUserId={currentUserId}
+          isBoardOwner={isBoardOwner}
         />
       );
     });
@@ -218,6 +222,8 @@ function ListCards({
     setBoardMembers,
     boardId,
     setColumns,
+    currentUserId,
+    isBoardOwner,
   ]);
 
   return (

@@ -111,7 +111,7 @@ const useProfile = () => {
     };
   }, [user, socket, socketReady, joined, navigate, logout]);
 
-  return { user, logout, loading, activities, isLoading, fetchActivities };
+  return { user, logout, loading, activities, isLoading, fetchActivities, setActivities };
 };
 
 // Component chính
@@ -119,7 +119,7 @@ function Profile() {
   const theme = useTheme();
   const isDarkMode = theme.palette.mode === "dark";
   const navigate = useNavigate();
-  const { user, logout, loading, activities, isLoading } = useProfile();
+  const { user, logout, loading, activities, isLoading, setActivities } = useProfile();
 
   const handleActivityClick = (activity) => {
     if (!activity.target || !activity.targetModel) {
@@ -168,7 +168,7 @@ function Profile() {
       setActivities((prev) => prev.filter((a) => a._id !== activityId));
       toast.success("Đã ẩn hoạt động!");
     } catch (err) {
-      toast.error("Không thể ẩn hoạt động!");
+      // toast.error("Không thể ẩn hoạt động!");
       if (err.response?.status === 401) {
         localStorage.removeItem("token");
         logout();
@@ -191,7 +191,7 @@ function Profile() {
       setActivities([]);
       toast.success("Đã ẩn tất cả hoạt động!");
     } catch (err) {
-      toast.error("Không thể ẩn tất cả hoạt động!");
+      // toast.error("Không thể ẩn tất cả hoạt động!");
       if (err.response?.status === 401) {
         localStorage.removeItem("token");
         logout();

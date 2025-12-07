@@ -47,6 +47,7 @@ export const adminApi = {
   getInactiveUsers: (days) => API.get('/users/inactive/list', { params: { days } }),
   sendInactivityNotices: () => API.post('/users/inactive/notify'),
   deleteInactiveUsers: () => API.post('/users/inactive/delete'),
+  getExpiringBans: () => API.get('/bans/expiring'),
 
   getActivityLogs: (params) => API.get('/logs', { params })
 };
