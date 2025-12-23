@@ -81,7 +81,7 @@ function ListColumns({ boardId: propBoardId }) {
         { headers: { Authorization: `Bearer ${token}` } }
       );
       setBoardMembers(response.data.members || []);
-      console.log("ListColumns: Fetched boardMembers:", response.data.members);
+      // console.log("ListColumns: Fetched boardMembers:", response.data.members);
     } catch (err) {
       console.error("ListColumns: Error fetching boardMembers:", err);
       toast.error("Lỗi khi tải danh sách thành viên!");
@@ -124,7 +124,7 @@ function ListColumns({ boardId: propBoardId }) {
         (col, index, self) => self.findIndex((c) => c._id === col._id) === index
       );
       setColumns(uniqueColumns);
-      console.log("ListColumns: Fetched columns:", uniqueColumns);
+      // console.log("ListColumns: Fetched columns:", uniqueColumns);
     } catch (err) {
       console.error("ListColumns: Error fetching columns:", {
         message: err.message,
@@ -192,10 +192,10 @@ function ListColumns({ boardId: propBoardId }) {
     }
 
     socket.emit("join-board", { boardId });
-    console.log("ListColumns: Emitted join-board:", {
-      boardId,
-      socketId: socket.id,
-    });
+    // console.log("ListColumns: Emitted join-board:", {
+    //   boardId,
+    //   socketId: socket.id,
+    // });
 
     const handleListCreated = ({ boardId: updatedBoardId, list }) => {
       if (updatedBoardId !== boardId) return;
@@ -340,7 +340,7 @@ function ListColumns({ boardId: propBoardId }) {
             position: index,
           }));
 
-        console.log("ListColumns: Updated columns state:", newColumns);
+        // console.log("ListColumns: Updated columns state:", newColumns);
         return [...newColumns];
       });
       // toast.info("Một thẻ đã được di chuyển!");
@@ -500,11 +500,11 @@ function ListColumns({ boardId: propBoardId }) {
     const { active } = event;
     const dragData = active.data.current;
 
-    console.log("ListColumns: Drag started:", {
-      id: active.id,
-      type: dragData.type,
-      hasColumn: !!dragData.column,
-    });
+    // console.log("ListColumns: Drag started:", {
+    //   id: active.id,
+    //   type: dragData.type,
+    //   hasColumn: !!dragData.column,
+    // });
 
     if (!dragData) {
       console.error("ListColumns: No drag data", active);

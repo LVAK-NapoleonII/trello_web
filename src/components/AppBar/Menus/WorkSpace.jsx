@@ -34,7 +34,7 @@ function WorkSpace({ onCreateWorkspace }) {
         headers: { Authorization: `Bearer ${token} ` },
         timeout: 5000,
       });
-      console.log("Fetched workspaces:", response.data);
+      // console.log("Fetched workspaces:", response.data);
       setWorkspaces(response.data);
     } catch (error) {
       console.error("Error fetching workspaces:", error);

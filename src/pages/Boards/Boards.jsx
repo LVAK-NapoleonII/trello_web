@@ -41,10 +41,10 @@ function Board() {
       }
       return acc;
     }, []);
-    console.log(
-      "filterUniqueMembers: Result:",
-      JSON.stringify(uniqueMembers, null, 2)
-    );
+    // console.log(
+    //   "filterUniqueMembers: Result:",
+    //   JSON.stringify(uniqueMembers, null, 2)
+    // );
     return uniqueMembers;
   };
 
@@ -57,27 +57,27 @@ function Board() {
           throw new Error("Không tìm thấy token! Vui lòng đăng nhập lại.");
         }
 
-        console.log("Board: Fetching board with ID:", boardId);
+        // console.log("Board: Fetching board with ID:", boardId);
         const response = await axios.get(
           `http://localhost:5000/api/boards/${boardId}`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
 
         const boardData = response.data;
-        console.log(
-          "Board: Fetched board data:",
-          JSON.stringify(boardData, null, 2)
-        );
+        // console.log(
+        //   "Board: Fetched board data:",
+        //   JSON.stringify(boardData, null, 2)
+        // );
 
         // Tải danh sách cột
         const columnsResponse = await axios.get(
           `http://localhost:5000/api/lists/board/${boardId}`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
-        console.log(
-          "Board: Fetched columns:",
-          JSON.stringify(columnsResponse.data, null, 2)
-        );
+        // console.log(
+        //   "Board: Fetched columns:",
+        //   JSON.stringify(columnsResponse.data, null, 2)
+        // );
 
         const columnsWithCards = await Promise.all(
           columnsResponse.data.map(async (column) => {
@@ -124,7 +124,7 @@ function Board() {
     if (!socket || !socketReady || !boardId) return;
 
     socket.emit("join-board", { boardId });
-    console.log("Board: Joined board room:", boardId);
+    // console.log("Board: Joined board room:", boardId);
 
     // Lắng nghe sự kiện board-updated để đồng bộ boardMembers
     socket.on("board-updated", (data) => {

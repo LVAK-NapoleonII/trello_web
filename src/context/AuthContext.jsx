@@ -31,9 +31,9 @@ export const AuthProvider = ({ children }) => {
 
     const verifyToken = async (retries = 3, delay = 1000) => {
       const token = localStorage.getItem("token");
-      console.log("AuthContext: Verifying token:", {
-        token: token ? "present" : "missing",
-      });
+      // console.log("AuthContext: Verifying token:", {
+      //   token: token ? "present" : "missing",
+      // });
 
       if (!token) {
         console.log("AuthContext: No token found, setting loading to false");
@@ -45,9 +45,9 @@ export const AuthProvider = ({ children }) => {
 
       for (let i = 0; i < retries; i++) {
         try {
-          console.log(
-            `AuthContext: Fetching user profile (attempt ${i + 1}/${retries})`
-          );
+          // console.log(
+          //   `AuthContext: Fetching user profile (attempt ${i + 1}/${retries})`
+          // );
           const response = await axios.get(
             "http://localhost:5000/api/auth/profile",
             {
@@ -59,7 +59,7 @@ export const AuthProvider = ({ children }) => {
           );
 
           const userData = response.data.user;
-          console.log("AuthContext: User profile fetched:", userData);
+          // console.log("AuthContext: User profile fetched:", userData);
 
           const userId = userData._id || userData.id;
           if (!userId) {
@@ -173,7 +173,7 @@ export const AuthProvider = ({ children }) => {
   }, [location.pathname]); // Thêm location.pathname vào dependency array
 
   const login = async (userData, token) => {
-    console.log("AuthContext: Logging in user:", userData);
+    // console.log("AuthContext: Logging in user:", userData);
     const userId = userData._id || userData.id;
     if (!userId) {
       console.error("AuthContext: Login user data missing _id or id", userData);

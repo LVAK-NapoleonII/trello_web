@@ -13,7 +13,7 @@ export const SocketProvider = ({ children }) => {
   const [onlineUsers, setOnlineUsers] = useState(new Set());
 
   const log = (message, data = {}) => {
-    console.log(`[SocketProvider] ${message}`, data);
+    // console.log(`[SocketProvider] ${message}`, data);
   };
 
   const initializeAuth = async () => {
