@@ -70,7 +70,7 @@ function WorkspaceHistory() {
       setDeletedWorkspaces(deletedData);
 
       if (activeData.length === 0 && deletedData.length === 0) {
-        toast.info("Không có workspace nào tồn tại. Hãy tạo mới!");
+        toast.info("Không có không gian làm việc nào tồn tại. Hãy tạo mới!");
       }
     } catch (error) {
       const errorMessage = handleApiError(error, navigate, "Lỗi tải dữ liệu workspace!");
@@ -169,7 +169,7 @@ function WorkspaceHistory() {
         }}
         endIcon={<ExpandMoreIcon />}
       >
-        Workspace History
+        Lịch sử các không gian làm việc
       </Button>
       <Menu
         id="basic-menu-workspace-history"
@@ -229,7 +229,7 @@ function WorkspaceHistory() {
         </MenuItem>
         <Divider sx={{ mx: 2, my: 1, opacity: 0.5 }} />
         <ListSubheader sx={{ fontWeight: 600, color: theme.palette.text.primary }}>
-          Active Workspaces
+          Không gian làm việc đang tồn tại
         </ListSubheader>
         {loading ? (
           <MenuItem sx={{ justifyContent: "center" }}>
@@ -276,13 +276,13 @@ function WorkspaceHistory() {
         ) : (
           <MenuItem sx={{ justifyContent: "center" }}>
             <Typography variant="body2" color="text.secondary">
-              No active workspaces found
+              Không có không gian làm việc nào được tìm thấy
             </Typography>
           </MenuItem>
         )}
         <Divider sx={{ mx: 2, my: 1, opacity: 0.5 }} />
         <ListSubheader sx={{ fontWeight: 600, color: theme.palette.text.primary }}>
-          Deleted Workspaces
+          Không gian làm việc có thể khôi phục
         </ListSubheader>
         {loading ? (
           <MenuItem sx={{ justifyContent: "center" }}>
@@ -336,7 +336,7 @@ function WorkspaceHistory() {
         ) : (
           <MenuItem sx={{ justifyContent: "center" }}>
             <Typography variant="body2" color="text.secondary">
-              No deleted workspaces found
+              Không có không gian làm việc để khôi phục
             </Typography>
           </MenuItem>
         )}

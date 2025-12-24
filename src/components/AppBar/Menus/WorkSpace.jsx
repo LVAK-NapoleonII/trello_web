@@ -80,7 +80,7 @@ function WorkSpace({ onCreateWorkspace }) {
     socket.on("workspace-hidden", (data) => {
       console.log("Received workspace-hidden:", data);
       setWorkspaces((prev) => prev.filter((ws) => ws._id !== data.workspaceId));
-      toast.info(`Không gian làm việc ${data.workspaceId} đã bị ẩn`);
+      toast.info(`Không gian làm việc ${data.workspace.name} đã bị ẩn`);
     });
 
     socket.on("workspace-restored", (data) => {
@@ -135,7 +135,7 @@ function WorkSpace({ onCreateWorkspace }) {
         startIcon={<WorkspacesIcon />}
         onClick={handleClick}
       >
-        Workspaces
+        Không gian làm việc
       </Button>
       <Menu
         id="workspace-menu"
@@ -186,7 +186,7 @@ function WorkSpace({ onCreateWorkspace }) {
           }}
         >
           <Typography variant="body2" fontWeight={500}>
-            Create New Workspace
+            Tạo không gian làm việc
           </Typography>
         </MenuItem>
         <Divider sx={{ mx: 2, my: 1, opacity: 0.5 }} />
@@ -215,7 +215,7 @@ function WorkSpace({ onCreateWorkspace }) {
         ) : (
           <MenuItem sx={{ justifyContent: "center" }}>
             <Typography variant="body2" color="text.secondary">
-              No workspaces available
+              Không có không gian làm việc nào tồn tại
             </Typography>
           </MenuItem>
         )}

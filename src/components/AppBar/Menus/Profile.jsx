@@ -268,7 +268,7 @@ function Profile() {
                 "&:hover": { bgcolor: theme.palette.primary.light + "20" },
               }}
             >
-              Edit
+              Chỉnh sửa
             </Button>
             <Button
               variant="outlined"
@@ -280,7 +280,7 @@ function Profile() {
                 "&:hover": { bgcolor: theme.palette.error.light + "20" },
               }}
             >
-              Logout
+              Đăng xuất
             </Button>
           </Box>
         </Box>
@@ -289,7 +289,7 @@ function Profile() {
       {/* === Danh sách hoạt động === */}
       <Box sx={{ mb: 1, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <Typography variant="subtitle1" fontWeight={600}>
-          Activities
+          Hoạt động
         </Typography>
         {activities.length > 0 && (
           <Button
@@ -301,7 +301,7 @@ function Profile() {
               "&:hover": { bgcolor: theme.palette.error.light + "20" },
             }}
           >
-            Clear All
+            Xóa hết
           </Button>
         )}
       </Box>

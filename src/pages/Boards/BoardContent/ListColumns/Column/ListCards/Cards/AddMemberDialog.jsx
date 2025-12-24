@@ -601,7 +601,7 @@ function AddMemberDialog({
             >
               {searchQuery.trim()
                 ? "Không tìm thấy người dùng phù hợp."
-                : "Không có thành viên active trong bảng."}
+                : "Không có thành viên hoạt động trong bảng."}
             </Typography>
           )}
         </Box>

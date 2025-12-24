@@ -63,7 +63,7 @@ function MemberActions({
         size="small"
         disabled={loading || !isOwner}
       >
-        Invite
+        Thêm thành viên
       </Button>
       <Button
         variant="outlined"
@@ -72,7 +72,7 @@ function MemberActions({
         onClick={handleOpenManageMembersDialog}
         size="small"
       >
-        Members
+        Thành viên
       </Button>
       <AvatarGroup
         max={5}

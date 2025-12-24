@@ -40,7 +40,7 @@ export const BoardDetailsModal = ({ boardId, open, onClose }) => {
             <DialogTitle>
                 <Box display="flex" alignItems="center" gap={1}>
                     <Dashboard />
-                    Chi tiết Board
+                    Chi tiết Bảng làm việc
                 </Box>
             </DialogTitle>
 
@@ -52,7 +52,7 @@ export const BoardDetailsModal = ({ boardId, open, onClose }) => {
                 ) : error ? (
                     <Alert severity="error">{error}</Alert>
                 ) : !board ? (
-                    <Alert severity="warning">Không tìm thấy board</Alert>
+                    <Alert severity="warning">Không tìm thấy Bảng làm việc</Alert>
                 ) : (
                     <Grid container spacing={2}>
                         <Grid item xs={12}>
@@ -66,7 +66,7 @@ export const BoardDetailsModal = ({ boardId, open, onClose }) => {
                         </Grid>
 
                         <Grid item xs={6}>
-                            <Typography variant="subtitle2" color="text.secondary">Workspace</Typography>
+                            <Typography variant="subtitle2" color="text.secondary">Không gian làm việc</Typography>
                             <Chip
                                 icon={<Workspaces fontSize="small" />}
                                 label={board.workspace?.name || 'Không xác định'}

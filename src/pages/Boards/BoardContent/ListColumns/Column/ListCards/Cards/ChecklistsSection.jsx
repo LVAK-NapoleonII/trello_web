@@ -374,7 +374,7 @@ const ChecklistsSection = ({
           icon={<LockIcon />}
           sx={{ mb: 2, fontSize: "0.85rem" }}
         >
-          Bạn chỉ có thể xem checklist. Chỉ thành viên của thẻ mới có thể thực hiện các thao tác.
+          Bạn chỉ có thể xem Danh sách công việc. Chỉ thành viên của thẻ mới có thể thực hiện các thao tác.
         </Alert>
       )}
 
@@ -397,7 +397,7 @@ const ChecklistsSection = ({
         <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
           <CheckCircleOutlineIcon sx={{ color: theme.palette.primary.main, fontSize: 20 }} />
           <Typography variant="h6" sx={styles.sectionTitle}>
-            Checklists
+            Danh sách công việc
           </Typography>
           {!canPerformActions && <LockIcon sx={{ fontSize: 16, color: "text.secondary" }} />}
         </Box>
@@ -419,7 +419,7 @@ const ChecklistsSection = ({
                       color="error"
                       sx={{ p: 1.5, bgcolor: isDarkMode ? "#3f3f3f" : "#ffebee", borderRadius: 1.5, mb: 1, fontSize: "0.875rem" }}
                     >
-                      Checklist không hợp lệ
+                      Danh sách công việc không hợp lệ
                     </Typography>
                   );
                 }
@@ -615,9 +615,9 @@ const ChecklistsSection = ({
                                       WebkitBoxOrient: "vertical",
                                     }}
                                     onClick={() => openViewItem(item.title, item.content)}
-                                    title={item.title || "Item không có tiêu đề"}
+                                    title={item.title || "công việc không có tiêu đề"}
                                   >
-                                    {item.title || "Item không có tiêu đề"}
+                                    {item.title || "Công việc không có tiêu đề"}
                                   </Typography>
                                   <Typography
                                     sx={{
@@ -706,7 +706,7 @@ const ChecklistsSection = ({
                               textAlign: "center",
                             }}
                           >
-                            Không có item trong checklist này.
+                            Không có Công việc trong danh sách này.
                           </Typography>
                         )}
 
@@ -716,7 +716,7 @@ const ChecklistsSection = ({
                             <TextField
                               fullWidth
                               size="small"
-                              placeholder="Thêm tiêu đề item..."
+                              placeholder="Thêm tiêu đề công việc..."
                               value={inputs.title || ""}
                               onChange={(e) => handleChecklistInputChange(checklist._id, "title", e.target.value)}
                               variant="outlined"
@@ -728,7 +728,7 @@ const ChecklistsSection = ({
                             <TextField
                               fullWidth
                               size="small"
-                              placeholder="Thêm nội dung item..."
+                              placeholder="Thêm nội dung Công việc..."
                               value={inputs.content || ""}
                               onChange={(e) => handleChecklistInputChange(checklist._id, "content", e.target.value)}
                               variant="outlined"
@@ -748,7 +748,7 @@ const ChecklistsSection = ({
                               startIcon={<AddCircleOutlineIcon fontSize="small" />}
                               sx={{ ...styles.button, mt: 1 }}
                             >
-                              Thêm Item
+                              Thêm Công việc
                             </Button>
                           </Box>
                         )}
@@ -771,7 +771,7 @@ const ChecklistsSection = ({
               fontSize: "0.85rem",
             }}
           >
-            Chưa có checklist nào. Hãy thêm một checklist mới!
+            Chưa có Danh sách nào. Hãy thêm một danh sách mới!
           </Typography>
         )}
 
@@ -793,7 +793,7 @@ const ChecklistsSection = ({
             <TextField
               fullWidth
               size="small"
-              placeholder="Thêm tiêu đề checklist..."
+              placeholder="Thêm tiêu đề Danh sách..."
               value={checklistTitle}
               onChange={(e) => setChecklistTitle(e.target.value)}
               variant="outlined"
@@ -917,7 +917,7 @@ const ChecklistsSection = ({
               wordBreak: "break-word",
             }}
           >
-            {viewItem.title || "Item không có tiêu đề"}
+            {viewItem.title || "Công việc không có tiêu đề"}
           </Typography>
           <Typography
             sx={{

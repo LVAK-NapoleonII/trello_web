@@ -15,7 +15,7 @@ function EditColumnTitleDialog({
                 <TextField
                     autoFocus
                     margin="dense"
-                    label="Tiêu đề cột"
+                    label="Tên cột"
                     fullWidth
                     variant="outlined"
                     value={title}

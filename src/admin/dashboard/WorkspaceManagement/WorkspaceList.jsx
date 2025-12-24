@@ -66,7 +66,7 @@ export const WorkspaceList = () => {
         <Paper sx={{ p: 3, borderRadius: 2, boxShadow: 3 }}>
             <Box display="flex" alignItems="center" justifyContent="space-between" mb={3}>
                 <Typography variant="h5" fontWeight="bold" display="flex" alignItems="center" gap={1}>
-                    <Workspaces /> Quản lý Workspace
+                    <Workspaces /> Quản lý Không gian làm việc
                 </Typography>
                 <TextField
                     label="Tìm kiếm theo tên"
@@ -82,7 +82,7 @@ export const WorkspaceList = () => {
                     <CircularProgress />
                 </Box>
             ) : workspaces?.length === 0 ? (
-                <Alert severity="info">Không có workspace nào</Alert>
+                <Alert severity="info">Không có Không gian làm việc nào tồn tại</Alert>
             ) : (
                 <>
                     <TableContainer sx={{ maxHeight: 600 }}>
@@ -92,7 +92,7 @@ export const WorkspaceList = () => {
                                     <TableCell><strong>Tên</strong></TableCell>
                                     <TableCell><strong>Chủ sở hữu</strong></TableCell>
                                     <TableCell><strong>Thành viên</strong></TableCell>
-                                    <TableCell><strong>Board</strong></TableCell>
+                                    <TableCell><strong>Bảng làm việc</strong></TableCell>
                                     <TableCell><strong>Trạng thái</strong></TableCell>
                                     <TableCell align="right"><strong>Hành động</strong></TableCell>
                                 </TableRow>

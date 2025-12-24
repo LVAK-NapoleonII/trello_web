@@ -198,10 +198,10 @@ const WorkspaceSettingsPage = () => {
             </Avatar>
             <Box>
               <Typography variant="h4" fontWeight="700" color="text.primary">
-                Cài đặt Workspace
+                Cài đặt không gian làm việc
               </Typography>
               <Typography variant="body1" color="text.secondary">
-                Tùy chỉnh thông tin và cài đặt của workspace
+                Tùy chỉnh thông tin và cài đặt
               </Typography>
             </Box>
           </Box>
@@ -253,7 +253,7 @@ const WorkspaceSettingsPage = () => {
 
               {/* Workspace Name */}
               <TextField
-                label="Tên workspace"
+                label="Tên Không gian"
                 value={workspace.name || ""}
                 onChange={(e) => handleInputChange('name', e.target.value)}
                 fullWidth
@@ -288,7 +288,7 @@ const WorkspaceSettingsPage = () => {
                 multiline
                 rows={4}
                 variant="outlined"
-                placeholder="Thêm mô tả cho workspace của bạn..."
+                placeholder="Thêm mô tả cho không gian của bạn..."
                 sx={{
                   mb: 3,
                   '& .MuiOutlinedInput-root': {
@@ -342,11 +342,11 @@ const WorkspaceSettingsPage = () => {
                     {workspace.isPublic ? <PublicIcon fontSize="small" /> : <PrivateIcon fontSize="small" />}
                     <Box>
                       <Typography variant="body2" fontWeight="500">
-                        {workspace.isPublic ? 'Workspace công khai' : 'Workspace riêng tư'}
+                        {workspace.isPublic ? 'Không gian công khai' : 'không gian riêng tư'}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
                         {workspace.isPublic
-                          ? 'Mọi người có thể tìm thấy và tham gia workspace này'
+                          ? 'Mọi người có thể tìm thấy và tham gia không gian này'
                           : 'Chỉ những người được mời mới có thể truy cập'
                         }
                       </Typography>

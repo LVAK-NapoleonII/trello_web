@@ -15,8 +15,8 @@ export const DashboardStats = () => {
     const statItems = [
         { title: 'Tổng người dùng', value: stats.totalUsers, icon: <People />, color: 'primary' },
         { title: 'Đang hoạt động', value: stats.activeUsers, icon: <TrendingUp />, color: 'success' },
-        { title: 'Workspace', value: stats.totalWorkspaces, icon: <Workspaces />, color: 'info' },
-        { title: 'Board', value: stats.totalBoards, icon: <Dashboard />, color: 'warning' },
+        { title: 'Không gian làm việc', value: stats.totalWorkspaces, icon: <Workspaces />, color: 'info' },
+        { title: 'Bảng làm việc', value: stats.totalBoards, icon: <Dashboard />, color: 'warning' },
         { title: 'Không hoạt động (90 ngày)', value: stats.inactiveUsers, icon: <Warning />, color: 'error' },
     ];
 
@@ -92,7 +92,7 @@ export const DashboardStats = () => {
             {bans.expiringBans?.length > 0 && (
                 <Alert severity="warning" icon={<Schedule />} sx={{ mt: 2 }}>
                     <Typography variant="subtitle1" fontWeight="bold">
-                        📅 {bans.expiringBans.length} tài khoản sắp hết hạn ban
+                        {bans.expiringBans.length} tài khoản sắp hết hạn ban
                     </Typography>
                     <Box display="flex" gap={1} mt={1} flexWrap="wrap">
                         {bans.expiringBans.slice(0, 5).map((user) => (

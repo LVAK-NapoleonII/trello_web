@@ -218,26 +218,26 @@ const Profiles = forwardRef((props, ref) => {
           onClick={() => { navigate("/profile"); handleClose(); }}
           sx={menuItemStyles}
         >
-          <ListItemText primary="Edit Profile" primaryTypographyProps={{ fontWeight: 500 }} />
+          <ListItemText primary="Chỉnh sửa trang cá nhân" primaryTypographyProps={{ fontWeight: 500 }} />
         </MenuItem>
         {user?.isAdmin && (
           <MenuItem
             onClick={() => { navigate("/admin"); handleClose(); }}
             sx={menuItemStyles}
           >
-            <ListItemText primary="Manages" primaryTypographyProps={{ fontWeight: 500 }} />
+            <ListItemText primary="Quản lý" primaryTypographyProps={{ fontWeight: 500 }} />
           </MenuItem>
         )}
         <MenuItem
           onClick={handleLogout}
           sx={menuItemStyles}
         >
-          <ListItemText primary="Logout" primaryTypographyProps={{ fontWeight: 500 }} />
+          <ListItemText primary="Đăng xuất" primaryTypographyProps={{ fontWeight: 500 }} />
         </MenuItem>
         <Divider sx={{ mx: 2, my: 1, opacity: 0.5 }} />
         <Box sx={{ px: 2, py: 1.5, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <Typography variant="subtitle1" fontWeight={600}>
-            Activities
+            Hoạt động
           </Typography>
           {activities.length > 0 && (
             <IconButton
@@ -252,7 +252,7 @@ const Profiles = forwardRef((props, ref) => {
         {activities.length === 0 ? (
           <MenuItem sx={{ justifyContent: "center" }}>
             <Typography variant="body2" color="text.secondary">
-              No activities
+              Không có hoạt động
             </Typography>
           </MenuItem>
         ) : (
@@ -287,7 +287,7 @@ const Profiles = forwardRef((props, ref) => {
               sx={menuItemStyles}
             >
               <Typography variant="body2" color="primary" sx={{ textAlign: "center", width: "100%", fontWeight: 500 }}>
-                View all activities
+                Xem tất cả hoạt động
               </Typography>
             </MenuItem>
           </>

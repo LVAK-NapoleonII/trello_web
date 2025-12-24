@@ -45,19 +45,19 @@ function ModeSelect() {
         <MenuItem value="light">
           <Box sx={menuItemStyles}>
             <LightModeIcon fontSize="small" color="primary" />
-            Light
+            Sáng
           </Box>
         </MenuItem>
         <MenuItem value="dark">
           <Box sx={menuItemStyles}>
             <Brightness4Icon fontSize="small" color="primary" />
-            Dark
+            Tối
           </Box>
         </MenuItem>
         <MenuItem value="system">
           <Box sx={menuItemStyles}>
             <SettingsSuggestIcon fontSize="small" color="primary" />
-            System
+            Chỉnh theo hệ thống
           </Box>
         </MenuItem>
       </Select>

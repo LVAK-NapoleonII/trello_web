@@ -571,7 +571,7 @@ const HomePage = () => {
                 severity="info"
                 sx={{ mb: 2, bgcolor: isDarkMode ? "rgba(102, 126, 234, 0.1)" : "rgba(49, 130, 206, 0.1)", color: isDarkMode ? "#E2E8F0" : "#2D3748" }}
               >
-                Đang hiển thị bảng trong workspace: {workspaces.find((ws) => ws._id === selectedWorkspaceId)?.name}
+                Đang hiển thị bảng trong Không gian làm việc: {workspaces.find((ws) => ws._id === selectedWorkspaceId)?.name}
               </Alert>
             )}
           </Box>

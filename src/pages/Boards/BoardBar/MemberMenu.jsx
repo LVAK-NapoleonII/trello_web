@@ -156,7 +156,7 @@ function MemberMenu({
           </ListItemIcon>
           <ListItemText>
             <Typography variant="body2" fontWeight={500}>
-              Remove from board
+              Xóa thành viên khỏi bảng
             </Typography>
           </ListItemText>
         </MenuItem>

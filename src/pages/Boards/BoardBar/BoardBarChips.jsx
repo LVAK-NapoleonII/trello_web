@@ -49,11 +49,11 @@ function BoardBarChips({
   const visibilityChipStyle = {
     ...chipBaseStyle,
     background:
-      board.visibility === "public"
+      board.visibility === "Công khai"
         ? `linear-gradient(135deg, ${theme.palette.success.main} 0%, ${theme.palette.success.dark} 100%)`
         : `linear-gradient(135deg, ${theme.palette.warning.main} 0%, ${theme.palette.warning.dark} 100%)`,
     color:
-      board.visibility === "public"
+      board.visibility === "Công khai"
         ? theme.palette.success.contrastText
         : theme.palette.warning.contrastText,
     "&:hover": {
@@ -98,7 +98,7 @@ function BoardBarChips({
           title={
             <Box sx={{ textAlign: "center", p: 1 }}>
               <Typography variant="subtitle2" fontWeight={600}>
-                Board Title
+                Tiêu đề bảng làm việc
               </Typography>
               <Typography variant="body2" sx={{ mt: 0.5 }}>
                 {board.title || "Board Title"}
@@ -129,12 +129,12 @@ function BoardBarChips({
           title={
             <Box sx={{ textAlign: "center", p: 1 }}>
               <Typography variant="subtitle2" fontWeight={600}>
-                Visibility
+                Trạng thái
               </Typography>
               <Typography variant="body2" sx={{ mt: 0.5 }}>
                 {board.visibility === "public"
-                  ? "Anyone can view and join"
-                  : "Only invited members can access"}
+                  ? "Tất cả mọi người có thể tham gia"
+                  : "chỉ những thành viên được mời có thể tham gia"}
               </Typography>
             </Box>
           }
@@ -148,90 +148,9 @@ function BoardBarChips({
             }
             label={
               <Typography variant="body2" fontWeight={500}>
-                {board.visibility === "public" ? "Public" : "Private"}
+                {board.visibility === "public" ? "Công khai" : "Riêng tư"}
               </Typography>
             }
-            clickable
-          />
-        </Tooltip>
-
-        <Tooltip
-          title={
-            <Box sx={{ textAlign: "center", p: 1 }}>
-              <Typography variant="subtitle2" fontWeight={600}>
-                Google Drive
-              </Typography>
-              <Typography variant="body2" sx={{ mt: 0.5 }}>
-                Sync and backup board to Google Drive
-              </Typography>
-            </Box>
-          }
-          arrow
-          TransitionComponent={Fade}
-        >
-          <Chip
-            sx={featureChipStyle}
-            icon={<AddToDriveIcon />}
-            label={
-              <Typography variant="body2" fontWeight={500}>
-                Drive
-              </Typography>
-            }
-            onClick={handleAddToGoogleDrive}
-            clickable
-          />
-        </Tooltip>
-
-        <Tooltip
-          title={
-            <Box sx={{ textAlign: "center", p: 1 }}>
-              <Typography variant="subtitle2" fontWeight={600}>
-                Automation
-              </Typography>
-              <Typography variant="body2" sx={{ mt: 0.5 }}>
-                Set up rules and automated actions
-              </Typography>
-            </Box>
-          }
-          arrow
-          TransitionComponent={Fade}
-        >
-          <Chip
-            sx={featureChipStyle}
-            icon={<BoltIcon />}
-            label={
-              <Typography variant="body2" fontWeight={500}>
-                Automation
-              </Typography>
-            }
-            onClick={handleAutomation}
-            clickable
-          />
-        </Tooltip>
-
-        <Tooltip
-          title={
-            <Box sx={{ textAlign: "center", p: 1 }}>
-              <Typography variant="subtitle2" fontWeight={600}>
-                Filters
-              </Typography>
-              <Typography variant="body2" sx={{ mt: 0.5 }}>
-                Filter and search cards by criteria
-              </Typography>
-            </Box>
-          }
-          arrow
-          TransitionComponent={Fade}
-        >
-          <Chip
-            sx={featureChipStyle}
-            icon={<FilterListIcon />}
-            label={
-              <Typography variant="body2" fontWeight={500}>
-                Filter
-              </Typography>
-            }
-            onClick={handleFilters}
             clickable
           />
         </Tooltip>

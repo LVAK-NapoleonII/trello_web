@@ -65,7 +65,7 @@ function BoardBarActions({
         size="small"
         disabled={loading || !isOwner}
       >
-        Invite
+        Thêm thành viên
       </Button>
       <Button
         variant="outlined"
@@ -74,7 +74,7 @@ function BoardBarActions({
         onClick={handleOpenManageMembersDialog}
         size="small"
       >
-        Members
+        Thành viên của bảng
       </Button>
       <AvatarGroup
         max={5}

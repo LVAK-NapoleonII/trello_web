@@ -176,10 +176,10 @@ const WorkspaceMembersPage = () => {
             </Avatar>
             <Box>
               <Typography variant="h4" fontWeight="700" color="text.primary">
-                Thành viên Workspace
+                Thành viên Không gian làm việc
               </Typography>
               <Typography variant="body1" color="text.secondary">
-                Quản lý thành viên và vai trò trong workspace
+                Quản lý thành viên và vai trò trong Không gian làm việc
               </Typography>
             </Box>
           </Box>
@@ -192,7 +192,7 @@ const WorkspaceMembersPage = () => {
           icon={<PersonIcon />}
         />
         <Tab
-          label={`Thành viên workspace (${workspaceMembers.length})`}
+          label={`Thành viên trong không gian (${workspaceMembers.length})`}
           icon={<GroupIcon />}
         />
         <Tab
@@ -257,7 +257,7 @@ const WorkspaceMembersPage = () => {
               </List>
             ) : (
               <Typography color="textSecondary">
-                Không có thành viên nào trong workspace này.
+                Không có thành viên nào trong Không gian làm việc này.
               </Typography>
             )}
           </CardContent>
@@ -304,7 +304,7 @@ const WorkspaceMembersPage = () => {
               </List>
             ) : (
               <Typography color="textSecondary">
-                Không có thành viên workspace nào.
+                Không có thành viên Không gian làm việc nào.
               </Typography>
             )}
           </CardContent>
@@ -384,7 +384,7 @@ const WorkspaceMembersPage = () => {
             <Card>
               <CardContent>
                 <Typography color="textSecondary" textAlign="center">
-                  Không có bảng nào trong workspace này.
+                  Không có bảng nào trong Không gian làm việc này.
                 </Typography>
               </CardContent>
             </Card>

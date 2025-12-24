@@ -56,7 +56,6 @@ function EditCardDialog({ open, onClose, card, setColumns, currentUserId, isCard
     "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=400",
     "https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=400",
     "https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=400",
-    "https://images.unsplash.com/photo-1555066931-4365d14bab1d?w=400",
   ];
 
   const isValidHexColor = (value) => /^#[0-9A-Fa-f]{6}$/.test(value);

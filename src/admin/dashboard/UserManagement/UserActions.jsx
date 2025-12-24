@@ -143,7 +143,7 @@ export const UserActions = ({ user, onUpdate, onView }) => {
 
                         <Box bgcolor="error.50" p={2} borderRadius={1}>
                             <Typography variant="caption" color="error.main">
-                                ⚠️ User sẽ bị đăng xuất ngay lập tức và không thể đăng nhập
+                                User sẽ bị đăng xuất ngay lập tức và không thể đăng nhập
                                 {banData.duration
                                     ? ` trong ${banData.duration} ngày`
                                     : ' vĩnh viễn cho đến khi được mở khóa'}

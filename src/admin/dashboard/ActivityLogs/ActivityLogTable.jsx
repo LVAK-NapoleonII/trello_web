@@ -133,10 +133,10 @@ export const ActivityLogTable = () => {
                         <MenuItem value="">Tất cả</MenuItem>
                         <MenuItem value="admin_granted">Cấp Admin</MenuItem>
                         <MenuItem value="banned">Khóa tài khoản</MenuItem>
-                        <MenuItem value="deleted">Xóa user</MenuItem>
+                        <MenuItem value="deleted">Xóa người dùng</MenuItem>
                         <MenuItem value="restored">Khôi phục</MenuItem>
-                        <MenuItem value="workspace_deleted_by_admin">Xóa Workspace</MenuItem>
-                        <MenuItem value="board_deleted_by_admin">Xóa Board</MenuItem>
+                        <MenuItem value="workspace_deleted_by_admin">Xóa Không gian làm việc</MenuItem>
+                        <MenuItem value="board_deleted_by_admin">Xóa Bảng làm việc</MenuItem>
                     </Select>
                 </FormControl>
             </Box>

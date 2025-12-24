@@ -121,7 +121,7 @@ function InviteDialog({
       >
         <PersonAddIcon />
         <Typography variant="subtitle1" fontWeight={600} component="div">
-          Invite to "{board?.title}"
+          Thêm thành viên vào "{board?.title}"
         </Typography>
       </DialogTitle>
 
@@ -145,7 +145,7 @@ function InviteDialog({
             inputRef={inputRef}
             autoFocus
             fullWidth
-            label="Search by email or name"
+            label="Tìm kiếm bằng email hoặc tên"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             InputProps={{
@@ -235,7 +235,7 @@ function InviteDialog({
                     fontWeight={600}
                     sx={{ color: theme.palette.text.primary, mb: 1.5, px: 2 }}
                   >
-                    Search Results
+                    Kết quả tìm kiếm
                   </Typography>
                   <List dense>
                     {uniqueSearchResults.map((user) => {
@@ -309,7 +309,7 @@ function InviteDialog({
                                 </Typography>
                                 {user.isPastMember && (
                                   <Chip
-                                    label="Left"
+                                    label="Rời khỏi"
                                     size="small"
                                     color="warning"
                                     variant="outlined"
@@ -324,7 +324,7 @@ function InviteDialog({
                                 )}
                                 {user.isInvited && (
                                   <Chip
-                                    label="Invited"
+                                    label="Thêm thành viên"
                                     size="small"
                                     color="info"
                                     variant="outlined"
@@ -361,7 +361,7 @@ function InviteDialog({
                     fontWeight={600}
                     sx={{ color: theme.palette.text.primary, mb: 1.5, px: 2 }}
                   >
-                    Past Members or Invited
+                    Thành viên đã từng tham gia
                   </Typography>
                   <List dense>
                     {uniquePastMembersAndInvited.map((entry) => {
@@ -436,7 +436,7 @@ function InviteDialog({
                                 </Typography>
                                 {!entry.isActive && (
                                   <Chip
-                                    label="Left"
+                                    label="Rời khỏi bảng"
                                     size="small"
                                     color="warning"
                                     variant="outlined"
@@ -451,7 +451,7 @@ function InviteDialog({
                                 )}
                                 {entry.isActive && (
                                   <Chip
-                                    label="Invited"
+                                    label="Thêm thành viên"
                                     size="small"
                                     color="info"
                                     variant="outlined"
@@ -495,7 +495,7 @@ function InviteDialog({
                 textAlign: "center",
               }}
             >
-              No matching users found.
+              Không có thành viên để xem
             </Typography>
           )}
 
@@ -529,7 +529,7 @@ function InviteDialog({
             transition: "all 0.3s ease",
           }}
         >
-          Cancel
+          Hủy
         </Button>
         <Button
           onClick={handleInviteMember}
@@ -555,7 +555,7 @@ function InviteDialog({
             transition: "all 0.3s ease",
           }}
         >
-          {loading ? "Processing..." : "Invite"}
+          {loading ? "Processing..." : "Thêm"}
         </Button>
       </DialogActions>
     </Dialog>

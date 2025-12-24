@@ -53,11 +53,11 @@ function GenericDialog({ open, onClose, card, setCards, setColumns }) {
       title: checklist.title || "Untitled Checklist",
       items: Array.isArray(checklist.items)
         ? checklist.items.map((item) => ({
-            _id: item._id || new Date().toISOString(),
-            text: item.text || "",
-            completed: !!item.completed,
-            createdAt: item.createdAt || new Date().toISOString(),
-          }))
+          _id: item._id || new Date().toISOString(),
+          text: item.text || "",
+          completed: !!item.completed,
+          createdAt: item.createdAt || new Date().toISOString(),
+        }))
         : [],
     }));
   };
@@ -152,12 +152,11 @@ function GenericDialog({ open, onClose, card, setCards, setColumns }) {
       updateCardState(card._id, { checklists: card.checklists });
       setError(
         err.response?.data?.message ||
-          err.message ||
-          "Có lỗi khi thêm checklist."
+        err.message ||
+        "Có lỗi khi thêm checklist."
       );
       toast.error(
-        `Có lỗi khi thêm checklist: ${
-          err.response?.data?.message || err.message
+        `Có lỗi khi thêm checklist: ${err.response?.data?.message || err.message
         }`
       );
     } finally {
@@ -190,13 +189,13 @@ function GenericDialog({ open, onClose, card, setCards, setColumns }) {
             : theme.palette.text.primary,
         }}
       >
-        Thêm Checklist
+        Thêm danh sách công việc
       </DialogTitle>
       <DialogContent>
         <TextField
           autoFocus
           margin="dense"
-          label="Tiêu đề checklist"
+          label="Tiêu đề Danh sách"
           type="text"
           fullWidth
           variant="outlined"

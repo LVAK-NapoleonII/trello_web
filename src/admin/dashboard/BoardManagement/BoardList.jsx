@@ -68,7 +68,7 @@ export const BoardList = () => {
         <Paper sx={{ p: 3, borderRadius: 2, boxShadow: 3 }}>
             <Box display="flex" alignItems="center" justifyContent="space-between" mb={3}>
                 <Typography variant="h5" fontWeight="bold" display="flex" alignItems="center" gap={1}>
-                    <BoardIcon /> Quản lý Board
+                    <BoardIcon /> Quản lý Bảng làm việc
                 </Typography>
                 <TextField
                     label="Tìm kiếm theo tiêu đề"
@@ -92,7 +92,7 @@ export const BoardList = () => {
                             <TableHead>
                                 <TableRow>
                                     <TableCell><strong>Tiêu đề</strong></TableCell>
-                                    <TableCell><strong>Workspace</strong></TableCell>
+                                    <TableCell><strong>Không gian làm việc</strong></TableCell>
                                     <TableCell><strong>Chủ sở hữu</strong></TableCell>
                                     <TableCell><strong>Thành viên</strong></TableCell>
                                     <TableCell><strong>Trạng thái</strong></TableCell>

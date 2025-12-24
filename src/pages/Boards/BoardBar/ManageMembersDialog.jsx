@@ -67,7 +67,7 @@ function ManageMembersDialog({
       >
         <GroupIcon />
         <Typography variant="h6" fontWeight={600}>
-          Manage Members
+          Quản lý thành viên
         </Typography>
       </DialogTitle>
       <DialogContent sx={{ pt: 3, pb: 2 }}>
@@ -87,7 +87,7 @@ function ManageMembersDialog({
             fontWeight={600}
             sx={{ color: theme.palette.text.primary, mb: 1.5 }}
           >
-            Members ({activeMembers.length})
+            Thành viên ({activeMembers.length})
           </Typography>
           <List
             dense
@@ -162,7 +162,7 @@ function ManageMembersDialog({
                   <ListItemSecondaryAction>
                     {isOwner && userId !== board?.owner?._id && (
                       <>
-                        <Tooltip title="Remove from board">
+                        <Tooltip title="Xóa khỏi bảng">
                           <IconButton
                             edge="end"
                             onClick={() => handleRemoveMember(userId)}
@@ -177,7 +177,7 @@ function ManageMembersDialog({
                             <DeleteIcon fontSize="small" />
                           </IconButton>
                         </Tooltip>
-                        <Tooltip title="Transfer ownership">
+                        <Tooltip title="Chuyển quyền chủ phòng">
                           <IconButton
                             edge="end"
                             onClick={() => handleTransferOwnership(userId)}

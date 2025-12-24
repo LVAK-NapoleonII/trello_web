@@ -35,9 +35,7 @@ import { SocketContext } from "../../../context/SocketContext";
 
 const presetBackgrounds = [
   "https://images.unsplash.com/photo-1507525428034-b723cf961d3e",
-  "https://images.unsplash.com/photo-1518655048521-f130df041f17",
   "https://images.unsplash.com/photo-1497436072909-60f360e1d4b1",
-  "https://images.unsplash.com/photo-1503262022798-6598733c1d6f",
 ];
 
 const isDarkColor = (hexColor) => {
@@ -366,7 +364,7 @@ const BoardItem = ({ board, onUpdate, onDelete }) => {
           />
           <TextField
             margin="dense"
-            label="Background (URL hoặc mã màu)"
+            label="Nền (URL hoặc mã màu)"
             fullWidth
             value={editBackground}
             onChange={(e) => setEditBackground(e.target.value)}

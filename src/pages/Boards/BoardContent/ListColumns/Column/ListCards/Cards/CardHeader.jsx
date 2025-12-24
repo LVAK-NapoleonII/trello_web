@@ -108,12 +108,16 @@ function CardHeader({ card, setColumns, setExpanded, currentUserId, isBoardOwner
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      updateCardInColumns({ completed: data.card.completed });
+      updateCardInColumns({
+        completed: data.card.completed,
+        version: data.card.version
+      });
 
       if (socket && socketReady) {
         socket.emit("card-completion-toggled", {
           cardId: card._id,
           completed: data.card.completed,
+          version: data.card.version,
           actorId: localStorage.getItem("userId"),
         });
       }

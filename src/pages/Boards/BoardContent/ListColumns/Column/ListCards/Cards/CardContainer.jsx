@@ -190,6 +190,7 @@ function CardContainer({
                     ...col.cards.slice(0, newPosition),
                     {
                       ...movedCard,
+                      version: movedCard.version,
                       checklists: normalizeChecklists(movedCard.checklists),
                       members: (movedCard.members || []).map(normalizeUser),
                       comments: (movedCard.comments || []).map((c) => ({
@@ -216,6 +217,7 @@ function CardContainer({
         if (cardId === card._id) {
           updateCardState(cardId, {
             ...updatedCard,
+            version: updatedCard.version,
             checklists: normalizeChecklists(updatedCard.checklists),
             members: (updatedCard.members || []).map(normalizeUser),
             comments: (updatedCard.comments || []).map((c) => ({
@@ -231,9 +233,9 @@ function CardContainer({
         }
       },
 
-      "card-completion-toggled": ({ cardId, completed }) => {
+      "card-completion-toggled": ({ cardId, completed, version }) => {
         if (cardId === card._id) {
-          updateCardState(cardId, { completed });
+          updateCardState(cardId, { completed, version });
           toast.info(
             `Thẻ đã được ${completed ? "đánh dấu hoàn thành" : "bỏ hoàn thành"}.`
           );

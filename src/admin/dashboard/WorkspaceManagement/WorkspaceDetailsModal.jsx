@@ -38,7 +38,7 @@ export const WorkspaceDetailsModal = ({ workspaceId, open, onClose }) => {
             <DialogTitle>
                 <Box display="flex" alignItems="center" gap={1}>
                     <Workspaces />
-                    Chi tiết Workspace
+                    Chi tiết Không gian làm việc
                 </Box>
             </DialogTitle>
 
@@ -50,7 +50,7 @@ export const WorkspaceDetailsModal = ({ workspaceId, open, onClose }) => {
                 ) : error ? (
                     <Alert severity="error">{error}</Alert>
                 ) : !workspace ? (
-                    <Alert severity="warning">Không tìm thấy workspace</Alert>
+                    <Alert severity="warning">Không tìm thấy Không gian làm việc</Alert>
                 ) : (
                     <Grid container spacing={2}>
                         <Grid item xs={12}>
@@ -112,7 +112,7 @@ export const WorkspaceDetailsModal = ({ workspaceId, open, onClose }) => {
                                         <Typography variant="h5" fontWeight="bold">
                                             {stats.boards || 0}
                                         </Typography>
-                                        <Typography variant="caption">Board</Typography>
+                                        <Typography variant="caption">Bảng làm việc</Typography>
                                     </Box>
                                 </Grid>
                                 <Grid item xs={6}>

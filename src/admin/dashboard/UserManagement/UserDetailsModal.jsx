@@ -188,7 +188,7 @@ export const UserDetailsModal = ({ userId, open, onClose }) => {
                                         <Typography variant="h5" fontWeight="bold">
                                             {stats.workspaces || 0}
                                         </Typography>
-                                        <Typography variant="caption">Workspace</Typography>
+                                        <Typography variant="caption">Không gian làm việc</Typography>
                                     </Box>
                                 </Grid>
                                 <Grid item xs={4}>
@@ -197,7 +197,7 @@ export const UserDetailsModal = ({ userId, open, onClose }) => {
                                         <Typography variant="h5" fontWeight="bold">
                                             {stats.boards || 0}
                                         </Typography>
-                                        <Typography variant="caption">Board</Typography>
+                                        <Typography variant="caption">Bảng làm việc</Typography>
                                     </Box>
                                 </Grid>
                                 <Grid item xs={4}>

@@ -219,7 +219,7 @@ const Sidebar = ({
 
   const handleCreateWorkspace = async () => {
     if (!newWorkspace.name.trim()) {
-      setError("Workspace name cannot be empty!");
+      setError("Tên không gian làm việc không được để trống!");
       return;
     }
 
@@ -258,7 +258,7 @@ const Sidebar = ({
 
   const handleDeleteWorkspace = async (workspaceId) => {
     const workspace = workspaces.find((ws) => ws._id === workspaceId);
-    if (!window.confirm(`Are you sure you want to delete workspace "${workspace?.name}"? This action cannot be undone.`)) {
+    if (!window.confirm(`Bạn có chắc muốn xóa không gian làm việc này không "${workspace?.name}"?`)) {
       return;
     }
 
@@ -280,16 +280,16 @@ const Sidebar = ({
         if (selectedWorkspaceId === workspaceId) onSelectWorkspace("");
       }
 
-      toast.success("Workspace deleted successfully!");
+      toast.success("Xóa không gian làm việc thành công!");
     } catch (error) {
       console.error("[Sidebar] Delete error:", error.message);
-      handleApiError(error, navigate, "Failed to delete workspace!");
+      handleApiError(error, navigate, "Lỗi khi xóa không gian làm việc!");
     }
   };
 
   const handleLeaveWorkspace = async (workspaceId) => {
     const workspace = workspaces.find((ws) => ws._id === workspaceId);
-    if (!window.confirm(`Are you sure you want to leave workspace "${workspace?.name}"?`)) {
+    if (!window.confirm(`Bạn có muốn rời khỏi không gian làm việc này không "${workspace?.name}"?`)) {
       return;
     }
 
@@ -306,17 +306,17 @@ const Sidebar = ({
       if (socket && socketReady) {
         socket.emit("workspace-left", {
           workspaceId,
-          message: `Left workspace "${workspace?.name}".`,
+          message: `Rời không gian làm việc "${workspace?.name}".`,
         });
       } else {
         setWorkspaces((prev) => prev.filter((ws) => ws._id !== workspaceId));
         if (selectedWorkspaceId === workspaceId) onSelectWorkspace("");
       }
 
-      toast.success("Left workspace successfully!");
+      toast.success("Rời không gian làm việc thành công!");
     } catch (error) {
       console.error("[Sidebar] Leave error:", error.message);
-      handleApiError(error, navigate, "Failed to leave workspace!");
+      handleApiError(error, navigate, "Không thể rời không gian làm việc!");
     }
   };
 
@@ -403,7 +403,7 @@ const Sidebar = ({
               />
               {isExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
             </ListItemButton>
-            <Tooltip title={isOwner ? "Delete workspace" : "Leave workspace"}>
+            <Tooltip title={isOwner ? "Xóa không gian" : "Rời khỏi không gian"}>
               <IconButton
                 onClick={() =>
                   isOwner
@@ -440,8 +440,8 @@ const Sidebar = ({
           <Collapse in={isExpanded} timeout="auto" unmountOnExit>
             <List component="div" disablePadding sx={{ pl: 3, mt: 0.5 }}>
               {[
-                { text: "Members", icon: <PeopleIcon />, path: "members" },
-                { text: "Settings", icon: <SettingsIcon />, path: "settings" },
+                { text: "Thành viên", icon: <PeopleIcon />, path: "members" },
+                { text: "Chỉnh sửa", icon: <SettingsIcon />, path: "settings" },
               ].map((item) => (
                 <ListItemButton
                   key={item.text}
@@ -497,7 +497,7 @@ const Sidebar = ({
         }}
       >
         <Typography variant="h6" sx={{ fontWeight: 700, color: isDarkMode ? "#E2E8F0" : "#2D3748", mb: 2 }}>
-          Workspace
+          Không gian làm việc
         </Typography>
         <List sx={{ p: 0 }}>
           <ListItemButton
@@ -545,9 +545,9 @@ const Sidebar = ({
       >
         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3, px: 1 }}>
           <Typography variant="overline" sx={{ color: isDarkMode ? "#A0AEC0" : "#718096", fontWeight: 600, letterSpacing: 1 }}>
-            Workspaces
+            Không gian làm việc
           </Typography>
-          <Tooltip title="Create new workspace">
+          <Tooltip title="Tạo không gian làm việc">
             <Button
               size="small"
               startIcon={<AddIcon />}
@@ -565,7 +565,7 @@ const Sidebar = ({
                 transition: "all 0.2s ease",
               }}
             >
-              Create
+              Tạo không gian
             </Button>
           </Tooltip>
         </Box>
@@ -587,10 +587,10 @@ const Sidebar = ({
           >
             <FolderIcon sx={{ fontSize: 48, color: isDarkMode ? "#4A5568" : "#CBD5E0", mb: 2 }} />
             <Typography sx={{ color: isDarkMode ? "#A0AEC0" : "#718096", fontWeight: 500, mb: 1 }}>
-              No workspaces yet
+              Chưa có không gian làm việc
             </Typography>
             <Typography sx={{ color: isDarkMode ? "#718096" : "#A0AEC0", fontSize: "0.9rem" }}>
-              Create your first workspace
+              Tạo không gian làm việc đầu tiên của bạn
             </Typography>
           </Box>
         ) : (
@@ -669,7 +669,7 @@ const Sidebar = ({
           }}
         >
           <AddIcon sx={{ color: isDarkMode ? "#667EEA" : "#3182CE" }} />
-          Create New Workspace
+          Tạo mới
         </DialogTitle>
         <DialogContent sx={{ mt: 2 }}>
           {error && (
@@ -687,11 +687,11 @@ const Sidebar = ({
           <TextField
             autoFocus
             margin="dense"
-            label="Workspace Name"
+            label="Tên của không gian làm việc"
             fullWidth
             value={newWorkspace.name}
             onChange={(e) => setNewWorkspace({ ...newWorkspace, name: e.target.value })}
-            placeholder="Enter workspace name..."
+            placeholder="Nhập tên"
             sx={{
               mb: 2,
               "& .MuiOutlinedInput-root": {
@@ -702,13 +702,13 @@ const Sidebar = ({
           />
           <TextField
             margin="dense"
-            label="Description (optional)"
+            label="Mô tả thông tin không gian"
             fullWidth
             multiline
             rows={3}
             value={newWorkspace.description}
             onChange={(e) => setNewWorkspace({ ...newWorkspace, description: e.target.value })}
-            placeholder="Describe this workspace..."
+            placeholder="nhập mô tả"
             sx={{
               mb: 2,
               "& .MuiOutlinedInput-root": {
@@ -735,7 +735,7 @@ const Sidebar = ({
                 <PublicIcon fontSize="small" />
                 <Typography>Public</Typography>
                 <Typography variant="caption" sx={{ color: isDarkMode ? "#A0AEC0" : "#718096" }}>
-                  (Anyone can join)
+                  Tất cả mọi người có thể tham gia
                 </Typography>
               </Box>
             }
@@ -743,7 +743,7 @@ const Sidebar = ({
           />
           <TextField
             margin="dense"
-            label="Background URL (optional)"
+            label="Ảnh nền"
             fullWidth
             value={newWorkspace.background}
             onChange={(e) => setNewWorkspace({ ...newWorkspace, background: e.target.value })}
@@ -771,7 +771,7 @@ const Sidebar = ({
               px: 3,
             }}
           >
-            Cancel
+            Hủy
           </Button>
           <Button
             onClick={handleCreateWorkspace}
@@ -792,7 +792,7 @@ const Sidebar = ({
               fontWeight: 600,
             }}
           >
-            {createLoading ? "Creating..." : "Create Workspace"}
+            {createLoading ? "Đang tạo..." : "Tạo không gian"}
           </Button>
         </DialogActions>
       </Dialog>
