@@ -140,34 +140,67 @@ function ListColumns({ boardId: propBoardId }) {
     const fetchUserAndBoardOwner = async () => {
       try {
         const token = localStorage.getItem("token");
-        const userId = localStorage.getItem("userId");
+        if (!token) {
+          console.error("ListColumns: No token found in localStorage");
+          toast.error("Vui lòng đăng nhập lại!");
+          return;
+        }
+        let userId = localStorage.getItem("userId");
 
         if (!userId) {
-          return;
+          console.log("ListColumns: userId not in localStorage, fetching from API...");
+          try {
+            const response = await axios.get(
+              "http://localhost:5000/api/auth/profile",
+              { headers: { Authorization: `Bearer ${token}` } }
+            );
+            userId = response.data.user._id || response.data.user.id;
+
+            // Lưu vào localStorage cho lần sau
+            localStorage.setItem("userId", userId);
+            console.log("ListColumns: Fetched and saved userId:", userId);
+          } catch (err) {
+            console.error("ListColumns: Error fetching user profile:", err);
+            if (err.response?.status === 401) {
+              toast.error("Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại!");
+              localStorage.removeItem("token");
+              localStorage.removeItem("userId");
+              window.location.href = "/login";
+            }
+            return;
+          }
         }
 
         setCurrentUserId(userId);
 
-        if (!boardId) {
-          return;
+        if (boardId) {
+          try {
+            const response = await axios.get(
+              `http://localhost:5000/api/boards/${boardId}`,
+              { headers: { Authorization: `Bearer ${token}` } }
+            );
+
+            const ownerId = response.data.owner?._id || response.data.owner;
+            console.log("ListColumns: Setting boardOwnerId:", ownerId);
+            setBoardOwnerId(ownerId);
+          } catch (err) {
+            console.error("ListColumns: Error fetching board owner:", err);
+            if (err.response?.status === 404) {
+              toast.error("Không tìm thấy board!");
+            } else if (err.response?.status === 403) {
+              toast.error("Bạn không có quyền truy cập board này!");
+            }
+          }
         }
-
-        // Fetch thông tin board để lấy owner
-        const response = await axios.get(
-          `http://localhost:5000/api/boards/${boardId}`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-
-        const ownerId = response.data.owner?._id || response.data.owner;
-        setBoardOwnerId(ownerId);
       } catch (err) {
-        console.error(" Error fetching user/board info:", err);
-        toast.error("Không thể lấy thông tin board!");
+        console.error("ListColumns: Error in fetchUserAndBoardOwner:", err);
+        toast.error("Có lỗi khi tải thông tin người dùng!");
       }
     };
 
     fetchUserAndBoardOwner();
   }, [boardId]);
+
   useEffect(() => {
     if (!boardId) {
       console.error("ListColumns: boardId is undefined or null");

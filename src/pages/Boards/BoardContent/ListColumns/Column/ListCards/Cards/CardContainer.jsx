@@ -284,6 +284,8 @@ function CardContainer({
         setExpanded={setExpanded}
         boardMembers={boardMembers}
         setBoardMembers={setBoardMembers}
+        currentUserId={currentUserId}
+        isBoardOwner={isBoardOwner}
       />
       <CardActionsPanel
         card={card}

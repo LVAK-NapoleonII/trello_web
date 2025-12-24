@@ -22,18 +22,27 @@ function CardHeader({ card, setColumns, setExpanded, currentUserId, isBoardOwner
   const { socket, socketReady } = useContext(SocketContext);
   const [isCompleted, setIsCompleted] = useState(card.completed || false);
   const [openEditDialog, setOpenEditDialog] = useState(false);
-
+  console.log("=== CardHeader DEBUG ===");
+  console.log("currentUserId:", currentUserId);
+  console.log("isBoardOwner:", isBoardOwner);
+  console.log("card.members:", card?.members);
+  console.log("card._id:", card?._id);
   // Kiểm tra xem user hiện tại có phải là thành viên của card không
   const isCardMember = useMemo(() => {
+
     if (!currentUserId || !card?.members || !Array.isArray(card.members)) {
+      console.log("Missing data - returning false");
       return false;
     }
 
     const result = card.members.some((m) => {
       const memberId = m._id?.toString();
       const userId = currentUserId?.toString();
+      console.log(`Comparing: memberId=${memberId}, userId=${userId}, match=${memberId === userId}`);
       return memberId === userId;
     });
+
+    console.log("isCardMember result:", result);
     return result;
   }, [card?.members, currentUserId, card._id]);
 

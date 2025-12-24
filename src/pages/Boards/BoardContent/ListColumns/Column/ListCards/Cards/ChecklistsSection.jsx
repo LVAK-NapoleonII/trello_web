@@ -30,7 +30,6 @@ import LockIcon from "@mui/icons-material/Lock";
 import { toast } from "react-toastify";
 import { useTheme } from "@mui/material/styles";
 
-// Object chứa các style tái sử dụng
 const getStyles = (theme, isDarkMode) => ({
   container: {
     mb: 2,
@@ -132,9 +131,9 @@ const ChecklistsSection = ({
   handleUpdateChecklistItem,
   handleDeleteChecklistItem,
   loading,
-  currentUserId, // Thêm prop
-  card, // Thêm prop để kiểm tra members
-  isBoardOwner, // Thêm prop
+  currentUserId,
+  card,
+  isBoardOwner,
 }) => {
   const theme = useTheme();
   const isDarkMode = theme.palette.mode === "dark";
@@ -151,10 +150,17 @@ const ChecklistsSection = ({
   const [isSectionCollapsed, setIsSectionCollapsed] = useState(false);
   const [collapsedChecklists, setCollapsedChecklists] = useState({});
 
-  // Kiểm tra xem user hiện tại có phải là thành viên của card không
-  const isCardMember = card?.members?.some(
-    (m) => m._id.toString() === currentUserId
-  ) || false;
+  // FIX: Chuẩn hóa cả currentUserId và member IDs về string để so sánh chính xác
+  const normalizedCurrentUserId = currentUserId?.toString();
+
+  // FIX: Kiểm tra xem user hiện tại có phải là thành viên của card không
+  const isCardMember = card?.members?.some((m) => {
+    const memberId = m?._id?.toString();
+    const isMatch = memberId === normalizedCurrentUserId;
+
+    return isMatch;
+  }) || false;
+
 
   // Quyền thực hiện các thao tác = (là thành viên của card) HOẶC (là chủ board)
   const canPerformActions = isCardMember || isBoardOwner;
@@ -347,10 +353,17 @@ const ChecklistsSection = ({
     }
   };
 
-  // Xử lý toggle checklist item
+  // FIX: Xử lý toggle checklist item với log debug
   const handleToggleItem = (checklistId, itemId, completed) => {
+    console.log('handleToggleItem called:', {
+      canPerformActions,
+      isCardMember,
+      isBoardOwner,
+      normalizedCurrentUserId
+    });
+
     if (!canPerformActions) {
-      toast.warning("Chỉ thành viên của thẻ mới được phép đánh dấu hoàn thành!");
+      toast.warning("Chỉ thành viên của thẻ hoặc chủ board mới được phép đánh dấu hoàn thành!");
       return;
     }
     handleToggleChecklistItem(checklistId, itemId, completed);
@@ -374,7 +387,7 @@ const ChecklistsSection = ({
           icon={<LockIcon />}
           sx={{ mb: 2, fontSize: "0.85rem" }}
         >
-          Bạn chỉ có thể xem Danh sách công việc. Chỉ thành viên của thẻ mới có thể thực hiện các thao tác.
+          Bạn chỉ có thể xem Danh sách công việc. Chỉ thành viên của thẻ hoặc chủ board mới có thể thực hiện các thao tác.
         </Alert>
       )}
 
@@ -583,7 +596,7 @@ const ChecklistsSection = ({
                             {filteredItems.slice(0, visibleCount).map((item) => (
                               <ListItem key={item._id} sx={styles.listItem}>
                                 {/* Checkbox */}
-                                <Tooltip title={canPerformActions ? "" : "Chỉ thành viên của thẻ mới có thể đánh dấu"}>
+                                <Tooltip title={canPerformActions ? "" : "Chỉ thành viên của thẻ hoặc chủ board mới có thể đánh dấu"}>
                                   <span>
                                     <Checkbox
                                       checked={item.completed || false}
